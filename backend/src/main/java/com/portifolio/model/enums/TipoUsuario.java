@@ -21,7 +21,6 @@ public enum TipoUsuario implements DatabaseEnum {
         return Arrays.stream(values())
                 .filter(tipo -> tipo.databaseValue.equals(value))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Tipo de usuário inválido: " + value));
+                .orElseThrow(() -> new IllegalArgumentException("Tipo de usuário inválido: " + value));
     }
 }

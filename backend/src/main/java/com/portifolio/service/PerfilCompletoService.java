@@ -7,13 +7,13 @@ import com.portifolio.model.enums.TipoUsuario;
 import com.portifolio.repository.PerfilArtistaRepository;
 import com.portifolio.repository.PerfilContratanteRepository;
 import com.portifolio.repository.UsuarioRepository;
-import java.time.LocalDate;
-import java.time.Period;
+import java.time.LocalDateTime;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Fonte única da regra server-side de perfil completo do RF08. */
+/** Regra central e exclusivamente server-side de completude do RF08. */
 @Service
 @RequiredArgsConstructor
 public class PerfilCompletoService {
@@ -24,23 +24,37 @@ public class PerfilCompletoService {
 
     @Transactional
     public boolean recalcular(Usuario usuario) {
-        boolean completo = switch (usuario.getTipoUsuario()) {
-            case ARTISTA -> perfilArtistaRepository.findById(usuario.getId())
-                    .map(perfil -> calcularArtista(usuario, perfil))
-                    .orElse(false);
-            case CONTRATANTE -> perfilContratanteRepository.findById(usuario.getId())
+        boolean completo;
+        PerfilArtista perfilArtista = null;
+
+        if (usuario.getTipoUsuario() == TipoUsuario.ARTISTA) {
+            Optional<PerfilArtista> perfil = perfilArtistaRepository.findById(usuario.getId());
+            perfilArtista = perfil.orElse(null);
+            completo = perfil.map(valor -> calcularArtista(usuario, valor)).orElse(false);
+        } else {
+            completo = perfilContratanteRepository.findById(usuario.getId())
                     .map(perfil -> calcularContratante(usuario, perfil))
                     .orElse(false);
-        };
+        }
+
+        boolean tornouCompleto = !Boolean.TRUE.equals(usuario.getPerfilCompleto()) && completo;
         usuario.setPerfilCompleto(completo);
         usuarioRepository.save(usuario);
+
+        if (tornouCompleto && perfilArtista != null) {
+            perfilArtista.setUltimaAtualizacao(LocalDateTime.now());
+            perfilArtistaRepository.save(perfilArtista);
+        }
         return completo;
     }
 
     public boolean calcularArtista(Usuario usuario, PerfilArtista perfil) {
         return cadastroCompleto(usuario)
                 && preenchido(perfil.getBiografia())
-                && preenchido(perfil.getLocalizacao());
+                && preenchido(perfil.getLocalizacao())
+                && preenchido(perfil.getUrlPortfolio())
+                && perfil.getTags() != null
+                && !perfil.getTags().isEmpty();
     }
 
     public boolean calcularContratante(Usuario usuario, PerfilContratante perfil) {
@@ -51,23 +65,10 @@ public class PerfilCompletoService {
 
     private boolean cadastroCompleto(Usuario usuario) {
         return preenchido(usuario.getNome())
-                && dataNascimentoValida(usuario.getDataNascimento())
+                && usuario.getDataNascimento() != null
                 && preenchido(usuario.getTelefone())
                 && preenchido(usuario.getEmail())
-                && responsavelValidoQuandoMenor(usuario);
-    }
-
-    private boolean dataNascimentoValida(LocalDate dataNascimento) {
-        return dataNascimento != null && !dataNascimento.isAfter(LocalDate.now());
-    }
-
-    private boolean responsavelValidoQuandoMenor(Usuario usuario) {
-        if (Period.between(usuario.getDataNascimento(), LocalDate.now()).getYears() >= 18) {
-            return true;
-        }
-        return preenchido(usuario.getNomeResponsavel())
-                && preenchido(usuario.getTelefoneResponsavel())
-                && preenchido(usuario.getEmailResponsavel());
+                && (preenchido(usuario.getSenha()) || preenchido(usuario.getGoogleId()));
     }
 
     private boolean preenchido(String valor) {

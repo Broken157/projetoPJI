@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detalhes da vaga — Palco</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/componentes.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body class="pagina-app">
+  <header>
+    <nav class="app-navbar" aria-label="Navegação principal">
+      <a href="dashboard-contratante.html"><img class="navbar__logo" src="assets/logo-palco.png" alt="Palco"></a>
+      <div class="app-navbar__acoes">
+        <a class="btn-dash btn-dash--secundario" href="dashboard-contratante.html">Voltar ao painel</a>
+        <button class="dashboard__sair" type="button" data-logout>Sair</button>
+      </div>
+    </nav>
+  </header>
+  <main class="dashboard">
+    <section class="dashboard-estado" data-vaga-carregando role="status">
+      <span class="dashboard-spinner" aria-hidden="true"></span>
+      <p>Carregando vaga…</p>
+    </section>
+    <section class="dashboard-estado dashboard-estado--erro" data-vaga-erro hidden role="alert">
+      <h1>Não foi possível abrir esta vaga</h1>
+      <p data-vaga-erro-texto></p>
+      <a class="btn-dash btn-dash--primario" href="dashboard-contratante.html">Voltar ao painel</a>
+    </section>
+    <article class="vaga-publica" data-vaga-conteudo hidden>
+      <p class="dashboard__sobrelinha" data-vaga-status></p>
+      <h1 class="vaga-publica__titulo" data-vaga-titulo></h1>
+      <p class="vaga-publica__empresa" data-vaga-empresa></p>
+      <div class="vaga-publica__resumo" data-vaga-resumo></div>
+      <section><h2>Sobre a oportunidade</h2><p data-vaga-descricao></p></section>
+      <section><h2>Requisitos</h2><p data-vaga-requisitos></p></section>
+      <div class="dashboard-card__tags" data-vaga-tags></div>
+    </article>
+  </main>
+  <script src="js/main.js"></script>
+</body>
+</html>

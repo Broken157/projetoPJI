@@ -1,6 +1,7 @@
 package com.portifolio.dto;
 
 import com.portifolio.model.enums.ModeloTrabalho;
+import com.portifolio.model.enums.StatusCandidatura;
 import com.portifolio.model.enums.StatusVaga;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,7 +12,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class VagaResponse {
     private Long id;
     private Long contratanteId;
@@ -35,6 +36,13 @@ public class VagaResponse {
     private LocalDate dataLimiteCandidatura;
     private String abrangencia;
     private List<String> fotos;
+    private ContratantePublicoResponse contratantePublico;
+    private Long minhaCandidaturaId;
+    private StatusCandidatura statusMinhaCandidatura;
+
+    // Calculado exclusivamente pela identidade autenticada e pelo vínculo
+    // persistido; nunca por contratanteId fornecido pelo cliente.
+    private boolean propriaDoContratante;
 
     // RF03 Fase 2 — true apenas dentro de vagasCanceladasComCandidatura;
     // sinaliza ao frontend exibir o badge "Vaga Cancelada"

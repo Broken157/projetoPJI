@@ -2,17 +2,21 @@ package com.portifolio.service;
 
 import com.portifolio.dto.CandidaturaRequest;
 import com.portifolio.dto.CandidaturaResponse;
-import com.portifolio.dto.CandidaturaStatusRequest;
+import com.portifolio.dto.CandidaturaVagaPaginaResponse;
+import com.portifolio.dto.CandidaturaVagaResponse;
+import com.portifolio.event.NotificacaoEvento;
 import com.portifolio.exception.ConflictException;
 import com.portifolio.exception.ForbiddenException;
 import com.portifolio.exception.ResourceNotFoundException;
 import com.portifolio.exception.UnprocessableEntityException;
 import com.portifolio.model.Candidatura;
 import com.portifolio.model.PerfilArtista;
+import com.portifolio.model.Tag;
 import com.portifolio.model.Usuario;
 import com.portifolio.model.Vaga;
 import com.portifolio.model.enums.StatusCandidatura;
 import com.portifolio.model.enums.StatusVaga;
+import com.portifolio.model.enums.TipoNotificacao;
 import com.portifolio.model.enums.TipoUsuario;
 import com.portifolio.repository.CandidaturaRepository;
 import com.portifolio.repository.PerfilArtistaRepository;
@@ -20,13 +24,18 @@ import com.portifolio.repository.VagaRepository;
 import com.portifolio.security.AuthenticatedUserResolver;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -42,31 +51,94 @@ public class CandidaturaService {
     private final VagaRepository vagaRepository;
     private final PerfilArtistaRepository perfilArtistaRepository;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final AvatarService avatarService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
-    public Page<CandidaturaResponse> listarDasMinhasVagas(Integer pagina, Integer tamanho) {
+    public List<CandidaturaResponse> listarDasMinhasVagas() {
+        return listarDasMinhasVagas(null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CandidaturaResponse> listarDasMinhasVagas(Integer page, Integer size) {
         Usuario usuario = exigirUsuarioAtual();
         exigirTipo(usuario, TipoUsuario.CONTRATANTE,
                 "Somente contratantes podem consultar candidaturas recebidas.");
-        return candidaturaRepository
-                .findByVagaContratanteUsuarioId(usuario.getId(), paginacao(pagina, tamanho))
-                .map(this::toResponse);
+        return candidaturaRepository.findByVagaContratanteUsuarioId(
+                        usuario.getId(), paginaOrdenadaPorId(page, size)).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     /**
-     * A rota genérica é mantida por compatibilidade, mas nunca retorna dados
-     * globais: cada ator vê somente candidaturas dentro do seu limite de acesso.
+     * Mantém a rota genérica por compatibilidade, mas nunca retorna dados globais:
+     * artista recebe as próprias candidaturas e contratante recebe apenas as
+     * candidaturas vinculadas às suas vagas.
      */
     @Transactional(readOnly = true)
-    public Page<CandidaturaResponse> listarDoUsuarioAtual(Integer pagina, Integer tamanho) {
+    public List<CandidaturaResponse> listarTodos() {
+        return listarTodos(null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CandidaturaResponse> listarTodos(Integer page, Integer size) {
         Usuario usuario = exigirUsuarioAtual();
-        Pageable pageable = paginacao(pagina, tamanho);
         Page<Candidatura> candidaturas = switch (usuario.getTipoUsuario()) {
-            case ARTISTA -> candidaturaRepository.findByArtistaUsuarioId(usuario.getId(), pageable);
-            case CONTRATANTE -> candidaturaRepository
-                    .findByVagaContratanteUsuarioId(usuario.getId(), pageable);
+            case ARTISTA -> candidaturaRepository.findByArtistaUsuarioId(
+                    usuario.getId(), paginaOrdenadaPorId(page, size));
+            case CONTRATANTE -> candidaturaRepository.findByVagaContratanteUsuarioId(
+                    usuario.getId(), paginaOrdenadaPorId(page, size));
         };
-        return candidaturas.map(this::toResponse);
+        return candidaturas.stream().map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CandidaturaVagaPaginaResponse listarPorVaga(
+            Long vagaId, Integer page, Integer size) {
+        Usuario usuario = exigirUsuarioAtual();
+        Vaga vaga = vagaRepository.findDetalhesById(vagaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
+        exigirTipo(usuario, TipoUsuario.CONTRATANTE,
+                "Somente contratantes podem consultar candidatos da vaga.");
+        if (!vaga.getContratante().getUsuarioId().equals(usuario.getId())) {
+            throw new ForbiddenException(
+                    "Somente o proprietário da vaga pode consultar seus candidatos.");
+        }
+
+        Pageable pageable = paginaSemOrdenacao(page, size);
+        Set<Long> tagsDaVaga = vaga.getTags().stream()
+                .map(Tag::getId)
+                .collect(Collectors.toSet());
+        Set<Long> tagsParaConsulta = tagsDaVaga.isEmpty() ? Set.of(-1L) : tagsDaVaga;
+        Page<Long> paginaIds = candidaturaRepository
+                .findIdsPorVagaOrdenadosPorCompatibilidade(
+                        vagaId, tagsParaConsulta, pageable);
+
+        List<Long> ids = paginaIds.getContent();
+        Map<Long, Candidatura> porId = ids.isEmpty()
+                ? Map.of()
+                : candidaturaRepository.findDetalhadasByIdIn(ids).stream()
+                        .collect(Collectors.toMap(
+                                Candidatura::getId,
+                                candidatura -> candidatura,
+                                (primeira, segunda) -> primeira,
+                                LinkedHashMap::new));
+        List<CandidaturaVagaResponse> content = ids.stream()
+                .map(porId::get)
+                .map(candidatura -> toCandidaturaVagaResponse(candidatura, tagsDaVaga))
+                .toList();
+
+        return CandidaturaVagaPaginaResponse.builder()
+                .content(content)
+                .page(paginaIds.getNumber())
+                .size(paginaIds.getSize())
+                .totalElements(paginaIds.getTotalElements())
+                .totalPages(paginaIds.getTotalPages())
+                .first(paginaIds.isFirst())
+                .last(paginaIds.isLast())
+                .hasNext(paginaIds.hasNext())
+                .hasPrevious(paginaIds.hasPrevious())
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -74,6 +146,7 @@ public class CandidaturaService {
         Usuario usuario = exigirUsuarioAtual();
         Candidatura candidatura = buscarCandidatura(id);
         if (!podeAcessar(candidatura, usuario)) {
+            // Não expõe a existência de uma candidatura privada a terceiros.
             throw new ResourceNotFoundException("Candidatura não encontrada.");
         }
         return toResponse(candidatura);
@@ -83,6 +156,9 @@ public class CandidaturaService {
     public CandidaturaResponse criar(CandidaturaRequest request) {
         Usuario usuario = exigirUsuarioAtual();
         exigirTipo(usuario, TipoUsuario.ARTISTA, "Somente artistas podem se candidatar.");
+        if (!usuario.getId().equals(request.getArtistaId())) {
+            throw new ForbiddenException("Não é permitido criar candidatura para outro artista.");
+        }
 
         Vaga vaga = vagaRepository.findById(request.getVagaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
@@ -95,7 +171,7 @@ public class CandidaturaService {
         }
 
         PerfilArtista artista = perfilArtistaRepository.findById(usuario.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Perfil de artista não encontrado."));
+                .orElseThrow(() -> new ResourceNotFoundException("Artista não encontrado."));
         if (candidaturaRepository.existsByVagaIdAndArtistaUsuarioId(vaga.getId(), usuario.getId())) {
             throw new ConflictException("Já existe candidatura para esta vaga e artista.");
         }
@@ -107,28 +183,40 @@ public class CandidaturaService {
         candidatura.setLinkPortfolioCandidatura(request.getLinkPortfolioCandidatura());
         candidatura.setStatus(StatusCandidatura.PENDENTE);
         candidatura.setDataCandidatura(LocalDateTime.now());
-        return toResponse(candidaturaRepository.save(candidatura));
+        Candidatura salva = candidaturaRepository.save(candidatura);
+        eventPublisher.publishEvent(new NotificacaoEvento(
+                Set.of(vaga.getContratante().getUsuarioId()),
+                TipoNotificacao.CANDIDATURA,
+                "Nova candidatura recebida para a vaga \"" + vaga.getTitulo() + "\".",
+                "dashboard-contratante.html"));
+        return toResponse(salva);
     }
 
+    /**
+     * A rota PUT existente passa a ter semântica exclusiva de transição de
+     * estado. Vaga, artista, mensagem e link são imutáveis após a candidatura.
+     */
     @Transactional
-    public CandidaturaResponse atualizar(Long id, CandidaturaStatusRequest request) {
+    public CandidaturaResponse atualizar(Long id, CandidaturaRequest request) {
         Usuario usuario = exigirUsuarioAtual();
         Candidatura candidatura = buscarCandidatura(id);
-        StatusCandidatura destino = request.getStatus();
 
         if (usuario.getTipoUsuario() == TipoUsuario.ARTISTA) {
             if (!ehArtistaProprietario(candidatura, usuario)) {
                 throw new ResourceNotFoundException("Candidatura não encontrada.");
             }
+            validarVinculosImutaveis(candidatura, request);
+            StatusCandidatura destino = exigirStatus(request);
             if (destino != StatusCandidatura.RETIRADA) {
                 throw new ForbiddenException("Artistas só podem retirar a própria candidatura.");
             }
             retirar(candidatura);
         } else {
             if (!ehContratanteProprietario(candidatura, usuario)) {
-                throw new ForbiddenException(
-                        "Somente o proprietário da vaga pode analisar esta candidatura.");
+                throw new ForbiddenException("Somente o proprietário da vaga pode analisar esta candidatura.");
             }
+            validarVinculosImutaveis(candidatura, request);
+            StatusCandidatura destino = exigirStatus(request);
             validarTransicaoDoContratante(candidatura.getStatus(), destino);
             candidatura.setStatus(destino);
         }
@@ -136,7 +224,17 @@ public class CandidaturaService {
         return toResponse(candidaturaRepository.save(candidatura));
     }
 
-    /** DELETE executa retirada lógica; o histórico não é removido. */
+    private StatusCandidatura exigirStatus(CandidaturaRequest request) {
+        if (request.getStatus() == null) {
+            throw new UnprocessableEntityException("Informe o novo status da candidatura.");
+        }
+        return request.getStatus();
+    }
+
+    /**
+     * DELETE é mantido por compatibilidade, mas executa retirada lógica pelo
+     * próprio artista. O registro nunca é removido fisicamente.
+     */
     @Transactional
     public void deletar(Long id) {
         Usuario usuario = exigirUsuarioAtual();
@@ -148,17 +246,6 @@ public class CandidaturaService {
         }
         retirar(candidatura);
         candidaturaRepository.save(candidatura);
-    }
-
-    private Pageable paginacao(Integer pagina, Integer tamanho) {
-        int paginaNormalizada = pagina == null || pagina < 0 ? 0 : pagina;
-        int tamanhoNormalizado = tamanho == null || tamanho < 1
-                ? TAMANHO_PADRAO
-                : Math.min(tamanho, TAMANHO_MAXIMO);
-        return PageRequest.of(
-                paginaNormalizada,
-                tamanhoNormalizado,
-                Sort.by(Sort.Direction.DESC, "dataCandidatura").and(Sort.by("id")));
     }
 
     private void retirar(Candidatura candidatura) {
@@ -186,6 +273,14 @@ public class CandidaturaService {
             StatusCandidatura atual, StatusCandidatura destino) {
         return new UnprocessableEntityException(
                 "Transição de candidatura inválida: " + atual + " -> " + destino + ".");
+    }
+
+    private void validarVinculosImutaveis(Candidatura candidatura, CandidaturaRequest request) {
+        if (!candidatura.getVaga().getId().equals(request.getVagaId())
+                || !candidatura.getArtista().getUsuarioId().equals(request.getArtistaId())) {
+            throw new UnprocessableEntityException(
+                    "Vaga e artista da candidatura não podem ser alterados.");
+        }
     }
 
     private Candidatura buscarCandidatura(Long id) {
@@ -216,6 +311,66 @@ public class CandidaturaService {
 
     private boolean ehContratanteProprietario(Candidatura candidatura, Usuario usuario) {
         return candidatura.getVaga().getContratante().getUsuarioId().equals(usuario.getId());
+    }
+
+    private CandidaturaVagaResponse toCandidaturaVagaResponse(
+            Candidatura candidatura, Set<Long> tagsDaVaga) {
+        PerfilArtista artista = candidatura.getArtista();
+        Set<Long> tagIds = artista.getTags().stream()
+                .map(Tag::getId)
+                .collect(Collectors.toSet());
+        Set<Long> tagsCoincidentes = tagIds.stream()
+                .filter(tagsDaVaga::contains)
+                .collect(Collectors.toSet());
+
+        return CandidaturaVagaResponse.builder()
+                .candidaturaId(candidatura.getId())
+                .artistaId(artista.getUsuarioId())
+                .nomeArtista(artista.getUsuario().getNome())
+                .biografia(artista.getBiografia())
+                .localizacao(artista.getLocalizacao())
+                .urlPortfolio(artista.getUrlPortfolio())
+                .avatarUrl(avatarService.resolverUrl(
+                        artista.getUsuarioId(),
+                        artista.getUsuario().getFotoPerfil(),
+                        artista.getFotoPerfil()))
+                .tagIds(tagIds)
+                .tagsCoincidentes(tagsCoincidentes)
+                .quantidadeTagsCoincidentes(tagsCoincidentes.size())
+                .mensagemApresentacao(candidatura.getMensagemApresentacao())
+                .linkPortfolioCandidatura(candidatura.getLinkPortfolioCandidatura())
+                .status(candidatura.getStatus())
+                .dataCandidatura(candidatura.getDataCandidatura())
+                .build();
+    }
+
+    private Pageable paginaOrdenadaPorId(Integer page, Integer size) {
+        return PageRequest.of(normalizarPagina(page), normalizarTamanho(size),
+                Sort.by(Sort.Direction.ASC, "id"));
+    }
+
+    private Pageable paginaSemOrdenacao(Integer page, Integer size) {
+        return PageRequest.of(normalizarPagina(page), normalizarTamanho(size));
+    }
+
+    private int normalizarPagina(Integer page) {
+        if (page == null) {
+            return 0;
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("Página não pode ser negativa.");
+        }
+        return page;
+    }
+
+    private int normalizarTamanho(Integer size) {
+        if (size == null) {
+            return TAMANHO_PADRAO;
+        }
+        if (size < 1) {
+            throw new IllegalArgumentException("Tamanho da página deve ser positivo.");
+        }
+        return Math.min(size, TAMANHO_MAXIMO);
     }
 
     private CandidaturaResponse toResponse(Candidatura candidatura) {

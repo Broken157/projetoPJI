@@ -1,12 +1,16 @@
 package com.portifolio.controller;
 
 import com.portifolio.dto.VagaBuscaFiltro;
+import com.portifolio.dto.CandidaturaVagaPaginaResponse;
 import com.portifolio.dto.VagaAtualizacaoRequest;
+import com.portifolio.dto.VagaCancelamentoRequest;
 import com.portifolio.dto.VagaListagemResponse;
 import com.portifolio.dto.VagaRequest;
 import com.portifolio.dto.VagaResponse;
+import com.portifolio.dto.VagaStatusAcaoRequest;
 import com.portifolio.model.enums.ModeloTrabalho;
 import com.portifolio.service.VagaService;
+import com.portifolio.service.CandidaturaService;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.Set;
@@ -16,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,33 +34,48 @@ import org.springframework.web.bind.annotation.RestController;
 public class VagaController {
 
     private final VagaService vagaService;
+    private final CandidaturaService candidaturaService;
 
     // RF03 — Listagem/busca pública, paginação cursor-based (RNF12)
     @GetMapping
     public ResponseEntity<VagaListagemResponse> listar(
             @RequestParam(required = false) String titulo,
+            @RequestParam(required = false) String empresa,
             @RequestParam(required = false) String cidade,
             @RequestParam(required = false) String estado,
             @RequestParam(required = false) ModeloTrabalho modeloTrabalho,
             @RequestParam(required = false) String tipoContrato,
             @RequestParam(required = false) BigDecimal faixaSalarialMin,
             @RequestParam(required = false) BigDecimal faixaSalarialMax,
+            @RequestParam(required = false) String areaAtuacao,
             @RequestParam(required = false) Set<Long> tagIds,
             @RequestParam(required = false) Long cursor,
+            @RequestParam(required = false) Long cursorCanceladas,
             @RequestParam(required = false) Integer size
     ) {
         VagaBuscaFiltro filtro = new VagaBuscaFiltro();
         filtro.setTitulo(titulo);
+        filtro.setEmpresa(empresa);
         filtro.setCidade(cidade);
         filtro.setEstado(estado);
         filtro.setModeloTrabalho(modeloTrabalho);
         filtro.setTipoContrato(tipoContrato);
         filtro.setFaixaSalarialMin(faixaSalarialMin);
         filtro.setFaixaSalarialMax(faixaSalarialMax);
+        filtro.setAreaAtuacao(areaAtuacao);
         filtro.setTagIds(tagIds);
         filtro.setCursor(cursor);
+        filtro.setCursorCanceladas(cursorCanceladas);
         filtro.setSize(size);
         return ResponseEntity.ok(vagaService.listar(filtro));
+    }
+
+    @GetMapping("/{id}/similares")
+    public ResponseEntity<VagaListagemResponse> listarSimilares(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(required = false) Integer size) {
+        return ResponseEntity.ok(vagaService.listarSimilares(id, cursor, size));
     }
 
     @GetMapping("/minhas")
@@ -70,6 +90,14 @@ public class VagaController {
         return ResponseEntity.ok(vagaService.buscarPorId(id));
     }
 
+    @GetMapping("/{id}/candidaturas")
+    public ResponseEntity<CandidaturaVagaPaginaResponse> listarCandidaturas(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ResponseEntity.ok(candidaturaService.listarPorVaga(id, page, size));
+    }
+
     @PostMapping
     public ResponseEntity<VagaResponse> criar(@Valid @RequestBody VagaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(vagaService.criar(request));
@@ -77,14 +105,20 @@ public class VagaController {
 
     @PutMapping("/{id}")
     public ResponseEntity<VagaResponse> atualizar(
-            @PathVariable Long id,
-            @Valid @RequestBody VagaAtualizacaoRequest request) {
+            @PathVariable Long id, @Valid @RequestBody VagaAtualizacaoRequest request) {
         return ResponseEntity.ok(vagaService.atualizar(id, request));
     }
 
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<VagaResponse> gerenciarStatus(
+            @PathVariable Long id, @Valid @RequestBody VagaStatusAcaoRequest request) {
+        return ResponseEntity.ok(vagaService.gerenciarStatus(id, request));
+    }
+
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletar(@PathVariable Long id) {
-        vagaService.deletar(id);
+    public ResponseEntity<Void> deletar(
+            @PathVariable Long id, @Valid @RequestBody VagaCancelamentoRequest request) {
+        vagaService.deletar(id, request);
         return ResponseEntity.noContent().build();
     }
 }

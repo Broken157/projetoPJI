@@ -35,4 +35,7 @@ public class LogVagaCancelada {
 
     @Column(name = "data_cancelamento", nullable = false)
     private LocalDateTime dataCancelamento;
+
+    @Column(columnDefinition = "text")
+    private String motivo;
 }

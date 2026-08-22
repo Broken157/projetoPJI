@@ -7,6 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -67,4 +68,17 @@ public class PerfilArtista {
             inverseJoinColumns = @jakarta.persistence.JoinColumn(name = "tag_id")
     )
     private Set<Tag> tags = new HashSet<>();
+
+    @PrePersist
+    void aplicarValoresPadraoDoSchema() {
+        if (nivelMedalha == null) {
+            nivelMedalha = 1;
+        }
+        if (scoreEngajamento == null) {
+            scoreEngajamento = new BigDecimal("0.00");
+        }
+        if (ultimaAtualizacao == null) {
+            ultimaAtualizacao = LocalDateTime.now();
+        }
+    }
 }

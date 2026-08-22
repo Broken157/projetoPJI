@@ -1,10 +1,5 @@
 package com.portifolio.controller;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.portifolio.model.Candidatura;
@@ -31,6 +26,8 @@ import java.util.HashSet;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -41,6 +38,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Testcontainers
 @SpringBootTest
@@ -71,7 +73,7 @@ class VagaEdicaoRf07IntegrationTest {
     }
 
     @Test
-    void edicaoExigeAutenticacao() throws Exception {
+    void naoAutenticadoDeveReceber401() throws Exception {
         mockMvc.perform(put("/api/vagas/{id}", 1)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payloadValido())))
@@ -79,66 +81,169 @@ class VagaEdicaoRf07IntegrationTest {
     }
 
     @Test
-    void somenteContratanteProprietarioPodeEditar() throws Exception {
-        Usuario dono = novoUsuario("dono-rf07@teste.com", TipoUsuario.CONTRATANTE);
-        Vaga vaga = novaVaga(novoContratante(dono), StatusVaga.ABERTA);
-        Usuario intruso = novoUsuario("intruso-rf07@teste.com", TipoUsuario.CONTRATANTE);
-        novoContratante(intruso);
-        Usuario artista = novoUsuario("artista-rf07@teste.com", TipoUsuario.ARTISTA);
-        novoArtista(artista);
+    void artistaDeveReceber403() throws Exception {
+        Usuario dono = criarUsuario("dono-artista@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
+        Usuario artista = criarUsuario("artista-rf07@teste.com", TipoUsuario.ARTISTA);
+        criarArtista(artista);
 
-        editar(vaga.getId(), intruso, payloadValido()).andExpect(status().isForbidden());
-        editar(vaga.getId(), artista, payloadValido()).andExpect(status().isForbidden());
-        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getTitulo())
-                .isEqualTo("Original");
+        editar(vaga.getId(), artista, payloadValido())
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void camposProtegidosSaoIgnoradosEStatusPersistidoEhPreservado() throws Exception {
-        Usuario dono = novoUsuario("dono-protegidos@teste.com", TipoUsuario.CONTRATANTE);
-        Vaga vaga = novaVaga(novoContratante(dono), StatusVaga.PAUSADA);
+    void contratanteNaoProprietarioDeveReceber403() throws Exception {
+        Usuario dono = criarUsuario("dono-idor@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
+        Usuario intruso = criarUsuario("intruso@teste.com", TipoUsuario.CONTRATANTE);
+        criarContratante(intruso);
+
+        ObjectNode payload = payloadValido();
+        payload.put("contratanteId", intruso.getId());
+        editar(vaga.getId(), intruso, payload)
+                .andExpect(status().isForbidden());
+
+        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getTitulo()).isEqualTo("Original");
+    }
+
+    @Test
+    void vagaInexistenteDeveReceber404() throws Exception {
+        Usuario contratante = criarUsuario("inexistente@teste.com", TipoUsuario.CONTRATANTE);
+        criarContratante(contratante);
+
+        editar(999_999L, contratante, payloadValido())
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void proprietarioDeveAtualizarTodosOsDetalhesEPreservarCamposProtegidos() throws Exception {
+        Usuario dono = criarUsuario("dono-campos@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.PAUSADA);
+        Long idOriginal = vaga.getId();
         LocalDateTime publicacaoOriginal = vaga.getDataPublicacao();
-        Usuario outro = novoUsuario("outro-payload@teste.com", TipoUsuario.CONTRATANTE);
-        novoContratante(outro);
+        Usuario outro = criarUsuario("outro-id-payload@teste.com", TipoUsuario.CONTRATANTE);
+        criarContratante(outro);
+
         ObjectNode payload = payloadValido();
         payload.put("contratanteId", outro.getId());
-        payload.put("id", 999999);
+        payload.put("id", 987654);
         payload.put("status", "CANCELADA");
-        payload.put("dataPublicacao", "2035-01-01T00:00:00");
+
+        editar(idOriginal, dono, payload)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(idOriginal))
+                .andExpect(jsonPath("$.contratanteId").value(dono.getId()))
+                .andExpect(jsonPath("$.status").value("PAUSADA"))
+                .andExpect(jsonPath("$.titulo").value("Título atualizado"))
+                .andExpect(jsonPath("$.descricao").value("Descrição atualizada"))
+                .andExpect(jsonPath("$.requisitos").value("Requisitos atualizados"))
+                .andExpect(jsonPath("$.remuneraValor").value(2500.75))
+                .andExpect(jsonPath("$.cidade").value("Campinas"))
+                .andExpect(jsonPath("$.estado").value("SP"))
+                .andExpect(jsonPath("$.modeloTrabalho").value("HIBRIDO"))
+                .andExpect(jsonPath("$.fotos.length()").value(2));
+
+        Vaga persistida = vagaRepository.findById(idOriginal).orElseThrow();
+        assertThat(persistida.getId()).isEqualTo(idOriginal);
+        assertThat(persistida.getContratante().getUsuarioId()).isEqualTo(dono.getId());
+        assertThat(persistida.getStatus()).isEqualTo(StatusVaga.PAUSADA);
+        assertThat(persistida.getDataPublicacao()).isEqualTo(publicacaoOriginal);
+        assertThat(persistida.getFormaPagamento()).isEqualTo("Transferência");
+        assertThat(persistida.getEnderecoCompleto()).isEqualTo("Rua Nova, 10");
+        assertThat(persistida.getBeneficios()).isEqualTo("Transporte");
+        assertThat(persistida.getTipoContrato()).isEqualTo("Temporário");
+        assertThat(persistida.getCategoria()).isEqualTo("Música");
+        assertThat(persistida.getExperiencia()).isEqualTo("Pleno");
+        assertThat(persistida.getDataLimiteCandidatura()).isEqualTo(LocalDate.of(2030, 12, 20));
+        assertThat(persistida.getAbrangencia()).isEqualTo("nacional");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StatusVaga.class, names = {"PAUSADA", "ENCERRADA", "CANCELADA"})
+    void edicaoDeDetalhesNaoDeveInventarRestricaoPorStatus(StatusVaga statusOriginal) throws Exception {
+        Usuario dono = criarUsuario("status-" + statusOriginal + "@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), statusOriginal);
+        ObjectNode payload = payloadValido();
+        payload.put("status", "ABERTA");
 
         editar(vaga.getId(), dono, payload)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(vaga.getId()))
-                .andExpect(jsonPath("$.contratanteId").value(dono.getId()))
-                .andExpect(jsonPath("$.status").value("PAUSADA"));
-
-        Vaga salva = vagaRepository.findById(vaga.getId()).orElseThrow();
-        assertThat(salva.getContratante().getUsuarioId()).isEqualTo(dono.getId());
-        assertThat(salva.getDataPublicacao()).isEqualTo(publicacaoOriginal);
-        assertThat(salva.getStatus()).isEqualTo(StatusVaga.PAUSADA);
+                .andExpect(jsonPath("$.status").value(statusOriginal.name()));
     }
 
     @Test
-    void remuneracaoNegativaELimitesInvalidosRetornam400() throws Exception {
-        Usuario dono = novoUsuario("dono-validacao-rf07@teste.com", TipoUsuario.CONTRATANTE);
-        Vaga vaga = novaVaga(novoContratante(dono), StatusVaga.ABERTA);
-        ObjectNode negativo = payloadValido();
-        negativo.put("remuneraValor", -0.01);
-        editar(vaga.getId(), dono, negativo).andExpect(status().isBadRequest());
+    void deveRejeitarObrigatorioBlank() throws Exception {
+        Usuario dono = criarUsuario("blank@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
+        ObjectNode payload = payloadValido();
+        payload.put("titulo", "   ");
+
+        editar(vaga.getId(), dono, payload)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detalhes[0]").isNotEmpty());
+    }
+
+    @Test
+    void deveRejeitarLimitesAntesDoPostgresql() throws Exception {
+        Usuario dono = criarUsuario("limites@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
 
         ObjectNode tituloLongo = payloadValido();
         tituloLongo.put("titulo", "x".repeat(151));
         editar(vaga.getId(), dono, tituloLongo).andExpect(status().isBadRequest());
-        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getTitulo())
-                .isEqualTo("Original");
+
+        ObjectNode valorForaDaPrecisao = payloadValido();
+        valorForaDaPrecisao.put("remuneraValor", 100_000_000);
+        editar(vaga.getId(), dono, valorForaDaPrecisao).andExpect(status().isBadRequest());
+
+        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getTitulo()).isEqualTo("Original");
     }
 
     @Test
-    void tagIdsNullPreservaEVazioRemoveVinculos() throws Exception {
-        Usuario dono = novoUsuario("dono-tags-rf07@teste.com", TipoUsuario.CONTRATANTE);
-        Vaga vaga = novaVaga(novoContratante(dono), StatusVaga.ABERTA);
-        Tag tag = novaTag("Música");
-        vincularTag(vaga.getId(), tag.getId());
+    void deveRejeitarRemuneracaoNegativaEEnumInvalido() throws Exception {
+        Usuario dono = criarUsuario("formato@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
+
+        ObjectNode negativo = payloadValido();
+        negativo.put("remuneraValor", -0.01);
+        editar(vaga.getId(), dono, negativo).andExpect(status().isBadRequest());
+
+        ObjectNode enumInvalido = payloadValido();
+        enumInvalido.put("modeloTrabalho", "INVALIDO");
+        editar(vaga.getId(), dono, enumInvalido).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deveSubstituirAdicionarRemoverEDeduplicarTags() throws Exception {
+        Usuario dono = criarUsuario("tags@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
+        Tag tag1 = criarTag("Música");
+        Tag tag2 = criarTag("Fotografia");
+        Tag tag3 = criarTag("Teatro");
+        definirTags(vaga.getId(), tag1.getId(), tag2.getId());
+
+        ObjectNode substituir = payloadValido();
+        substituir.putArray("tagIds").add(tag2.getId()).add(tag3.getId()).add(tag3.getId());
+        editar(vaga.getId(), dono, substituir).andExpect(status().isOk());
+        assertThat(tagsDaVaga(vaga.getId())).containsExactlyInAnyOrder(tag2.getId(), tag3.getId());
+
+        ObjectNode adicionar = payloadValido();
+        adicionar.putArray("tagIds").add(tag1.getId()).add(tag2.getId()).add(tag3.getId());
+        editar(vaga.getId(), dono, adicionar).andExpect(status().isOk());
+        assertThat(tagsDaVaga(vaga.getId())).containsExactlyInAnyOrder(tag1.getId(), tag2.getId(), tag3.getId());
+
+        ObjectNode remover = payloadValido();
+        remover.putArray("tagIds").add(tag1.getId());
+        editar(vaga.getId(), dono, remover).andExpect(status().isOk());
+        assertThat(tagsDaVaga(vaga.getId())).containsExactly(tag1.getId());
+    }
+
+    @Test
+    void tagIdsAusenteOuNullDevePreservarEListaVaziaDeveLimpar() throws Exception {
+        Usuario dono = criarUsuario("semantica-tags@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
+        Tag tag = criarTag("Dança");
+        definirTags(vaga.getId(), tag.getId());
 
         ObjectNode ausente = payloadValido();
         ausente.remove("tagIds");
@@ -157,55 +262,51 @@ class VagaEdicaoRf07IntegrationTest {
     }
 
     @Test
-    void tagsSaoSubstituidasEDeduplicadas() throws Exception {
-        Usuario dono = novoUsuario("dono-substitui-tags@teste.com", TipoUsuario.CONTRATANTE);
-        Vaga vaga = novaVaga(novoContratante(dono), StatusVaga.ABERTA);
-        Tag antiga = novaTag("Antiga");
-        Tag nova = novaTag("Nova");
-        vincularTag(vaga.getId(), antiga.getId());
+    void tagInexistenteDeveCausarRollbackSemAlterarCatalogoOuTagsDoArtista() throws Exception {
+        Usuario dono = criarUsuario("rollback@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
+        Tag tag1 = criarTag("Cinema");
+        Tag tag2 = criarTag("Produção");
+        definirTags(vaga.getId(), tag1.getId(), tag2.getId());
+
+        Usuario artistaUsuario = criarUsuario("artista-tag@teste.com", TipoUsuario.ARTISTA);
+        PerfilArtista artista = criarArtista(artistaUsuario);
+        artista.getTags().add(tag1);
+        perfilArtistaRepository.save(artista);
+        long catalogoAntes = tagRepository.count();
+        long tagsArtistaAntes = contarTagsArtista(artistaUsuario.getId());
+
         ObjectNode payload = payloadValido();
-        payload.putArray("tagIds").add(nova.getId()).add(nova.getId());
-
-        editar(vaga.getId(), dono, payload).andExpect(status().isOk());
-        assertThat(tagsDaVaga(vaga.getId())).containsExactly(nova.getId());
-    }
-
-    @Test
-    void tagInexistenteCausaRollbackIntegral() throws Exception {
-        Usuario dono = novoUsuario("dono-rollback-rf07@teste.com", TipoUsuario.CONTRATANTE);
-        Vaga vaga = novaVaga(novoContratante(dono), StatusVaga.ABERTA);
-        Tag tag = novaTag("Original");
-        vincularTag(vaga.getId(), tag.getId());
-        ObjectNode payload = payloadValido();
-        payload.put("titulo", "Não deve persistir");
-        payload.putArray("tagIds").add(tag.getId()).add(999999);
-
+        payload.put("titulo", "Não pode persistir");
+        payload.putArray("tagIds").add(tag1.getId()).add(999_999);
         editar(vaga.getId(), dono, payload).andExpect(status().isNotFound());
-        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getTitulo())
-                .isEqualTo("Original");
-        assertThat(tagsDaVaga(vaga.getId())).containsExactly(tag.getId());
+
+        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getTitulo()).isEqualTo("Original");
+        assertThat(tagsDaVaga(vaga.getId())).containsExactlyInAnyOrder(tag1.getId(), tag2.getId());
+        assertThat(tagRepository.count()).isEqualTo(catalogoAntes);
+        assertThat(contarTagsArtista(artistaUsuario.getId())).isEqualTo(tagsArtistaAntes);
     }
 
     @Test
-    void historicoDeCandidaturaPermaneceIntegralmenteIntacto() throws Exception {
-        Usuario dono = novoUsuario("dono-candidatura-rf07@teste.com", TipoUsuario.CONTRATANTE);
-        Vaga vaga = novaVaga(novoContratante(dono), StatusVaga.ABERTA);
-        Usuario usuarioArtista = novoUsuario("artista-candidatura-rf07@teste.com", TipoUsuario.ARTISTA);
-        PerfilArtista artista = novoArtista(usuarioArtista);
-        Candidatura original = novaCandidatura(vaga, artista);
+    void candidaturaDevePermanecerIntegralmenteIntacta() throws Exception {
+        Usuario dono = criarUsuario("candidatura-dono@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
+        Usuario artistaUsuario = criarUsuario("candidatura-artista@teste.com", TipoUsuario.ARTISTA);
+        PerfilArtista artista = criarArtista(artistaUsuario);
+        Candidatura original = criarCandidatura(vaga, artista);
 
         editar(vaga.getId(), dono, payloadValido()).andExpect(status().isOk());
 
         List<Candidatura> candidaturas = candidaturaRepository.findByVagaId(vaga.getId());
         assertThat(candidaturas).hasSize(1);
-        Candidatura salva = candidaturas.getFirst();
-        assertThat(salva.getId()).isEqualTo(original.getId());
-        assertThat(salva.getArtista().getUsuarioId()).isEqualTo(usuarioArtista.getId());
-        assertThat(salva.getStatus()).isEqualTo(StatusCandidatura.EM_ANALISE);
-        assertThat(salva.getMensagemApresentacao()).isEqualTo("Mensagem original");
-        assertThat(salva.getLinkPortfolioCandidatura())
-                .isEqualTo("https://exemplo.com/portfolio-original");
-        assertThat(salva.getDataCandidatura()).isEqualTo(original.getDataCandidatura());
+        Candidatura persistida = candidaturas.get(0);
+        assertThat(persistida.getId()).isEqualTo(original.getId());
+        assertThat(persistida.getVaga().getId()).isEqualTo(vaga.getId());
+        assertThat(persistida.getArtista().getUsuarioId()).isEqualTo(artistaUsuario.getId());
+        assertThat(persistida.getStatus()).isEqualTo(original.getStatus());
+        assertThat(persistida.getMensagemApresentacao()).isEqualTo(original.getMensagemApresentacao());
+        assertThat(persistida.getLinkPortfolioCandidatura()).isEqualTo(original.getLinkPortfolioCandidatura());
+        assertThat(persistida.getDataCandidatura()).isEqualTo(original.getDataCandidatura());
     }
 
     private org.springframework.test.web.servlet.ResultActions editar(
@@ -233,11 +334,11 @@ class VagaEdicaoRf07IntegrationTest {
         payload.put("experiencia", "Pleno");
         payload.put("dataLimiteCandidatura", "2030-12-20");
         payload.put("abrangencia", "nacional");
-        payload.putArray("fotos").add("assets/vaga-foto-1.png");
+        payload.putArray("fotos").add("assets/vaga-foto-1.png").add("https://exemplo.com/foto.jpg");
         return payload;
     }
 
-    private Usuario novoUsuario(String email, TipoUsuario tipo) {
+    private Usuario criarUsuario(String email, TipoUsuario tipo) {
         Usuario usuario = new Usuario();
         usuario.setNome("Usuário RF07");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
@@ -250,21 +351,21 @@ class VagaEdicaoRf07IntegrationTest {
         return usuarioRepository.save(usuario);
     }
 
-    private PerfilContratante novoContratante(Usuario usuario) {
+    private PerfilContratante criarContratante(Usuario usuario) {
         PerfilContratante perfil = new PerfilContratante();
         perfil.setUsuario(usuario);
         perfil.setNomeEmpresa("Empresa RF07");
         return perfilContratanteRepository.save(perfil);
     }
 
-    private PerfilArtista novoArtista(Usuario usuario) {
+    private PerfilArtista criarArtista(Usuario usuario) {
         PerfilArtista perfil = new PerfilArtista();
         perfil.setUsuario(usuario);
         perfil.setBiografia("Biografia RF07");
         return perfilArtistaRepository.save(perfil);
     }
 
-    private Vaga novaVaga(PerfilContratante contratante, StatusVaga status) {
+    private Vaga criarVaga(PerfilContratante contratante, StatusVaga status) {
         Vaga vaga = new Vaga();
         vaga.setContratante(contratante);
         vaga.setTitulo("Original");
@@ -282,24 +383,29 @@ class VagaEdicaoRf07IntegrationTest {
         return vagaRepository.save(vaga);
     }
 
-    private Tag novaTag(String nome) {
+    private Tag criarTag(String nome) {
         Tag tag = new Tag();
         tag.setNome(nome);
         return tagRepository.save(tag);
     }
 
-    private void vincularTag(Long vagaId, Long tagId) {
-        jdbcTemplate.update("INSERT INTO tags_vaga (vaga_id, tag_id) VALUES (?, ?)", vagaId, tagId);
+    private void definirTags(Long vagaId, Long... tagIds) {
+        for (Long tagId : tagIds) {
+            jdbcTemplate.update("INSERT INTO tags_vaga (vaga_id, tag_id) VALUES (?, ?)", vagaId, tagId);
+        }
     }
 
     private List<Long> tagsDaVaga(Long vagaId) {
         return jdbcTemplate.queryForList(
-                "SELECT tag_id FROM tags_vaga WHERE vaga_id = ? ORDER BY tag_id",
-                Long.class,
-                vagaId);
+                "SELECT tag_id FROM tags_vaga WHERE vaga_id = ? ORDER BY tag_id", Long.class, vagaId);
     }
 
-    private Candidatura novaCandidatura(Vaga vaga, PerfilArtista artista) {
+    private long contarTagsArtista(Long artistaId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM tags_artista WHERE artista_id = ?", Long.class, artistaId);
+    }
+
+    private Candidatura criarCandidatura(Vaga vaga, PerfilArtista artista) {
         Candidatura candidatura = new Candidatura();
         candidatura.setVaga(vaga);
         candidatura.setArtista(artista);

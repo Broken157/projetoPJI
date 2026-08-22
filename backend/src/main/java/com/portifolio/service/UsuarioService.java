@@ -36,84 +36,13 @@ public class UsuarioService {
 
     @Transactional
     public UsuarioResponse atualizarAtual(UsuarioAtualizacaoRequest request) {
-        return atualizarUsuario(usuarioAtual(), request);
-    }
-
-    @Transactional
-    public void deletarAtual() {
         Usuario usuario = usuarioAtual();
-        refreshTokenService.invalidarTodosDoUsuario(usuario.getId());
-        usuarioRepository.delete(usuario);
-    }
-
-    /** Lista pública compatível, sem dados pessoais ou do responsável legal. */
-    @Transactional(readOnly = true)
-    public List<UsuarioResponse> listarTodos() {
-        return usuarioRepository.findAll().stream().map(this::toResponsePublico).toList();
-    }
-
-    @Transactional(readOnly = true)
-    public UsuarioResponse buscarPorId(Long id) {
-        Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
-        return authenticatedUserResolver.usuarioAtual()
-                .filter(atual -> atual.getId().equals(id))
-                .map(ignorado -> toResponseCompleto(usuario))
-                .orElseGet(() -> toResponsePublico(usuario));
-    }
-
-    @Transactional
-    public UsuarioResponse criar(UsuarioRequest request) {
-        validarEmailDisponivel(request.getEmail(), null);
-        if (request.getSenha() == null || request.getSenha().isBlank()) {
-            throw new IllegalArgumentException("Senha é obrigatória.");
-        }
-        validarDataNascimento(request.getDataNascimento());
-
-        Usuario usuario = new Usuario();
-        usuario.setNome(request.getNome());
-        usuario.setDataNascimento(request.getDataNascimento());
-        usuario.setTelefone(request.getTelefone());
-        usuario.setEmail(request.getEmail());
-        usuario.setSenha(passwordEncoder.encode(request.getSenha()));
-        usuario.setTipoUsuario(request.getTipoUsuario());
-        usuario.setPerfilCompleto(false);
-        usuario.setDataCriacao(LocalDateTime.now());
-        atualizarResponsavelSeMenor(
-                usuario,
-                request.getNomeResponsavel(),
-                request.getTelefoneResponsavel(),
-                request.getEmailResponsavel());
-        return toResponseCompleto(usuarioRepository.save(usuario));
-    }
-
-    /** Rota legada por ID, limitada à própria conta e ao DTO seguro do RF08. */
-    @Transactional
-    public UsuarioResponse atualizar(Long id, UsuarioAtualizacaoRequest request) {
-        Usuario usuario = usuarioAtual();
-        if (!usuario.getId().equals(id)) {
-            throw new ForbiddenException("Você só pode alterar a própria conta.");
-        }
-        return atualizarUsuario(usuario, request);
-    }
-
-    @Transactional
-    public void deletar(Long id) {
-        Usuario usuario = usuarioAtual();
-        if (!usuario.getId().equals(id)) {
-            throw new ForbiddenException("Você só pode excluir a própria conta.");
-        }
-        refreshTokenService.invalidarTodosDoUsuario(usuario.getId());
-        usuarioRepository.delete(usuario);
-    }
-
-    private UsuarioResponse atualizarUsuario(
-            Usuario usuario, UsuarioAtualizacaoRequest request) {
         validarEmailDisponivel(request.getEmail(), usuario.getId());
+
         usuario.setNome(request.getNome());
         usuario.setTelefone(request.getTelefone());
         usuario.setEmail(request.getEmail());
-        // dataNascimento é deliberadamente imutável, mesmo se o cliente legado a enviar.
+        // dataNascimento permanece imutável mesmo que o cliente legado a envie.
         atualizarResponsavelSeMenor(
                 usuario,
                 request.getNomeResponsavel(),
@@ -129,8 +58,73 @@ public class UsuarioService {
         return toResponseCompleto(salvo);
     }
 
-    private boolean atualizarSenhaSeSolicitada(
-            Usuario usuario, UsuarioAtualizacaoRequest request) {
+    @Transactional
+    public void deletarAtual() {
+        usuarioRepository.delete(usuarioAtual());
+    }
+
+    /** Lista compatível, sem expor e-mail, telefone, nascimento ou responsável. */
+    @Transactional(readOnly = true)
+    public List<UsuarioResponse> listarTodos() {
+        return usuarioRepository.findAll().stream()
+                .map(this::toResponsePublico)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UsuarioResponse buscarPorId(Long id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
+        return authenticatedUserResolver.usuarioAtual()
+                .filter(atual -> atual.getId().equals(id))
+                .map(ignorado -> toResponseCompleto(usuario))
+                .orElseGet(() -> toResponsePublico(usuario));
+    }
+
+    @Transactional
+    public UsuarioResponse criar(UsuarioRequest request) {
+        if (usuarioRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new ConflictException("E-mail já cadastrado.");
+        }
+        if (request.getSenha() == null || request.getSenha().isBlank()) {
+            throw new IllegalArgumentException("Senha é obrigatória.");
+        }
+        Usuario usuario = new Usuario();
+        preencherUsuarioNaCriacao(usuario, request);
+        usuario.setSenha(passwordEncoder.encode(request.getSenha()));
+        usuario.setPerfilCompleto(false);
+        usuario.setDataCriacao(LocalDateTime.now());
+        return toResponseCompleto(usuarioRepository.save(usuario));
+    }
+
+    /** Rota legada por ID, limitada aos mesmos campos seguros de /me. */
+    @Transactional
+    public UsuarioResponse atualizar(Long id, UsuarioRequest request) {
+        Usuario usuario = exigirProprioUsuario(id);
+        validarEmailDisponivel(request.getEmail(), id);
+        if (request.getSenha() != null && !request.getSenha().isBlank()) {
+            throw new UnprocessableEntityException(
+                    "Troque a senha por /api/usuarios/me informando a senha atual.");
+        }
+        usuario.setNome(request.getNome());
+        usuario.setTelefone(request.getTelefone());
+        usuario.setEmail(request.getEmail());
+        atualizarResponsavelSeMenor(
+                usuario,
+                request.getNomeResponsavel(),
+                request.getTelefoneResponsavel(),
+                request.getEmailResponsavel());
+        Usuario salvo = usuarioRepository.save(usuario);
+        perfilCompletoService.recalcular(salvo);
+        return toResponseCompleto(salvo);
+    }
+
+    @Transactional
+    public void deletar(Long id) {
+        usuarioRepository.delete(exigirProprioUsuario(id));
+    }
+
+    private boolean atualizarSenhaSeSolicitada(Usuario usuario, UsuarioAtualizacaoRequest request) {
         if (request.getNovaSenha() == null || request.getNovaSenha().isBlank()) {
             return false;
         }
@@ -139,8 +133,7 @@ public class UsuarioService {
                     "Contas exclusivamente Google não podem criar senha por este fluxo.");
         }
         if (request.getSenhaAtual() == null || request.getSenhaAtual().isBlank()) {
-            throw new UnprocessableEntityException(
-                    "Informe a senha atual para definir uma nova senha.");
+            throw new UnprocessableEntityException("Informe a senha atual para definir uma nova senha.");
         }
         if (!passwordEncoder.matches(request.getSenhaAtual(), usuario.getSenha())) {
             throw new ForbiddenException("Senha atual incorreta.");
@@ -151,19 +144,10 @@ public class UsuarioService {
 
     private void validarEmailDisponivel(String email, Long usuarioId) {
         usuarioRepository.findByEmail(email)
-                .filter(existente -> usuarioId == null || !existente.getId().equals(usuarioId))
+                .filter(existente -> !existente.getId().equals(usuarioId))
                 .ifPresent(existente -> {
                     throw new ConflictException("E-mail já cadastrado.");
                 });
-    }
-
-    private void validarDataNascimento(LocalDate dataNascimento) {
-        if (dataNascimento == null) {
-            throw new IllegalArgumentException("Data de nascimento é obrigatória.");
-        }
-        if (dataNascimento.isAfter(LocalDate.now())) {
-            throw new IllegalArgumentException("Data de nascimento não pode estar no futuro.");
-        }
     }
 
     private void atualizarResponsavelSeMenor(
@@ -174,22 +158,24 @@ public class UsuarioService {
         if (!menorDeIdade(usuario.getDataNascimento())) {
             return;
         }
+
         String nomeFinal = valorInformadoOuAtual(nomeResponsavel, usuario.getNomeResponsavel());
-        String telefoneFinal = valorInformadoOuAtual(
-                telefoneResponsavel, usuario.getTelefoneResponsavel());
+        String telefoneFinal = valorInformadoOuAtual(telefoneResponsavel, usuario.getTelefoneResponsavel());
         String emailFinal = valorInformadoOuAtual(emailResponsavel, usuario.getEmailResponsavel());
+
         if (!preenchido(nomeFinal) || !preenchido(telefoneFinal) || !preenchido(emailFinal)) {
             throw new UnprocessableEntityException(
                     "Nome, telefone e e-mail do responsável são obrigatórios para menores de 18 anos.");
         }
+
         usuario.setNomeResponsavel(nomeFinal);
         usuario.setTelefoneResponsavel(telefoneFinal);
         usuario.setEmailResponsavel(emailFinal);
     }
 
     private boolean menorDeIdade(LocalDate dataNascimento) {
-        validarDataNascimento(dataNascimento);
-        return Period.between(dataNascimento, LocalDate.now()).getYears() < 18;
+        return dataNascimento != null
+                && Period.between(dataNascimento, LocalDate.now()).getYears() < 18;
     }
 
     private String valorInformadoOuAtual(String novoValor, String valorAtual) {
@@ -198,6 +184,25 @@ public class UsuarioService {
 
     private boolean preenchido(String valor) {
         return valor != null && !valor.isBlank();
+    }
+
+    private Usuario exigirProprioUsuario(Long id) {
+        Usuario atual = usuarioAtual();
+        if (!atual.getId().equals(id)) {
+            throw new ForbiddenException("Você só pode alterar a própria conta.");
+        }
+        return atual;
+    }
+
+    private void preencherUsuarioNaCriacao(Usuario usuario, UsuarioRequest request) {
+        usuario.setNome(request.getNome());
+        usuario.setDataNascimento(request.getDataNascimento());
+        usuario.setTelefone(request.getTelefone());
+        usuario.setEmail(request.getEmail());
+        usuario.setTipoUsuario(request.getTipoUsuario());
+        usuario.setNomeResponsavel(request.getNomeResponsavel());
+        usuario.setTelefoneResponsavel(request.getTelefoneResponsavel());
+        usuario.setEmailResponsavel(request.getEmailResponsavel());
     }
 
     private UsuarioResponse toResponseCompleto(Usuario usuario) {
@@ -228,7 +233,6 @@ public class UsuarioService {
 
     private Usuario usuarioAtual() {
         return authenticatedUserResolver.usuarioAtual()
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Usuário autenticado não encontrado."));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado."));
     }
 }

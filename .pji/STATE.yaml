@@ -24,8 +24,9 @@
       "name": "pji-automation",
       "repository": "fork",
       "upstream_integration_forbidden": true,
-      "published": false,
-      "publication_status": "PENDING_EXPLICIT_REMOTE_UPLOAD_APPROVAL"
+      "published": true,
+      "publication_status": "PUBLISHED_TO_FORK",
+      "publication_sha": "473bbc24a4df17a0400af52403e12ec2130fa1cd"
     }
   },
   "phase": "BASELINE_SYNC",

@@ -59,8 +59,8 @@ test('recuperação exige e-mail e mostra a resposta genérica da API', async ()
       body: JSON.stringify({ email: 'artista@palco.test' })
     })
   ));
-  expect(document.getElementById('mensagem-recuperacao'))
-    .toHaveTextContent('Se o e-mail estiver cadastrado');
+  await waitFor(() => expect(document.getElementById('mensagem-recuperacao'))
+    .toHaveTextContent('Se o e-mail estiver cadastrado'));
 });
 
 test('redefinição lê e remove o fragmento, bloqueia divergência e envia token no body', async () => {
@@ -92,8 +92,8 @@ test('redefinição lê e remove o fragmento, bloqueia divergência e envia toke
     token: 'TOKEN_SEGURO',
     novaSenha: 'senha-nova'
   });
-  expect(document.getElementById('mensagem-redefinicao'))
-    .toHaveTextContent('Senha redefinida com sucesso');
+  await waitFor(() => expect(document.getElementById('mensagem-redefinicao'))
+    .toHaveTextContent('Senha redefinida com sucesso'));
 });
 
 test('redefinição sem token bloqueia envio', () => {

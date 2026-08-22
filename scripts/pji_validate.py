@@ -22,10 +22,10 @@ YAML_FILES = (
 )
 CHECKPOINT = "fe4a18a638a47cdc50acb5680c999280f8c26545"
 INTEGRATION_SHA = "d351ff909266884446f78eac32364816c2b1e4b6"
-BASELINE_SHA = "858088939ba4cab7d59bdad484ade9688fae114e"
+BASELINE_SHA = "fc2f8ec8eabc864a8ed98054e458971ab6dd664d"
 MANDATORY_BLOCKERS = {
     "SECURITY-JWT-001": ("SECURITY_REGRESSION", "CLOSED"),
-    "FRONTEND-TEST-001": ("TEST_GAP", "OPEN"),
+    "FRONTEND-TEST-001": ("TEST_GAP", "CLOSED"),
     "RF24-SCHEMA-001": ("FUNCTIONAL_BLOCKER", "BLOCKED_BY_DATABASE"),
     "BASELINE-SYNC-001": ("INTEGRATION_PENDING", "OPEN"),
 }
@@ -92,7 +92,7 @@ def main() -> int:
         "current_rf": "NONE_DURING_BASELINE_SYNC",
         "database_changed": "historical_rf25_only",
         "frontend_changed": True,
-        "pr_ready": False,
+        "pr_ready": True,
     }
     for key, expected in expectations.items():
         if state.get(key) != expected:
@@ -106,30 +106,30 @@ def main() -> int:
         if backend.get(key) != expected:
             failures.append(f"backend test {key}: expected {expected!r}, got {backend.get(key)!r}")
     frontend = state["tests"]["frontend"]
-    if frontend.get("result") != "FAILED" or frontend.get("execution_status") != "FRONTEND_TEST_FAILURE":
-        failures.append("frontend state must preserve the executed functional test failure")
+    if frontend.get("result") != "PASSED" or frontend.get("execution_status") != "PASSED":
+        failures.append("frontend state must record the executed successful validation")
     elif frontend.get("npm_ci") != "PASSED" or frontend.get("build") != "BUILD_SUCCESS":
         failures.append("frontend state must record successful npm ci and build")
-    elif frontend.get("suites") != {"total": 4, "passed": 3, "failed": 1}:
+    elif frontend.get("suites") != {"total": 4, "passed": 4, "failed": 0}:
         failures.append("frontend suite counts do not match executed evidence")
-    elif frontend.get("tests") != {"total": 13, "passed": 11, "failed": 2, "skipped": 0}:
+    elif frontend.get("tests") != {"total": 13, "passed": 13, "failed": 0, "skipped": 0}:
         failures.append("frontend test counts do not match executed evidence")
     else:
-        passes.append("test baseline matches 280/280 backend and the executed frontend failure evidence")
+        passes.append("test baseline matches 280/280 backend and 13/13 frontend evidence")
 
     delivery = state.get("delivery", {})
     baseline_sync = state.get("baseline_sync", {})
     fork_backup = delivery.get("fork_backup", {})
-    if any(delivery.get(key) is not False for key in ("ready_for_pr", "pr_created", "merge_approved", "merged")):
-        failures.append("delivery state must remain not ready, without PR or merge authorization")
+    if delivery.get("ready_for_pr") is not True or any(delivery.get(key) is not False for key in ("pr_created", "merge_approved", "merged")):
+        failures.append("delivery state must be PR-ready without PR or merge authorization")
     elif fork_backup.get("allowed_when_blocked") is not True or fork_backup.get("baseline_pushed") is not True or fork_backup.get("baseline_remote_sha") != BASELINE_SHA:
         failures.append("fork backup state must record the preserved baseline SHA")
     elif baseline_sync.get("branch") != "sync/baseline-2026-08-25" or baseline_sync.get("base_sha") != INTEGRATION_SHA:
         failures.append("baseline sync branch/base does not match the audited upstream")
-    elif baseline_sync.get("head_sha") != BASELINE_SHA or baseline_sync.get("prepared") is not False or baseline_sync.get("preserved_on_fork") is not True:
-        failures.append("baseline sync head/prepared state does not match the failed frontend gate")
+    elif baseline_sync.get("head_sha") != BASELINE_SHA or baseline_sync.get("prepared") is not True or baseline_sync.get("preserved_on_fork") is not True:
+        failures.append("baseline sync head/prepared state does not match the closed frontend gate")
     else:
-        passes.append("delivery and baseline sync state preserve the failed frontend gate")
+        passes.append("delivery and baseline sync state record technical PR readiness without merge authorization")
 
     if set(state.get("blockers", [])) != set(MANDATORY_BLOCKERS):
         failures.append("STATE blocker references do not match mandatory blockers")
@@ -178,10 +178,13 @@ def main() -> int:
 
     roadmap = documents["ROADMAP.yaml"]
     rf24 = next((item for item in roadmap.get("items", []) if item.get("id") == "RF24"), None)
+    baseline_item = next((item for item in roadmap.get("items", []) if item.get("id") == "BASELINE_SYNC"), None)
     if roadmap.get("next_automatic_rf") is not None or roadmap.get("automatic_execution_enabled") is not False:
         failures.append("roadmap must not schedule automatic RF execution")
     elif not rf24 or rf24.get("status") != "PARTIAL_BLOCKED_BY_DATABASE":
         failures.append("roadmap must keep RF24 partial and database-blocked")
+    elif not baseline_item or baseline_item.get("delivery_ready") is not True:
+        failures.append("roadmap must record technical baseline delivery readiness")
     else:
         passes.append("roadmap has no automatic RF and preserves RF24 partial status")
 

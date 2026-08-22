@@ -46,9 +46,9 @@
       "command": ".\\mvnw.cmd clean test '-Dspring.jpa.show-sql=false'"
     },
     "frontend": {
-      "result": "FAILED",
-      "execution_status": "FRONTEND_TEST_FAILURE",
-      "reason": "The recovered environment executed the real suite; two RF09 assertions failed because the expected recovery/reset success messages were empty",
+      "result": "PASSED",
+      "execution_status": "PASSED",
+      "reason": "The RF09 tests now await the final observable DOM state after response.json resolves; production code and assertions were preserved",
       "previous_docker_attempts": 3,
       "environment_recovery": {
         "method": "Official portable Node.js Windows ZIP in TEMP with a temporary frontend copy",
@@ -63,32 +63,34 @@
       "npm_ci": "PASSED",
       "suites": {
         "total": 4,
-        "passed": 3,
-        "failed": 1
+        "passed": 4,
+        "failed": 0
       },
       "tests": {
         "total": 13,
-        "passed": 11,
-        "failed": 2,
+        "passed": 13,
+        "failed": 0,
         "skipped": 0
       },
-      "failed_test_file": "frontend/src/rf09-recuperacao-senha.test.js",
+      "test_file_changed": "frontend/src/rf09-recuperacao-senha.test.js",
+      "frontend_production_changed": false,
+      "frontend_test_changed": true,
       "build": "BUILD_SUCCESS",
-      "next_phase_action": "REQUEST_EXPLICIT_SCOPE_BEFORE_ANY_FUNCTIONAL_FRONTEND_CORRECTION"
+      "next_phase_action": "NONE"
     }
   },
   "database_changed": "historical_rf25_only",
   "frontend_changed": true,
-  "pr_ready": false,
+  "pr_ready": true,
   "delivery": {
-    "ready_for_pr": false,
+    "ready_for_pr": true,
     "pr_created": false,
     "merge_approved": false,
     "merged": false,
     "fork_backup": {
       "allowed_when_blocked": true,
       "baseline_pushed": true,
-      "baseline_remote_sha": "858088939ba4cab7d59bdad484ade9688fae114e",
+      "baseline_remote_sha": "fc2f8ec8eabc864a8ed98054e458971ab6dd664d",
       "repository": "Broken157/projetoPJI",
       "does_not_imply_pr_ready": true
     }
@@ -96,8 +98,8 @@
   "baseline_sync": {
     "branch": "sync/baseline-2026-08-25",
     "base_sha": "d351ff909266884446f78eac32364816c2b1e4b6",
-    "head_sha": "858088939ba4cab7d59bdad484ade9688fae114e",
-    "prepared": false,
+    "head_sha": "fc2f8ec8eabc864a8ed98054e458971ab6dd664d",
+    "prepared": true,
     "preserved_on_fork": true
   },
   "security_observations": [
@@ -115,7 +117,6 @@
     "BASELINE-SYNC-001"
   ],
   "open_blockers": [
-    "FRONTEND-TEST-001",
     "RF24-SCHEMA-001",
     "BASELINE-SYNC-001"
   ]

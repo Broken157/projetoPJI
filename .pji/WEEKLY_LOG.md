@@ -35,4 +35,14 @@
 - Testes frontend executados: 4 suítes, 3 aprovadas e 1 reprovada; 13 testes, 11 aprovados e 2 reprovados em `rf09-recuperacao-senha.test.js`. Build frontend: `BUILD SUCCESS`.
 - Nenhuma correção funcional foi realizada. `FRONTEND-TEST-001` permanece aberto, `pr_ready=false`, `FASE2_PRONTA=NÃO` e `READY_FOR_TUESDAY_PR=NÃO`.
 
+### Fase 2B — fechamento dos testes RF09
+
+- A causa foi confirmada como `TEST_ASYNC_RACE`: os testes aguardavam somente a chamada de `fetch`, não a conclusão de `response.json()` e a atualização observável do DOM.
+- Alterado exclusivamente `frontend/src/rf09-recuperacao-senha.test.js`, substituindo duas assertions imediatas por `waitFor`; nenhuma assertion, endpoint, método, body, token ou validação foi removida.
+- Classificação: `FRONTEND_PRODUCTION_CHANGED=false`; `FRONTEND_TEST_CHANGED=true`; banco e backend inalterados.
+- Validação em nova cópia TEMP com Node `22.23.2`, npm `10.9.8`, ZIP oficial verificado e `NODE_USE_SYSTEM_CA=1`: `npm ci` PASS, 4/4 suítes PASS, 13/13 testes PASS, build PASS.
+- Commit do baseline: `fc2f8ec8eabc864a8ed98054e458971ab6dd664d`, publicado sem force push exclusivamente no fork.
+- `FRONTEND-TEST-001` foi fechado; com `SECURITY-JWT-001` também fechado, `pr_ready=true`. Isso autoriza apenas a futura abertura do PR histórico, não merge.
+- `RF24-SCHEMA-001` permanece `BLOCKED_BY_DATABASE`; `BASELINE-SYNC-001` permanece `OPEN`; fase continua `BASELINE_SYNC` e nenhum RF novo foi iniciado.
+
 O fechamento desta semana e a abertura de uma semana seguinte exigem decisão explícita conforme `.pji/POLICY.yaml`.

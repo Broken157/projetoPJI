@@ -16,8 +16,7 @@
       "status": "IN_PROGRESS",
       "evidence": [".pji/STATE.yaml", ".pji/BLOCKERS.yaml"],
       "implementation_authorized": false,
-      "delivery_ready": false,
-      "delivery_blocker": "FRONTEND-TEST-001"
+      "delivery_ready": true
     },
     {
       "id": "RF03",

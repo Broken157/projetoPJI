@@ -5,23 +5,38 @@
     {
       "id": "SECURITY-JWT-001",
       "type": "SECURITY_REGRESSION",
-      "status": "OPEN",
+      "status": "CLOSED",
       "title": "Predictable JWT fallback secret in checkpoint",
       "evidence": {
         "checkpoint": "backend/src/main/resources/application.properties contains jwt.secret=${JWT_SECRET:MinhaChaveSuperSecreta2026SosArtistas}",
         "previous_state": "The preceding tracked state required jwt.secret=${JWT_SECRET} without a fallback"
       },
-      "required_action": "Obtain explicit authorization before any significant JWT/security configuration change; do not fix during bootstrap",
-      "automation_action": "DO_NOT_FIX",
-      "blocks": ["PR_READY"]
+      "resolution": {
+        "baseline_branch": "sync/baseline-2026-08-25",
+        "commit": "858088939ba4cab7d59bdad484ade9688fae114e",
+        "change": "Removed the predictable JWT fallback and required JWT_SECRET from the external process environment",
+        "validation": "280 backend tests passed with externally supplied ephemeral JWT_SECRET; no secret was committed"
+      },
+      "automation_action": "CLOSED_WITH_EXECUTED_EVIDENCE",
+      "blocks": []
     },
     {
       "id": "FRONTEND-TEST-001",
       "type": "TEST_GAP",
       "status": "OPEN",
-      "title": "Frontend changed without an executed automated frontend suite",
-      "evidence": "Checkpoint includes frontend changes; Node/npm was unavailable in the checkpoint validation environment",
-      "next_phase_action": "Try Node in an isolated Docker environment without changing functional code",
+      "title": "Frontend historical changes remain without an executed automated suite and build",
+      "evidence": {
+        "attempts": 3,
+        "method": "Official ephemeral Node Docker images with read-only host source copied to a temporary container volume",
+        "attempt_1": "Node 22.23.2/npm 10.9.8: npm ci failed with internal Exit handler never called",
+        "attempt_2": "Node 20.20.2/npm 10.8.2: npm ci failed with the same internal error; react-scripts was not installed",
+        "attempt_3": "Node 20: obtaining npm 10.8.0 failed with UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+        "functional_test_result": "NOT_EXECUTED",
+        "build_result": "NOT_EXECUTED",
+        "host_artifacts_created": false
+      },
+      "execution_status": "BLOCKED_BY_ENVIRONMENT",
+      "next_phase_action": "Resolve the isolated npm environment without modifying functional frontend code, then execute npm ci, tests, and build",
       "automation_action": "DO_NOT_CLOSE_WITHOUT_EXECUTED_EVIDENCE",
       "blocks": ["PR_READY"]
     },
@@ -33,7 +48,8 @@
       "evidence": "RELATORIO_RF24_SISTEMA_MENSAGENS.md classifies RF24 as partial because secure attachments, a persistent edited marker, and full RF30 anonymization compatibility require schema support",
       "required_action": "Request a new, explicitly scoped database approval before any schema design or implementation",
       "automation_action": "DO_NOT_CHANGE_DATABASE_OR_MARK_RF24_COMPLETE",
-      "blocks": ["RF24_COMPLETE"]
+      "blocks": ["RF24_COMPLETE"],
+      "blocks_historical_baseline_pr": false
     },
     {
       "id": "BASELINE-SYNC-001",
@@ -45,9 +61,11 @@
         "upstream_integration_sha": "d351ff909266884446f78eac32364816c2b1e4b6",
         "checkpoint_branch_present_upstream": false
       },
-      "required_action": "Perform only an explicitly authorized baseline synchronization workflow; this bootstrap creates no PR or merge",
+      "required_action": "Integrate the reviewed baseline through an explicitly approved original-repository workflow; no merge is authorized by this state",
       "automation_action": "DO_NOT_START_NEW_RF",
-      "blocks": ["NEW_RF", "PR_READY"]
+      "blocks": ["NEW_RF", "PHASE_DEVELOPMENT", "NEXT_FUNCTIONAL_CYCLE"],
+      "blocks_pr_ready": false,
+      "blocks_pr_creation": false
     }
   ]
 }

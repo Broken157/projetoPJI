@@ -42,12 +42,20 @@
   "branch_rules": {
     "checkpoint/pre-automacao-2026-08-22": "IMMUTABLE",
     "pji-automation": "FORK_ONLY_AUTOMATION_INFRASTRUCTURE",
-    "projetoPJI-10-08-ajustes": "OFFICIAL_INTEGRATION_DO_NOT_MUTATE_DURING_BOOTSTRAP"
+    "projetoPJI-10-08-ajustes": "OFFICIAL_INTEGRATION_NEVER_PUSH_DIRECTLY"
+  },
+  "delivery_semantics": {
+    "pr_ready": "Technical readiness to open a historical baseline PR; it is not merge approval",
+    "merge_approved": "Requires a separate explicit decision and is never inferred from pr_ready",
+    "baseline_sync_open": "Does not block pr_ready or baseline PR creation; blocks new RF work, DEVELOPMENT phase, and the next functional cycle until approved integration"
   },
   "phase_rules": {
     "BASELINE_SYNC": {
       "new_rf_allowed": false,
-      "pr_creation_allowed": false,
+      "development_phase_allowed": false,
+      "next_functional_cycle_allowed": false,
+      "pr_creation_allowed": true,
+      "pr_creation_requires_pr_ready": true,
       "automatic_execution_allowed": false
     }
   }

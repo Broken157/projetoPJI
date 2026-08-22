@@ -8,14 +8,16 @@
   "phase_gate": {
     "id": "BASELINE-SYNC-001",
     "status": "OPEN",
-    "effect": "No new RF may start"
+    "effect": "No new RF, DEVELOPMENT phase, or next functional cycle may start; this gate does not block technical PR readiness or creation of the historical baseline PR"
   },
   "items": [
     {
       "id": "BASELINE_SYNC",
       "status": "IN_PROGRESS",
       "evidence": [".pji/STATE.yaml", ".pji/BLOCKERS.yaml"],
-      "implementation_authorized": false
+      "implementation_authorized": false,
+      "delivery_ready": false,
+      "delivery_blocker": "FRONTEND-TEST-001"
     },
     {
       "id": "RF03",

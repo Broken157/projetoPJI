@@ -26,7 +26,7 @@
       "upstream_integration_forbidden": true,
       "published": true,
       "publication_status": "PUBLISHED_TO_FORK",
-      "publication_sha": "473bbc24a4df17a0400af52403e12ec2130fa1cd"
+      "publication_sha": "7ef77d1cf205252b48214ffd3db64c2e92230949"
     }
   },
   "phase": "BASELINE_SYNC",
@@ -47,15 +47,51 @@
     },
     "frontend": {
       "result": "NOT_EXECUTED",
-      "reason": "Node/npm unavailable in the checkpoint validation environment",
-      "next_phase_action": "TRY_NODE_IN_ISOLATED_DOCKER"
+      "execution_status": "BLOCKED_BY_ENVIRONMENT",
+      "reason": "Three isolated Docker attempts exhausted before react-scripts could execute: npm internal exit-handler errors on Node 22/npm 10.9.8 and Node 20/npm 10.8.2, followed by TLS certificate validation failure while obtaining npm 10.8.0",
+      "attempts": 3,
+      "node_versions": ["22.23.2", "20.20.2"],
+      "npm_versions": ["10.9.8", "10.8.2"],
+      "npm_ci": "FAILED_ENVIRONMENT",
+      "suites": null,
+      "tests": null,
+      "passed": null,
+      "failed": null,
+      "skipped": null,
+      "build": "NOT_EXECUTED",
+      "next_phase_action": "RESOLVE_ISOLATED_NPM_ENVIRONMENT_WITHOUT_FUNCTIONAL_FRONTEND_CHANGE"
     }
   },
   "database_changed": "historical_rf25_only",
   "frontend_changed": true,
   "pr_ready": false,
+  "delivery": {
+    "ready_for_pr": false,
+    "pr_created": false,
+    "merge_approved": false,
+    "merged": false
+  },
+  "baseline_sync": {
+    "branch": "sync/baseline-2026-08-25",
+    "base_sha": "d351ff909266884446f78eac32364816c2b1e4b6",
+    "head_sha": "858088939ba4cab7d59bdad484ade9688fae114e",
+    "prepared": false
+  },
+  "security_observations": [
+    {
+      "id": "DB-PASSWORD-FALLBACK-OBS-001",
+      "status": "OBSERVED_NOT_CHANGED",
+      "value_redacted": "spring.datasource.password uses a versioned development fallback",
+      "scope": "Observation only; outside SECURITY-JWT-001"
+    }
+  ],
   "blockers": [
     "SECURITY-JWT-001",
+    "FRONTEND-TEST-001",
+    "RF24-SCHEMA-001",
+    "BASELINE-SYNC-001"
+  ],
+  "open_blockers": [
     "FRONTEND-TEST-001",
     "RF24-SCHEMA-001",
     "BASELINE-SYNC-001"

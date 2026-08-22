@@ -23,7 +23,7 @@ YAML_FILES = (
 CHECKPOINT = "fe4a18a638a47cdc50acb5680c999280f8c26545"
 INTEGRATION_SHA = "d351ff909266884446f78eac32364816c2b1e4b6"
 MANDATORY_BLOCKERS = {
-    "SECURITY-JWT-001": ("SECURITY_REGRESSION", "OPEN"),
+    "SECURITY-JWT-001": ("SECURITY_REGRESSION", "CLOSED"),
     "FRONTEND-TEST-001": ("TEST_GAP", "OPEN"),
     "RF24-SCHEMA-001": ("FUNCTIONAL_BLOCKER", "BLOCKED_BY_DATABASE"),
     "BASELINE-SYNC-001": ("INTEGRATION_PENDING", "OPEN"),
@@ -33,6 +33,7 @@ ALLOWED_DIFF_PREFIXES = (
     "docs/AUTOMATION_",
     "scripts/pji_",
     "RELATORIO_BOOTSTRAP_AUTOMACAO_FASE1.md",
+    "RELATORIO_AUTOMACAO_FASE2_BASELINE.md",
 )
 SKILL_PATH = PJI_DIR / "codex-skill" / "pji-palco-control" / "SKILL.md"
 
@@ -104,8 +105,23 @@ def main() -> int:
             failures.append(f"backend test {key}: expected {expected!r}, got {backend.get(key)!r}")
     if state["tests"]["frontend"].get("result") != "NOT_EXECUTED":
         failures.append("frontend test result must remain NOT_EXECUTED")
+    elif state["tests"]["frontend"].get("execution_status") != "BLOCKED_BY_ENVIRONMENT":
+        failures.append("frontend execution status must record the environmental block")
+    elif state["tests"]["frontend"].get("attempts") != 3 or state["tests"]["frontend"].get("build") != "NOT_EXECUTED":
+        failures.append("frontend state must record three attempts and an unexecuted build")
     else:
-        passes.append("test baseline matches 280/280 backend and NOT_EXECUTED frontend")
+        passes.append("test baseline matches 280/280 backend and the evidenced frontend environmental block")
+
+    delivery = state.get("delivery", {})
+    baseline_sync = state.get("baseline_sync", {})
+    if delivery != {"ready_for_pr": False, "pr_created": False, "merge_approved": False, "merged": False}:
+        failures.append("delivery state must remain not ready, without PR or merge authorization")
+    elif baseline_sync.get("branch") != "sync/baseline-2026-08-25" or baseline_sync.get("base_sha") != INTEGRATION_SHA:
+        failures.append("baseline sync branch/base does not match the audited upstream")
+    elif baseline_sync.get("head_sha") != "858088939ba4cab7d59bdad484ade9688fae114e" or baseline_sync.get("prepared") is not False:
+        failures.append("baseline sync head/prepared state does not match the failed frontend gate")
+    else:
+        passes.append("delivery and baseline sync state preserve the failed frontend gate")
 
     if set(state.get("blockers", [])) != set(MANDATORY_BLOCKERS):
         failures.append("STATE blocker references do not match mandatory blockers")
@@ -137,8 +153,12 @@ def main() -> int:
         failures.append("policy categories must be populated")
     elif policy["phase_rules"]["BASELINE_SYNC"].get("new_rf_allowed") is not False:
         failures.append("BASELINE_SYNC must prohibit new RF work")
+    elif policy["phase_rules"]["BASELINE_SYNC"].get("pr_creation_allowed") is not True:
+        failures.append("BASELINE_SYNC must not logically block its own historical baseline PR")
+    elif blockers["BASELINE-SYNC-001"].get("blocks_pr_ready") is not False or blockers["BASELINE-SYNC-001"].get("blocks_pr_creation") is not False:
+        failures.append("BASELINE-SYNC-001 must not block pr_ready or historical PR creation")
     else:
-        passes.append("policy categories and BASELINE_SYNC gate are active")
+        passes.append("policy categories and corrected BASELINE_SYNC delivery semantics are active")
 
     roadmap = documents["ROADMAP.yaml"]
     rf24 = next((item for item in roadmap.get("items", []) if item.get("id") == "RF24"), None)
@@ -172,6 +192,7 @@ def main() -> int:
         or path.startswith("docs/AUTOMATION_")
         or path.startswith("scripts/pji_")
         or path == "RELATORIO_BOOTSTRAP_AUTOMACAO_FASE1.md"
+        or path == "RELATORIO_AUTOMACAO_FASE2_BASELINE.md"
     ]
     if forbidden_in_checkpoint:
         failures.append(f"automation files found in checkpoint: {forbidden_in_checkpoint}")

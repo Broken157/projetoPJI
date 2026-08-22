@@ -13,5 +13,6 @@
 - Aprovação histórica registrada: `DB-RF25-001`; não reutilizável para alterações futuras.
 - Trabalho desta semana: apenas bootstrap de políticas, estado, roadmap, guardas, runbook e instruções locais do Codex.
 - Nenhuma RF nova iniciada, nenhum PR aberto, nenhum merge realizado e nenhuma automação agendada ativada.
+- Publicação de `pji-automation`: pendente; a revisão de segurança bloqueou o upload antes da execução e exige confirmação explícita do usuário após o aviso de exportação dos 13 arquivos para o fork.
 
 O fechamento desta semana e a abertura de uma semana seguinte exigem decisão explícita conforme `.pji/POLICY.yaml`.

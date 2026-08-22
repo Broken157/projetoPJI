@@ -23,7 +23,9 @@
     "automation": {
       "name": "pji-automation",
       "repository": "fork",
-      "upstream_integration_forbidden": true
+      "upstream_integration_forbidden": true,
+      "published": false,
+      "publication_status": "PENDING_EXPLICIT_REMOTE_UPLOAD_APPROVAL"
     }
   },
   "phase": "BASELINE_SYNC",

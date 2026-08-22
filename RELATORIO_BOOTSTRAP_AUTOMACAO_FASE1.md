@@ -2,7 +2,7 @@
 
 ## Status do bootstrap
 
-**PRONTO.** A infraestrutura de governança, estado, aprovação, bloqueios, roadmap, histórico e validação foi criada na branch exclusiva `pji-automation`, sem implementar RF, alterar comportamento funcional, abrir PR, fazer merge ou ativar automação agendada.
+**VALIDADO LOCALMENTE; PUBLICAÇÃO PENDENTE.** A infraestrutura de governança, estado, aprovação, bloqueios, roadmap, histórico e validação foi criada na branch local exclusiva `pji-automation`, sem implementar RF, alterar comportamento funcional, abrir PR, fazer merge ou ativar automação agendada. O push ao fork foi bloqueado pela revisão de segurança antes da execução e exige confirmação explícita do usuário após o aviso de exportação remota.
 
 ## Fork
 
@@ -32,7 +32,7 @@
 
 ## Automation SHA
 
-`38d3439a12e5d45fd27ebd3a9734a3ac6f0775db` — commit-base que contém os 12 arquivos de infraestrutura validados antes da inclusão deste relatório.
+`38d3439a12e5d45fd27ebd3a9734a3ac6f0775db` — commit-base que contém os 12 arquivos de infraestrutura validados antes da inclusão deste relatório. A branch permanece somente local até autorização explícita para upload.
 
 O commit que adiciona este relatório passa a ser o `HEAD` final da branch e é informado no relatório de execução entregue ao usuário. Um commit não pode registrar o próprio SHA em seu conteúdo sem criar uma autorreferência impossível; por isso o SHA acima identifica de forma exata o baseline de infraestrutura validado.
 
@@ -157,7 +157,7 @@ Nenhum teste backend ou frontend foi reexecutado nesta fase, porque o bootstrap 
 
 ## Próxima ação segura
 
-Parar após publicar `pji-automation` somente no fork. A próxima etapa possível é uma decisão explícita sobre o fluxo de `BASELINE_SYNC`; sem ela, não abrir PR, não fazer merge e não iniciar RF. Separadamente, a execução de frontend em Node/Docker isolado exige autorização prévia de Docker e deve ocorrer sem mudança funcional.
+Obter confirmação explícita para enviar ao fork `https://github.com/Broken157/projetoPJI.git` os 13 arquivos de infraestrutura da branch local `pji-automation`. Somente depois dessa autorização, repetir as verificações remotas e publicar exclusivamente em `origin`. Em seguida, parar: a próxima etapa funcional continua sendo uma decisão explícita sobre `BASELINE_SYNC`; sem ela, não abrir PR, não fazer merge e não iniciar RF. Separadamente, a execução de frontend em Node/Docker isolado exige autorização prévia de Docker e deve ocorrer sem mudança funcional.
 
 ## Confirmações finais
 
@@ -170,6 +170,7 @@ Parar após publicar `pji-automation` somente no fork. A próxima etapa possíve
 - PR criado: **NÃO**.
 - Merge realizado: **NÃO**.
 - Push ao original: **NÃO**.
+- Push ao fork: **NÃO; BLOQUEADO ANTES DA EXECUÇÃO, PENDENTE DE CONFIRMAÇÃO EXPLÍCITA**.
 - Automação agendada/execução automática ativada: **NÃO**.
 
-BOOTSTRAP_FASE1_PRONTO = SIM
+BOOTSTRAP_FASE1_PRONTO = NÃO

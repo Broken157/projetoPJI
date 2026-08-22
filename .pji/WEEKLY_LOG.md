@@ -25,4 +25,14 @@
 - `FRONTEND-TEST-001` permanece aberto e bloqueia `pr_ready`; `RF24-SCHEMA-001` permanece bloqueado por banco; `BASELINE-SYNC-001` permanece aberto sem bloquear o futuro PR histórico.
 - Como nem todos os gates passaram, nenhuma branch da Fase 2 foi enviada e nenhum PR/merge foi realizado.
 
+### Fase 2B — preservação e recuperação do ambiente frontend
+
+- A política foi corrigida para permitir push ao fork como backup/WIP mesmo com `pr_ready=false`; PR continua exigindo `pr_ready`, push ao upstream continua proibido e merge exige aprovação explícita.
+- `sync/baseline-2026-08-25` foi preservada exclusivamente no fork com SHA local/remoto `858088939ba4cab7d59bdad484ade9688fae114e`; nenhum PR foi aberto.
+- O host Windows alcançou `https://registry.npmjs.org/` com HTTP 200, sem proxy WinHTTP/WinINET ou variáveis de proxy; a cadeia TLS apresentou o interceptor local `Avast Web/Mail Shield Root`.
+- Node.js portátil oficial `22.23.2` foi baixado em TEMP e verificado pelo `SHASUMS256.txt`: SHA-256 `1177B4137BA5ADAA56354AE40F1080C7450E8AE09CECB47DA459D1C52AC99F97`.
+- Com `NODE_USE_SYSTEM_CA=1` somente no processo, `npm ping` e `npm ci --no-audit --no-fund` passaram na cópia temporária.
+- Testes frontend executados: 4 suítes, 3 aprovadas e 1 reprovada; 13 testes, 11 aprovados e 2 reprovados em `rf09-recuperacao-senha.test.js`. Build frontend: `BUILD SUCCESS`.
+- Nenhuma correção funcional foi realizada. `FRONTEND-TEST-001` permanece aberto, `pr_ready=false`, `FASE2_PRONTA=NÃO` e `READY_FOR_TUESDAY_PR=NÃO`.
+
 O fechamento desta semana e a abertura de uma semana seguinte exigem decisão explícita conforme `.pji/POLICY.yaml`.

@@ -47,7 +47,21 @@
   "delivery_semantics": {
     "pr_ready": "Technical readiness to open a historical baseline PR; it is not merge approval",
     "merge_approved": "Requires a separate explicit decision and is never inferred from pr_ready",
-    "baseline_sync_open": "Does not block pr_ready or baseline PR creation; blocks new RF work, DEVELOPMENT phase, and the next functional cycle until approved integration"
+    "baseline_sync_open": "Does not block pr_ready or baseline PR creation; blocks new RF work, DEVELOPMENT phase, and the next functional cycle until approved integration",
+    "push_to_fork": {
+      "allowed_when_blocked": true,
+      "purpose": "BACKUP_OR_WIP_PRESERVATION",
+      "does_not_imply_pr_ready": true
+    },
+    "pull_request": {
+      "requires_pr_ready": true
+    },
+    "upstream_push": {
+      "allowed": false
+    },
+    "merge": {
+      "requires_explicit_user_approval": true
+    }
   },
   "phase_rules": {
     "BASELINE_SYNC": {

@@ -22,6 +22,7 @@ YAML_FILES = (
 )
 CHECKPOINT = "fe4a18a638a47cdc50acb5680c999280f8c26545"
 INTEGRATION_SHA = "d351ff909266884446f78eac32364816c2b1e4b6"
+BASELINE_SHA = "858088939ba4cab7d59bdad484ade9688fae114e"
 MANDATORY_BLOCKERS = {
     "SECURITY-JWT-001": ("SECURITY_REGRESSION", "CLOSED"),
     "FRONTEND-TEST-001": ("TEST_GAP", "OPEN"),
@@ -34,6 +35,7 @@ ALLOWED_DIFF_PREFIXES = (
     "scripts/pji_",
     "RELATORIO_BOOTSTRAP_AUTOMACAO_FASE1.md",
     "RELATORIO_AUTOMACAO_FASE2_BASELINE.md",
+    "RELATORIO_AUTOMACAO_FASE2B_FRONTEND.md",
 )
 SKILL_PATH = PJI_DIR / "codex-skill" / "pji-palco-control" / "SKILL.md"
 
@@ -103,22 +105,28 @@ def main() -> int:
     for key, expected in expected_backend.items():
         if backend.get(key) != expected:
             failures.append(f"backend test {key}: expected {expected!r}, got {backend.get(key)!r}")
-    if state["tests"]["frontend"].get("result") != "NOT_EXECUTED":
-        failures.append("frontend test result must remain NOT_EXECUTED")
-    elif state["tests"]["frontend"].get("execution_status") != "BLOCKED_BY_ENVIRONMENT":
-        failures.append("frontend execution status must record the environmental block")
-    elif state["tests"]["frontend"].get("attempts") != 3 or state["tests"]["frontend"].get("build") != "NOT_EXECUTED":
-        failures.append("frontend state must record three attempts and an unexecuted build")
+    frontend = state["tests"]["frontend"]
+    if frontend.get("result") != "FAILED" or frontend.get("execution_status") != "FRONTEND_TEST_FAILURE":
+        failures.append("frontend state must preserve the executed functional test failure")
+    elif frontend.get("npm_ci") != "PASSED" or frontend.get("build") != "BUILD_SUCCESS":
+        failures.append("frontend state must record successful npm ci and build")
+    elif frontend.get("suites") != {"total": 4, "passed": 3, "failed": 1}:
+        failures.append("frontend suite counts do not match executed evidence")
+    elif frontend.get("tests") != {"total": 13, "passed": 11, "failed": 2, "skipped": 0}:
+        failures.append("frontend test counts do not match executed evidence")
     else:
-        passes.append("test baseline matches 280/280 backend and the evidenced frontend environmental block")
+        passes.append("test baseline matches 280/280 backend and the executed frontend failure evidence")
 
     delivery = state.get("delivery", {})
     baseline_sync = state.get("baseline_sync", {})
-    if delivery != {"ready_for_pr": False, "pr_created": False, "merge_approved": False, "merged": False}:
+    fork_backup = delivery.get("fork_backup", {})
+    if any(delivery.get(key) is not False for key in ("ready_for_pr", "pr_created", "merge_approved", "merged")):
         failures.append("delivery state must remain not ready, without PR or merge authorization")
+    elif fork_backup.get("allowed_when_blocked") is not True or fork_backup.get("baseline_pushed") is not True or fork_backup.get("baseline_remote_sha") != BASELINE_SHA:
+        failures.append("fork backup state must record the preserved baseline SHA")
     elif baseline_sync.get("branch") != "sync/baseline-2026-08-25" or baseline_sync.get("base_sha") != INTEGRATION_SHA:
         failures.append("baseline sync branch/base does not match the audited upstream")
-    elif baseline_sync.get("head_sha") != "858088939ba4cab7d59bdad484ade9688fae114e" or baseline_sync.get("prepared") is not False:
+    elif baseline_sync.get("head_sha") != BASELINE_SHA or baseline_sync.get("prepared") is not False or baseline_sync.get("preserved_on_fork") is not True:
         failures.append("baseline sync head/prepared state does not match the failed frontend gate")
     else:
         passes.append("delivery and baseline sync state preserve the failed frontend gate")
@@ -157,6 +165,14 @@ def main() -> int:
         failures.append("BASELINE_SYNC must not logically block its own historical baseline PR")
     elif blockers["BASELINE-SYNC-001"].get("blocks_pr_ready") is not False or blockers["BASELINE-SYNC-001"].get("blocks_pr_creation") is not False:
         failures.append("BASELINE-SYNC-001 must not block pr_ready or historical PR creation")
+    elif policy["delivery_semantics"]["push_to_fork"].get("allowed_when_blocked") is not True:
+        failures.append("policy must allow fork backup/WIP while blocked")
+    elif policy["delivery_semantics"]["pull_request"].get("requires_pr_ready") is not True:
+        failures.append("pull requests must require pr_ready")
+    elif policy["delivery_semantics"]["upstream_push"].get("allowed") is not False:
+        failures.append("upstream push must remain prohibited")
+    elif policy["delivery_semantics"]["merge"].get("requires_explicit_user_approval") is not True:
+        failures.append("merge must require explicit user approval")
     else:
         passes.append("policy categories and corrected BASELINE_SYNC delivery semantics are active")
 
@@ -173,11 +189,14 @@ def main() -> int:
         branch = git("branch", "--show-current")
         checkpoint_ref = git("rev-parse", "refs/heads/checkpoint/pre-automacao-2026-08-22")
         origin_checkpoint = git("rev-parse", "refs/remotes/origin/checkpoint/pre-automacao-2026-08-22")
+        origin_baseline = git("rev-parse", "refs/remotes/origin/sync/baseline-2026-08-25")
         upstream_integration = git("rev-parse", "refs/remotes/upstream/projetoPJI-10-08-ajustes")
         if branch != "pji-automation":
             failures.append(f"current branch must be pji-automation, got {branch}")
         if checkpoint_ref != CHECKPOINT or origin_checkpoint != CHECKPOINT:
             failures.append("checkpoint local/fork ref drifted from immutable SHA")
+        if origin_baseline != BASELINE_SHA:
+            failures.append("fork baseline ref differs from the preserved local SHA")
         if upstream_integration != INTEGRATION_SHA:
             failures.append("upstream integration tracking SHA differs from recorded baseline")
         if not failures:
@@ -193,6 +212,7 @@ def main() -> int:
         or path.startswith("scripts/pji_")
         or path == "RELATORIO_BOOTSTRAP_AUTOMACAO_FASE1.md"
         or path == "RELATORIO_AUTOMACAO_FASE2_BASELINE.md"
+        or path == "RELATORIO_AUTOMACAO_FASE2B_FRONTEND.md"
     ]
     if forbidden_in_checkpoint:
         failures.append(f"automation files found in checkpoint: {forbidden_in_checkpoint}")

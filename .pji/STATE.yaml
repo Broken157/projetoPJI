@@ -46,20 +46,35 @@
       "command": ".\\mvnw.cmd clean test '-Dspring.jpa.show-sql=false'"
     },
     "frontend": {
-      "result": "NOT_EXECUTED",
-      "execution_status": "BLOCKED_BY_ENVIRONMENT",
-      "reason": "Three isolated Docker attempts exhausted before react-scripts could execute: npm internal exit-handler errors on Node 22/npm 10.9.8 and Node 20/npm 10.8.2, followed by TLS certificate validation failure while obtaining npm 10.8.0",
-      "attempts": 3,
-      "node_versions": ["22.23.2", "20.20.2"],
-      "npm_versions": ["10.9.8", "10.8.2"],
-      "npm_ci": "FAILED_ENVIRONMENT",
-      "suites": null,
-      "tests": null,
-      "passed": null,
-      "failed": null,
-      "skipped": null,
-      "build": "NOT_EXECUTED",
-      "next_phase_action": "RESOLVE_ISOLATED_NPM_ENVIRONMENT_WITHOUT_FUNCTIONAL_FRONTEND_CHANGE"
+      "result": "FAILED",
+      "execution_status": "FRONTEND_TEST_FAILURE",
+      "reason": "The recovered environment executed the real suite; two RF09 assertions failed because the expected recovery/reset success messages were empty",
+      "previous_docker_attempts": 3,
+      "environment_recovery": {
+        "method": "Official portable Node.js Windows ZIP in TEMP with a temporary frontend copy",
+        "node": "22.23.2",
+        "npm": "10.9.8",
+        "official_zip_sha256_verified": true,
+        "host_registry_connectivity": "HTTP_200",
+        "tls_issuer": "Avast Web/Mail Shield Root",
+        "node_use_system_ca": "1_PROCESS_ONLY",
+        "npm_ping": "PASSED"
+      },
+      "npm_ci": "PASSED",
+      "suites": {
+        "total": 4,
+        "passed": 3,
+        "failed": 1
+      },
+      "tests": {
+        "total": 13,
+        "passed": 11,
+        "failed": 2,
+        "skipped": 0
+      },
+      "failed_test_file": "frontend/src/rf09-recuperacao-senha.test.js",
+      "build": "BUILD_SUCCESS",
+      "next_phase_action": "REQUEST_EXPLICIT_SCOPE_BEFORE_ANY_FUNCTIONAL_FRONTEND_CORRECTION"
     }
   },
   "database_changed": "historical_rf25_only",
@@ -69,13 +84,21 @@
     "ready_for_pr": false,
     "pr_created": false,
     "merge_approved": false,
-    "merged": false
+    "merged": false,
+    "fork_backup": {
+      "allowed_when_blocked": true,
+      "baseline_pushed": true,
+      "baseline_remote_sha": "858088939ba4cab7d59bdad484ade9688fae114e",
+      "repository": "Broken157/projetoPJI",
+      "does_not_imply_pr_ready": true
+    }
   },
   "baseline_sync": {
     "branch": "sync/baseline-2026-08-25",
     "base_sha": "d351ff909266884446f78eac32364816c2b1e4b6",
     "head_sha": "858088939ba4cab7d59bdad484ade9688fae114e",
-    "prepared": false
+    "prepared": false,
+    "preserved_on_fork": true
   },
   "security_observations": [
     {

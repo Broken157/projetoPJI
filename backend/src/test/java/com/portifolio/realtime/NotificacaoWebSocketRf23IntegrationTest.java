@@ -54,7 +54,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class NotificacaoWebSocketRf23IntegrationTest {
 
-    private static final String SECRET = "MinhaChaveSuperSecreta2026SosArtistas";
+    private static final String SECRET = requireTestSecret();
 
     @Container
     @ServiceConnection
@@ -67,6 +67,14 @@ class NotificacaoWebSocketRf23IntegrationTest {
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired JwtService jwtService;
     @Autowired NotificacaoRealtimeGateway realtimeGateway;
+
+    private static String requireTestSecret() {
+        String secret = System.getenv("JWT_SECRET");
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT_SECRET deve ser fornecido externamente para o teste WebSocket");
+        }
+        return secret;
+    }
 
     @AfterEach
     void limpar() {

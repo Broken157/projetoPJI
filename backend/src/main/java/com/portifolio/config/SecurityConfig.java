@@ -39,10 +39,22 @@ public class SecurityConfig {
                                 HttpServletResponse.SC_UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
                         // Rotas publicas — sem token
-                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/cadastro",
+                                "/api/auth/login",
+                                "/api/auth/google",
+                                "/api/auth/refresh",
+                                "/api/auth/logout",
+                                "/api/auth/forgot-password",
+                                "/api/auth/reset-password").permitAll()
                         // RF03: listagem/busca de vagas e publica (feed tipo LinkedIn).
                         // Candidatura (RF06) e criacao/edicao continuam exigindo autenticacao.
                         .requestMatchers(HttpMethod.GET, "/api/vagas").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/vagas/*/similares").permitAll()
+                        // RF10: somente a consulta publica por tipo e ID dispensa JWT.
+                        .requestMatchers(HttpMethod.GET, "/api/perfis/publicos/*/*").permitAll()
+                        // O handshake nao carrega JWT. A autenticacao ocorre no frame STOMP CONNECT.
+                        .requestMatchers(HttpMethod.GET, "/ws", "/ws/**").permitAll()
                         // Tudo mais exige autenticacao
                         .anyRequest().authenticated()
                 )
@@ -61,7 +73,7 @@ public class SecurityConfig {
             @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(allowedOrigins);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

@@ -79,7 +79,11 @@ public class AuthService {
         if (request.getDataNascimento().isAfter(hoje)) {
             throw new IllegalArgumentException("Data de nascimento não pode estar no futuro.");
         }
+
         int idade = Period.between(request.getDataNascimento(), hoje).getYears();
+        if (idade < 14) {
+            throw new IllegalArgumentException("A idade mínima para cadastro é 14 anos.");
+        }
         boolean menorDeIdade = idade < 18;
 
         if (menorDeIdade) {
@@ -196,6 +200,7 @@ public class AuthService {
         String email    = payload.getEmail();
         String nome     = (String) payload.get("name");
         String foto     = (String) payload.get("picture");
+        validarDadosGoogleNoSchema(googleId, email, nome, foto);
 
         // 2. Busca usuario por googleId (retorno) ou por email (vinculacao de conta existente)
         Optional<Usuario> usuarioOpt = usuarioRepository.findByGoogleId(googleId);
@@ -310,6 +315,21 @@ public class AuthService {
                 .perfilCompleto(usuario.getPerfilCompleto())
                 .avatarUrl(avatarUrl)
                 .build();
+    }
+
+    private void validarDadosGoogleNoSchema(String googleId, String email, String nome, String foto) {
+        if (googleId == null || googleId.isBlank() || googleId.length() > 255) {
+            throw new IllegalArgumentException("Identificador da conta Google é inválido.");
+        }
+        if (email == null || email.isBlank() || email.length() > 150) {
+            throw new IllegalArgumentException("E-mail retornado pelo Google é inválido para o cadastro.");
+        }
+        if (nome == null || nome.isBlank() || nome.length() > 150) {
+            throw new IllegalArgumentException("Nome retornado pelo Google é inválido para o cadastro.");
+        }
+        if (foto != null && foto.length() > 255) {
+            throw new IllegalArgumentException("URL da foto retornada pelo Google excede 255 caracteres.");
+        }
     }
 
     private GoogleIdToken.Payload validarTokenGoogle(String rawToken) {

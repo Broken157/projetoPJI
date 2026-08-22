@@ -303,7 +303,8 @@ create table log_vagas_canceladas (
     id bigserial primary key,
     vaga_id bigint not null references vagas(id) on delete cascade,
     cancelado_por_id bigint not null references usuarios(id) on delete cascade,
-    data_cancelamento timestamp default current_timestamp
+    data_cancelamento timestamp default current_timestamp,
+    motivo text
 );
 
 -- (rf26)

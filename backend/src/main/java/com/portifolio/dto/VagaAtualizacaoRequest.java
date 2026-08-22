@@ -6,6 +6,8 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -44,6 +46,7 @@ public class VagaAtualizacaoRequest {
 
     @NotBlank(message = "Estado é obrigatório")
     @Size(min = 2, max = 2, message = "Estado deve usar exatamente 2 caracteres")
+    @Pattern(regexp = "[A-Za-z]{2}", message = "Estado deve conter uma UF válida com 2 letras")
     private String estado;
 
     private String enderecoCompleto;
@@ -56,7 +59,8 @@ public class VagaAtualizacaoRequest {
     @Size(max = 100, message = "Tipo de contrato deve ter no máximo 100 caracteres")
     private String tipoContrato;
 
-    private Set<@NotNull(message = "ID de tag não pode ser nulo") Long> tagIds;
+    private Set<@NotNull(message = "ID de tag não pode ser nulo")
+            @Positive(message = "ID de tag deve ser positivo") Long> tagIds;
 
     @Size(max = 100, message = "Categoria deve ter no máximo 100 caracteres")
     private String categoria;

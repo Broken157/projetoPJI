@@ -1,6 +1,5 @@
 package com.portifolio.dto;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -8,6 +7,7 @@ import lombok.Setter;
 @Setter
 public class VagaRequest extends VagaAtualizacaoRequest {
 
-    @NotNull(message = "Contratante é obrigatório")
+    // Campo legado mantido apenas para compatibilidade com o frontend atual.
+    // A propriedade da vaga é sempre derivada do usuário autenticado pelo JWT.
     private Long contratanteId;
 }

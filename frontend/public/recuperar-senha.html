@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recuperar senha — Palco</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/componentes.css">
+  <link rel="stylesheet" href="css/login.css">
+</head>
+<body class="pagina-login">
+  <header>
+    <nav class="navbar" aria-label="Navegação principal">
+      <a href="index.html">
+        <img class="navbar__logo" src="assets/logo-palco.png" alt="Palco">
+      </a>
+      <ul class="navbar__menu">
+        <li><a class="navbar__link navbar__link--destaque" href="explorar.html">Explorar</a></li>
+        <li><a class="navbar__link" href="comunidade.html">Comunidade</a></li>
+        <li><a class="navbar__link" href="empresa.html">Empresa</a></li>
+      </ul>
+      <div class="navbar__acoes">
+        <a class="navbar__link" href="login.html">Login</a>
+        <a class="navbar__link navbar__link--destaque" href="cadastro-contratante.html">Cadastrar</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="login">
+    <div class="card login__card">
+      <h1 class="login__titulo">Recuperar <span class="destaque-magenta">senha</span></h1>
+
+      <form class="login__form" id="form-recuperar-senha" novalidate>
+        <div class="campo">
+          <label class="campo__rotulo" for="email-recuperacao">E-mail</label>
+          <div class="campo__controle">
+            <input
+              class="campo__input"
+              type="email"
+              id="email-recuperacao"
+              name="email"
+              placeholder="E-mail@example.com"
+              autocomplete="email"
+              required>
+          </div>
+        </div>
+
+        <button class="btn btn--primario login__entrar" type="submit">Enviar instruções</button>
+        <p class="campo__ajuda" id="mensagem-recuperacao" role="status" aria-live="polite"></p>
+        <p class="login__cadastro"><a href="login.html">Voltar ao login</a></p>
+      </form>
+    </div>
+  </main>
+
+  <script src="js/recuperacao-senha.js"></script>
+</body>
+</html>

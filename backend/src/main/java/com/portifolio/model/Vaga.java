@@ -2,8 +2,8 @@ package com.portifolio.model;
 
 import com.portifolio.model.enums.ModeloTrabalho;
 import com.portifolio.model.enums.StatusVaga;
-import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -102,10 +102,7 @@ public class Vaga {
     private String abrangencia;
 
     @ElementCollection
-    @CollectionTable(
-            name = "fotos_vaga",
-            joinColumns = @JoinColumn(name = "vaga_id")
-    )
+    @CollectionTable(name = "fotos_vaga", joinColumns = @JoinColumn(name = "vaga_id"))
     @OrderColumn(name = "ordem")
     @Column(name = "url", nullable = false, length = 500)
     private List<String> fotos = new ArrayList<>();

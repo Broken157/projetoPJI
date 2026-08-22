@@ -1,10 +1,18 @@
 package com.portifolio.repository;
 
 import com.portifolio.model.Vaga;
+import com.portifolio.model.enums.StatusVaga;
+import com.portifolio.repository.projection.VagaRecomendadaProjection;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface VagaRepository extends JpaRepository<Vaga, Long>, JpaSpecificationExecutor<Vaga> {
 
@@ -15,4 +23,43 @@ public interface VagaRepository extends JpaRepository<Vaga, Long>, JpaSpecificat
     // fetch join de coleção com LIMIT/OFFSET na mesma query.
     @EntityGraph(attributePaths = {"tags", "contratante", "contratante.usuario", "fotos"})
     List<Vaga> findByIdIn(List<Long> ids);
+
+    // RF05: uma única vaga detalhada pode carregar tags e dados públicos do
+    // contratante juntos; fotos permanecem em consulta própria dentro da transação.
+    @EntityGraph(attributePaths = {"tags", "contratante", "contratante.usuario"})
+    @Query("select v from Vaga v where v.id = :id")
+    Optional<Vaga> findDetalhesById(@Param("id") Long id);
+
+    @Query(value = """
+            select v.id as id,
+                   count(distinct tv.tag_id) as quantidadeTagsCoincidentes
+            from vagas v
+            join tags_vaga tv on tv.vaga_id = v.id
+            where v.status = 'aberta'
+              and tv.tag_id in (:tagIds)
+            group by v.id, v.data_publicacao
+            order by count(distinct tv.tag_id) desc,
+                     v.data_publicacao desc nulls last,
+                     v.id desc
+            """, countQuery = """
+            select count(distinct v.id)
+            from vagas v
+            join tags_vaga tv on tv.vaga_id = v.id
+            where v.status = 'aberta'
+              and tv.tag_id in (:tagIds)
+            """, nativeQuery = true)
+    Page<VagaRecomendadaProjection> findRecomendadasPorTags(
+            @Param("tagIds") Set<Long> tagIds,
+            Pageable pageable);
+
+    @Query("""
+            select distinct tag.id
+            from Vaga vaga
+            join vaga.tags tag
+            where vaga.contratante.usuarioId = :contratanteId
+              and vaga.status in :statusAtivos
+            """)
+    Set<Long> findTagIdsDasVagasAtivasDoContratante(
+            @Param("contratanteId") Long contratanteId,
+            @Param("statusAtivos") Set<StatusVaga> statusAtivos);
 }

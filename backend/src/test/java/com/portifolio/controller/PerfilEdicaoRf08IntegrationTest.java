@@ -10,19 +10,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portifolio.model.PerfilArtista;
 import com.portifolio.model.PerfilContratante;
+import com.portifolio.model.Tag;
 import com.portifolio.model.Usuario;
+import com.portifolio.model.Vaga;
+import com.portifolio.model.enums.ModeloTrabalho;
+import com.portifolio.model.enums.StatusVaga;
 import com.portifolio.model.enums.TipoUsuario;
+import com.portifolio.repository.CandidaturaRepository;
 import com.portifolio.repository.PerfilArtistaRepository;
 import com.portifolio.repository.PerfilContratanteRepository;
 import com.portifolio.repository.RefreshTokenRepository;
+import com.portifolio.repository.TagRepository;
 import com.portifolio.repository.UsuarioRepository;
+import com.portifolio.repository.VagaRepository;
 import com.portifolio.security.JwtService;
 import com.portifolio.service.RefreshTokenService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +42,6 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -55,6 +63,9 @@ class PerfilEdicaoRf08IntegrationTest {
     @Autowired UsuarioRepository usuarioRepository;
     @Autowired PerfilArtistaRepository perfilArtistaRepository;
     @Autowired PerfilContratanteRepository perfilContratanteRepository;
+    @Autowired TagRepository tagRepository;
+    @Autowired VagaRepository vagaRepository;
+    @Autowired CandidaturaRepository candidaturaRepository;
     @Autowired RefreshTokenRepository refreshTokenRepository;
     @Autowired RefreshTokenService refreshTokenService;
     @Autowired BCryptPasswordEncoder passwordEncoder;
@@ -62,16 +73,17 @@ class PerfilEdicaoRf08IntegrationTest {
 
     @AfterEach
     void limparBanco() {
-        jdbcTemplate.execute("TRUNCATE candidaturas, vagas, tags, perfis_artistas, "
-                + "perfis_contratantes, refresh_tokens, usuarios RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute(
+                "TRUNCATE candidaturas, vagas, tags, perfis_artistas, perfis_contratantes, refresh_tokens, usuarios RESTART IDENTITY CASCADE");
     }
 
     @Test
     void perfilArtistaExigeAutenticacaoPropriedadeETipoCorreto() throws Exception {
         PerfilArtista artista = novoArtista("artista-proprio-rf08@teste.com");
         PerfilArtista outro = novoArtista("artista-alheio-rf08@teste.com");
-        PerfilContratante contratante = novoContratante("contratante-rf08@teste.com");
-        String corpo = json(perfilArtistaPayload(outro.getUsuarioId()));
+        PerfilContratante contratante = novoContratante("contratante-cruzado-rf08@teste.com");
+        Tag tag = novaTag("Teatro");
+        String corpo = json(perfilArtistaPayload(artista.getUsuarioId(), tag.getId()));
 
         mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
                         .contentType(MediaType.APPLICATION_JSON).content(corpo))
@@ -82,99 +94,345 @@ class PerfilEdicaoRf08IntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(put("/api/perfis-artistas/{id}", contratante.getUsuarioId())
                         .header("Authorization", bearer(contratante.getUsuario()))
-                        .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(perfilArtistaPayload(contratante.getUsuarioId(), tag.getId()))))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @Transactional
-    void artistaDerivaIdentidadeDoJwtIgnoraCamposAdministrativosECalculaCompletude() throws Exception {
+    void artistaCompletoComUmaTagAtualizaFlagETimestampSemDependerDeOpcionais() throws Exception {
         PerfilArtista artista = novoArtista("artista-completo-rf08@teste.com");
-        PerfilArtista outro = novoArtista("artista-id-payload-rf08@teste.com");
-        artista.setNivelMedalha(2);
-        artista.setScoreEngajamento(new BigDecimal("10.00"));
+        artista.setUltimaAtualizacao(LocalDateTime.now().minusDays(2));
         perfilArtistaRepository.save(artista);
-        Map<String, Object> payload = perfilArtistaPayload(outro.getUsuarioId());
-        payload.put("nivelMedalha", 5);
-        payload.put("scoreEngajamento", 99.99);
+        LocalDateTime anterior = artista.getUltimaAtualizacao();
+        Tag tag = novaTag("Música");
+
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(perfilArtistaPayload(artista.getUsuarioId(), tag.getId()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tagIds.length()").value(1));
+
+        Usuario atualizado = usuarioRepository.findById(artista.getUsuarioId()).orElseThrow();
+        PerfilArtista perfil = perfilArtistaRepository.findById(artista.getUsuarioId()).orElseThrow();
+        assertThat(atualizado.getPerfilCompleto()).isTrue();
+        assertThat(perfil.getUltimaAtualizacao()).isAfter(anterior);
+    }
+
+    @Test
+    void removerUltimaTagRebaixaPerfilCompletoParaFalse() throws Exception {
+        PerfilArtista artista = novoArtista("artista-remove-tag@teste.com");
+        Tag tag = novaTag("Dança");
+        completarArtista(artista, tag);
+        assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow().getPerfilCompleto()).isTrue();
+
+        Map<String, Object> semTags = perfilArtistaPayload(artista.getUsuarioId(), tag.getId());
+        semTags.put("tagIds", List.of());
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(semTags)))
+                .andExpect(status().isOk());
+
+        assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow().getPerfilCompleto()).isFalse();
+    }
+
+    @Test
+    void clienteNaoBurlaComPerfilCompletoEPerfilObrigatorioBlankContinuaFalse() throws Exception {
+        PerfilArtista artista = novoArtista("artista-burla-rf08@teste.com");
+        Tag tag = novaTag("Cinema");
+        Map<String, Object> payload = perfilArtistaPayload(artista.getUsuarioId(), tag.getId());
+        payload.put("biografia", "   ");
         payload.put("perfilCompleto", true);
 
         mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.usuarioId").value(artista.getUsuarioId()));
-
-        PerfilArtista salvo = perfilArtistaRepository.findById(artista.getUsuarioId()).orElseThrow();
-        assertThat(salvo.getNivelMedalha()).isEqualTo(2);
-        assertThat(salvo.getScoreEngajamento()).isEqualByComparingTo("10.00");
-        assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow()
-                .getPerfilCompleto()).isTrue();
-        // Portfólio e tags não fazem parte da lista obrigatória definida para o RF08.
-        assertThat(salvo.getUrlPortfolio()).isNull();
-        assertThat(salvo.getTags()).isEmpty();
-    }
-
-    @Test
-    void camposOmitidosSaoPreservadosEUrlsInvalidasRetornam400() throws Exception {
-        PerfilArtista artista = novoArtista("artista-parcial-rf08@teste.com");
-        artista.setBiografia("Biografia anterior");
-        artista.setLocalizacao("Local anterior");
-        artista.setUrlPortfolio("https://portfolio.example");
-        perfilArtistaRepository.save(artista);
-
-        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
-                        .header("Authorization", bearer(artista.getUsuario()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("biografia", "Biografia nova"))))
                 .andExpect(status().isOk());
 
-        PerfilArtista salvo = perfilArtistaRepository.findById(artista.getUsuarioId()).orElseThrow();
-        assertThat(salvo.getLocalizacao()).isEqualTo("Local anterior");
-        assertThat(salvo.getUrlPortfolio()).isEqualTo("https://portfolio.example");
+        assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow().getPerfilCompleto()).isFalse();
+    }
+
+    @Test
+    void tagInexistenteEhRejeitadaSemAtualizacaoParcial() throws Exception {
+        PerfilArtista artista = novoArtista("artista-tag-inexistente@teste.com");
 
         mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("bannerUrl", "url-invalida"))))
-                .andExpect(status().isBadRequest());
+                        .content(json(perfilArtistaPayload(artista.getUsuarioId(), 999999L))))
+                .andExpect(status().isNotFound());
+
+        PerfilArtista persistido = perfilArtistaRepository.findById(artista.getUsuarioId()).orElseThrow();
+        assertThat(persistido.getBiografia()).isNull();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from tags_artista where artista_id = ?", Integer.class,
+                artista.getUsuarioId())).isZero();
+        assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow().getPerfilCompleto()).isFalse();
     }
 
     @Test
-    void contratanteSoEditaProprioPerfilENomeEmpresaEhOpcional() throws Exception {
+    void tagsDuplicadasGeramUmaUnicaAssociacao() throws Exception {
+        PerfilArtista artista = novoArtista("artista-tags-duplicadas@teste.com");
+        Tag tag = novaTag("Fotografia");
+        Map<String, Object> payload = perfilArtistaPayload(artista.getUsuarioId(), tag.getId());
+        payload.put("tagIds", List.of(tag.getId(), tag.getId()));
+
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isOk());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from tags_artista where artista_id = ?", Integer.class, artista.getUsuarioId()))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void medalhaEScoreEnviadosPeloArtistaSaoIgnorados() throws Exception {
+        PerfilArtista artista = novoArtista("artista-score-rf08@teste.com");
+        Tag tag = novaTag("Artes Visuais");
+        Map<String, Object> payload = perfilArtistaPayload(artista.getUsuarioId(), tag.getId());
+        payload.put("nivelMedalha", 5);
+        payload.put("scoreEngajamento", 999.99);
+
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isOk());
+
+        PerfilArtista persistido = perfilArtistaRepository.findById(artista.getUsuarioId()).orElseThrow();
+        assertThat(persistido.getNivelMedalha()).isEqualTo(1);
+        assertThat(persistido.getScoreEngajamento()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void contratanteEditaProprioPerfilENomeEmpresaEhOpcional() throws Exception {
+        PerfilContratante contratante = novoContratante("contratante-completo-rf08@teste.com");
+
+        mockMvc.perform(put("/api/perfis-contratantes/{id}", contratante.getUsuarioId())
+                        .header("Authorization", bearer(contratante.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(perfilContratantePayload(contratante.getUsuarioId(), null))))
+                .andExpect(status().isOk());
+        assertThat(usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow().getPerfilCompleto()).isTrue();
+
+        Map<String, Object> empresaVazia = perfilContratantePayload(contratante.getUsuarioId(), "");
+        mockMvc.perform(put("/api/perfis-contratantes/{id}", contratante.getUsuarioId())
+                        .header("Authorization", bearer(contratante.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(empresaVazia)))
+                .andExpect(status().isOk());
+        assertThat(usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow().getPerfilCompleto()).isTrue();
+    }
+
+    @Test
+    void contratanteSemBiografiaOuLocalizacaoFicaIncompleto() throws Exception {
+        PerfilContratante contratante = novoContratante("contratante-incompleto-rf08@teste.com");
+        Map<String, Object> payload = perfilContratantePayload(contratante.getUsuarioId(), null);
+        payload.put("biografia", null);
+        mockMvc.perform(put("/api/perfis-contratantes/{id}", contratante.getUsuarioId())
+                        .header("Authorization", bearer(contratante.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isOk());
+        assertThat(usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow().getPerfilCompleto()).isFalse();
+
+        payload.put("biografia", "Biografia");
+        payload.put("localizacao", "   ");
+        mockMvc.perform(put("/api/perfis-contratantes/{id}", contratante.getUsuarioId())
+                        .header("Authorization", bearer(contratante.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isOk());
+        assertThat(usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow().getPerfilCompleto()).isFalse();
+    }
+
+    @Test
+    void contratanteNaoEditaPerfilAlheioNemPerfilDeArtista() throws Exception {
         PerfilContratante dono = novoContratante("contratante-dono-rf08@teste.com");
         PerfilContratante outro = novoContratante("contratante-outro-rf08@teste.com");
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("usuarioId", outro.getUsuarioId());
-        payload.put("biografia", "Biografia completa");
-        payload.put("localizacao", "São Paulo, SP");
+        PerfilArtista artista = novoArtista("artista-cruzado-contratante@teste.com");
 
         mockMvc.perform(put("/api/perfis-contratantes/{id}", dono.getUsuarioId())
                         .header("Authorization", bearer(outro.getUsuario()))
-                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(perfilContratantePayload(dono.getUsuarioId(), null))))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(put("/api/perfis-contratantes/{id}", dono.getUsuarioId())
-                        .header("Authorization", bearer(dono.getUsuario()))
-                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
-                .andExpect(status().isOk());
-
-        PerfilContratante salvo = perfilContratanteRepository
-                .findById(dono.getUsuarioId()).orElseThrow();
-        assertThat(salvo.getNomeEmpresa()).isNull();
-        assertThat(usuarioRepository.findById(dono.getUsuarioId()).orElseThrow()
-                .getPerfilCompleto()).isTrue();
+        mockMvc.perform(put("/api/perfis-contratantes/{id}", artista.getUsuarioId())
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(perfilContratantePayload(artista.getUsuarioId(), null))))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void rotaLegadaDeUsuarioSoEditaProprioUsuarioEIgnoraCamposProtegidos() throws Exception {
-        PerfilArtista dono = novoArtista("usuario-dono-rf08@teste.com");
-        PerfilArtista outro = novoArtista("usuario-outro-rf08@teste.com");
-        LocalDate nascimento = dono.getUsuario().getDataNascimento();
-        Map<String, Object> payload = dadosUsuario(dono.getUsuario());
-        payload.put("dataNascimento", "2005-05-05");
-        payload.put("tipoUsuario", "CONTRATANTE");
-        payload.put("perfilCompleto", true);
-        payload.put("tokenRecuperacao", "administrativo");
+    void edicaoDeUsuarioAtualizaSomenteNomeTelefoneEmailERecalcula() throws Exception {
+        PerfilContratante contratante = novoContratante("usuario-edicao-rf08@teste.com");
+        completarContratante(contratante, null);
+        LocalDate nascimentoOriginal = contratante.getUsuario().getDataNascimento();
+
+        mockMvc.perform(put("/api/usuarios/me")
+                        .header("Authorization", bearer(contratante.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "nome", "Nome Atualizado",
+                                "dataNascimento", "2000-12-31",
+                                "telefone", "11888888888",
+                                "email", "usuario-editado-rf08@teste.com"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Nome Atualizado"))
+                .andExpect(jsonPath("$.telefone").value("11888888888"))
+                .andExpect(jsonPath("$.email").value("usuario-editado-rf08@teste.com"))
+                .andExpect(jsonPath("$.perfilCompleto").value(true));
+
+        Usuario persistido = usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow();
+        assertThat(persistido.getDataNascimento()).isEqualTo(nascimentoOriginal);
+    }
+
+    @Test
+    void menorAtualizaDadosDoProprioResponsavelSemAlterarPerfilCompleto() throws Exception {
+        PerfilContratante menor = novoContratanteMenor("menor-responsavel-rf08@teste.com");
+        completarContratante(menor, null);
+        assertThat(usuarioRepository.findById(menor.getUsuarioId()).orElseThrow().getPerfilCompleto()).isTrue();
+
+        Map<String, Object> payload = dadosUsuario(menor.getUsuario());
+        payload.put("nomeResponsavel", "Responsável Atualizado");
+        payload.put("telefoneResponsavel", "11888887777");
+        payload.put("emailResponsavel", "responsavel-atualizado@teste.com");
+
+        mockMvc.perform(put("/api/usuarios/me")
+                        .header("Authorization", bearer(menor.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomeResponsavel").value("Responsável Atualizado"))
+                .andExpect(jsonPath("$.telefoneResponsavel").value("11888887777"))
+                .andExpect(jsonPath("$.emailResponsavel").value("responsavel-atualizado@teste.com"))
+                .andExpect(jsonPath("$.perfilCompleto").value(true));
+
+        Usuario persistido = usuarioRepository.findById(menor.getUsuarioId()).orElseThrow();
+        assertThat(persistido.getNomeResponsavel()).isEqualTo("Responsável Atualizado");
+        assertThat(persistido.getTelefoneResponsavel()).isEqualTo("11888887777");
+        assertThat(persistido.getEmailResponsavel()).isEqualTo("responsavel-atualizado@teste.com");
+        assertThat(persistido.getPerfilCompleto()).isTrue();
+    }
+
+    @Test
+    void menorNaoPodeDeixarCamposObrigatoriosDoResponsavelEmBranco() throws Exception {
+        PerfilArtista menor = novoArtistaMenor("menor-responsavel-blank-rf08@teste.com");
+
+        for (String campo : List.of("nomeResponsavel", "telefoneResponsavel", "emailResponsavel")) {
+            Map<String, Object> payload = dadosUsuario(menor.getUsuario());
+            payload.put(campo, "   ");
+            mockMvc.perform(put("/api/usuarios/me")
+                            .header("Authorization", bearer(menor.getUsuario()))
+                            .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                    .andExpect(campo.equals("emailResponsavel")
+                            ? status().isBadRequest()
+                            : status().isUnprocessableEntity());
+        }
+
+        Usuario persistido = usuarioRepository.findById(menor.getUsuarioId()).orElseThrow();
+        assertThat(persistido.getNomeResponsavel()).isEqualTo("Responsável Original");
+        assertThat(persistido.getTelefoneResponsavel()).isEqualTo("11911112222");
+        assertThat(persistido.getEmailResponsavel()).isEqualTo("responsavel-original@teste.com");
+    }
+
+    @Test
+    void emailInvalidoDoResponsavelEhRejeitadoNoServidor() throws Exception {
+        PerfilArtista menor = novoArtistaMenor("menor-responsavel-email-rf08@teste.com");
+        Map<String, Object> payload = dadosUsuario(menor.getUsuario());
+        payload.put("emailResponsavel", "email-invalido");
+
+        mockMvc.perform(put("/api/usuarios/me")
+                        .header("Authorization", bearer(menor.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detalhes[0]").value(
+                        "emailResponsavel: E-mail do responsável inválido"));
+    }
+
+    @Test
+    void dadosDoResponsavelExigemAutenticacaoEPropriedade() throws Exception {
+        PerfilArtista menor = novoArtistaMenor("menor-responsavel-dono-rf08@teste.com");
+        PerfilArtista outro = novoArtista("menor-responsavel-invasor-rf08@teste.com");
+        Map<String, Object> payloadMe = dadosUsuario(menor.getUsuario());
+        payloadMe.put("nomeResponsavel", "Tentativa sem token");
+
+        mockMvc.perform(put("/api/usuarios/me")
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payloadMe)))
+                .andExpect(status().isUnauthorized());
+
+        Map<String, Object> payloadLegado = new java.util.LinkedHashMap<>();
+        payloadLegado.put("nome", menor.getUsuario().getNome());
+        payloadLegado.put("dataNascimento", menor.getUsuario().getDataNascimento().toString());
+        payloadLegado.put("telefone", menor.getUsuario().getTelefone());
+        payloadLegado.put("email", menor.getUsuario().getEmail());
+        payloadLegado.put("tipoUsuario", menor.getUsuario().getTipoUsuario().name());
+        payloadLegado.put("nomeResponsavel", "Tentativa alheia");
+        payloadLegado.put("telefoneResponsavel", "11777776666");
+        payloadLegado.put("emailResponsavel", "tentativa-alheia@teste.com");
+
+        mockMvc.perform(put("/api/usuarios/{id}", menor.getUsuarioId())
+                        .header("Authorization", bearer(outro.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payloadLegado)))
+                .andExpect(status().isForbidden());
+
+        assertThat(usuarioRepository.findById(menor.getUsuarioId()).orElseThrow().getNomeResponsavel())
+                .isEqualTo("Responsável Original");
+    }
+
+    @Test
+    void adultoNaoPassaAExigirResponsavelNemPerdeDadosExistentes() throws Exception {
+        PerfilContratante adulto = novoContratante("adulto-responsavel-rf08@teste.com");
+        Map<String, Object> semResponsavel = dadosUsuario(adulto.getUsuario());
+
+        mockMvc.perform(put("/api/usuarios/me")
+                        .header("Authorization", bearer(adulto.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(semResponsavel)))
+                .andExpect(status().isOk());
+
+        adulto.getUsuario().setNomeResponsavel("Dado legado");
+        adulto.getUsuario().setTelefoneResponsavel("11666665555");
+        adulto.getUsuario().setEmailResponsavel("legado@teste.com");
+        usuarioRepository.save(adulto.getUsuario());
+
+        mockMvc.perform(put("/api/usuarios/me")
+                        .header("Authorization", bearer(adulto.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(semResponsavel)))
+                .andExpect(status().isOk());
+
+        Usuario persistido = usuarioRepository.findById(adulto.getUsuarioId()).orElseThrow();
+        assertThat(persistido.getNomeResponsavel()).isEqualTo("Dado legado");
+        assertThat(persistido.getTelefoneResponsavel()).isEqualTo("11666665555");
+        assertThat(persistido.getEmailResponsavel()).isEqualTo("legado@teste.com");
+    }
+
+    @Test
+    void emailDuplicadoELimitesInvalidosSaoBloqueados() throws Exception {
+        PerfilArtista usuario = novoArtista("usuario-validacao-rf08@teste.com");
+        novoArtista("email-existente-rf08@teste.com");
+
+        mockMvc.perform(put("/api/usuarios/me")
+                        .header("Authorization", bearer(usuario.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nome", "Nome", "telefone", "11999999999",
+                                "email", "email-existente-rf08@teste.com"))))
+                .andExpect(status().isConflict());
+        mockMvc.perform(put("/api/usuarios/me")
+                        .header("Authorization", bearer(usuario.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("nome", "x".repeat(151), "telefone", "1".repeat(21),
+                                "email", "invalido"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detalhes.length()").value(3));
+    }
+
+    @Test
+    void rotaLegadaPorIdBloqueiaIdorEManipulacaoDeCamposProtegidos() throws Exception {
+        PerfilArtista dono = novoArtista("usuario-legado-dono@teste.com");
+        PerfilArtista outro = novoArtista("usuario-legado-outro@teste.com");
+        Map<String, Object> payload = Map.of(
+                "nome", "Ataque", "dataNascimento", "2001-01-01", "telefone", "11999999999",
+                "email", dono.getUsuario().getEmail(), "senha", "nova-sem-atual",
+                "tipoUsuario", "CONTRATANTE", "perfilCompleto", true);
 
         mockMvc.perform(put("/api/usuarios/{id}", dono.getUsuarioId())
                         .header("Authorization", bearer(outro.getUsuario()))
@@ -183,17 +441,15 @@ class PerfilEdicaoRf08IntegrationTest {
         mockMvc.perform(put("/api/usuarios/{id}", dono.getUsuarioId())
                         .header("Authorization", bearer(dono.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
-                .andExpect(status().isOk());
+                .andExpect(status().isUnprocessableEntity());
 
-        Usuario salvo = usuarioRepository.findById(dono.getUsuarioId()).orElseThrow();
-        assertThat(salvo.getDataNascimento()).isEqualTo(nascimento);
-        assertThat(salvo.getTipoUsuario()).isEqualTo(TipoUsuario.ARTISTA);
-        assertThat(salvo.getTokenRecuperacao()).isNull();
-        assertThat(salvo.getPerfilCompleto()).isFalse();
+        Usuario persistido = usuarioRepository.findById(dono.getUsuarioId()).orElseThrow();
+        assertThat(persistido.getTipoUsuario()).isEqualTo(TipoUsuario.ARTISTA);
+        assertThat(persistido.getPerfilCompleto()).isFalse();
     }
 
     @Test
-    void respostaDeTerceiroNaoExpoeDadosPessoaisOuResponsavel() throws Exception {
+    void responsesDeOutroUsuarioNaoExibemDadosPrivados() throws Exception {
         PerfilArtista consultado = novoArtista("privado-consultado-rf08@teste.com");
         PerfilContratante consulente = novoContratante("privado-consulente-rf08@teste.com");
         consultado.getUsuario().setNomeResponsavel("Responsável privado");
@@ -214,27 +470,26 @@ class PerfilEdicaoRf08IntegrationTest {
     }
 
     @Test
-    void trocaDeSenhaExigeSenhaAtualCorreta() throws Exception {
+    void trocaDeSenhaExigeSenhaAtual() throws Exception {
         PerfilArtista artista = novoArtista("senha-exigida-rf08@teste.com");
-        Map<String, Object> payload = dadosUsuario(artista.getUsuario());
-        payload.put("novaSenha", "NovaSenha456!");
+        Map<String, Object> base = dadosUsuario(artista.getUsuario());
+        base.put("novaSenha", "NovaSenha123!");
 
         mockMvc.perform(put("/api/usuarios/me")
                         .header("Authorization", bearer(artista.getUsuario()))
-                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(base)))
                 .andExpect(status().isUnprocessableEntity());
-        payload.put("senhaAtual", "senha-incorreta");
+        base.put("senhaAtual", "senha-incorreta");
         mockMvc.perform(put("/api/usuarios/me")
                         .header("Authorization", bearer(artista.getUsuario()))
-                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(base)))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void trocaDeSenhaUsaBCryptERevogaTodosRefreshTokens() throws Exception {
+    void trocaDeSenhaUsaBCryptAlteraLoginERevogaRefreshTokens() throws Exception {
         PerfilArtista artista = novoArtista("senha-sucesso-rf08@teste.com");
-        refreshTokenService.gerarRefreshToken(artista.getUsuario());
-        refreshTokenService.gerarRefreshToken(artista.getUsuario());
+        String refreshToken = refreshTokenService.gerarRefreshToken(artista.getUsuario());
         Map<String, Object> payload = dadosUsuario(artista.getUsuario());
         payload.put("senhaAtual", "SenhaAtual123!");
         payload.put("novaSenha", "NovaSenha456!");
@@ -244,14 +499,21 @@ class PerfilEdicaoRf08IntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
                 .andExpect(status().isOk());
 
-        Usuario salvo = usuarioRepository.findById(artista.getUsuarioId()).orElseThrow();
-        assertThat(salvo.getSenha()).isNotEqualTo("NovaSenha456!");
-        assertThat(passwordEncoder.matches("NovaSenha456!", salvo.getSenha())).isTrue();
+        Usuario persistido = usuarioRepository.findById(artista.getUsuarioId()).orElseThrow();
+        assertThat(persistido.getSenha()).isNotEqualTo("NovaSenha456!");
+        assertThat(passwordEncoder.matches("NovaSenha456!", persistido.getSenha())).isTrue();
         assertThat(refreshTokenRepository.findAll()).allMatch(token -> !token.getAtivo());
+
+        login(artista.getUsuario().getEmail(), "SenhaAtual123!").andExpect(status().isNotFound());
+        login(artista.getUsuario().getEmail(), "NovaSenha456!").andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("refreshToken", refreshToken))))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void contaExclusivamenteGoogleNaoCriaSenhaLocalPorEsteFluxo() throws Exception {
+    void contaExclusivamenteGoogleNaoGanhaSenhaLocal() throws Exception {
         PerfilArtista artista = novoArtista("google-rf08@teste.com");
         artista.getUsuario().setSenha(null);
         artista.getUsuario().setGoogleId("google-rf08-id");
@@ -264,60 +526,42 @@ class PerfilEdicaoRf08IntegrationTest {
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
                 .andExpect(status().isUnprocessableEntity());
-        assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow().getSenha())
-                .isNull();
+        assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow().getSenha()).isNull();
     }
 
     @Test
-    void menorExigeResponsavelLegalEPreservaCamposOmitidos() throws Exception {
-        PerfilArtista menor = novoArtista("menor-rf08@teste.com");
-        menor.getUsuario().setDataNascimento(LocalDate.now().minusYears(16));
-        usuarioRepository.save(menor.getUsuario());
+    void rf06RefleteImediatamentePromocaoERebaixamentoDoPerfil() throws Exception {
+        PerfilContratante contratante = novoContratante("rf06-contratante-rf08@teste.com");
+        Vaga vaga1 = novaVaga(contratante, "Vaga 1");
+        Vaga vaga2 = novaVaga(contratante, "Vaga 2");
+        PerfilArtista artista = novoArtista("rf06-artista-rf08@teste.com");
+        String candidatura1 = candidaturaPayload(vaga1.getId(), artista.getUsuarioId());
 
-        mockMvc.perform(put("/api/usuarios/me")
-                        .header("Authorization", bearer(menor.getUsuario()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(dadosUsuario(menor.getUsuario()))))
+        mockMvc.perform(post("/api/candidaturas")
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(candidatura1))
                 .andExpect(status().isUnprocessableEntity());
 
-        menor.getUsuario().setNomeResponsavel("Responsável Original");
-        menor.getUsuario().setTelefoneResponsavel("11911112222");
-        menor.getUsuario().setEmailResponsavel("responsavel-original@teste.com");
-        usuarioRepository.save(menor.getUsuario());
-        mockMvc.perform(put("/api/usuarios/me")
-                        .header("Authorization", bearer(menor.getUsuario()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(dadosUsuario(menor.getUsuario()))))
-                .andExpect(status().isOk());
-
-        Usuario salvo = usuarioRepository.findById(menor.getUsuarioId()).orElseThrow();
-        assertThat(salvo.getNomeResponsavel()).isEqualTo("Responsável Original");
-        assertThat(salvo.getTelefoneResponsavel()).isEqualTo("11911112222");
-        assertThat(salvo.getEmailResponsavel()).isEqualTo("responsavel-original@teste.com");
-    }
-
-    @Test
-    void cadastroDeMenorValidaResponsavelEDataFutura() throws Exception {
-        Map<String, Object> menorSemResponsavel = cadastroPayload(
-                "menor-cadastro-rf08@teste.com", LocalDate.now().minusYears(16));
-        mockMvc.perform(post("/api/auth/cadastro")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(menorSemResponsavel)))
-                .andExpect(status().isBadRequest());
-
-        menorSemResponsavel.put("nomeResponsavel", "Responsável");
-        menorSemResponsavel.put("telefoneResponsavel", "11988887777");
-        menorSemResponsavel.put("emailResponsavel", "responsavel@teste.com");
-        mockMvc.perform(post("/api/auth/cadastro")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(menorSemResponsavel)))
+        Tag tag = novaTag("Produção");
+        completarArtista(artista, tag);
+        mockMvc.perform(post("/api/candidaturas")
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(candidatura1))
                 .andExpect(status().isCreated());
 
-        Map<String, Object> futuro = cadastroPayload(
-                "futuro-rf08@teste.com", LocalDate.now().plusDays(1));
-        mockMvc.perform(post("/api/auth/cadastro")
-                        .contentType(MediaType.APPLICATION_JSON).content(json(futuro)))
-                .andExpect(status().isBadRequest());
+        Map<String, Object> semTags = perfilArtistaPayload(artista.getUsuarioId(), tag.getId());
+        semTags.put("tagIds", List.of());
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(semTags)))
+                .andExpect(status().isOk());
+        assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow().getPerfilCompleto()).isFalse();
+
+        mockMvc.perform(post("/api/candidaturas")
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(candidaturaPayload(vaga2.getId(), artista.getUsuarioId())))
+                .andExpect(status().isUnprocessableEntity());
     }
 
     private PerfilArtista novoArtista(String email) {
@@ -334,6 +578,26 @@ class PerfilEdicaoRf08IntegrationTest {
         return perfilContratanteRepository.save(perfil);
     }
 
+    private PerfilArtista novoArtistaMenor(String email) {
+        PerfilArtista perfil = novoArtista(email);
+        prepararUsuarioMenor(perfil.getUsuario());
+        return perfil;
+    }
+
+    private PerfilContratante novoContratanteMenor(String email) {
+        PerfilContratante perfil = novoContratante(email);
+        prepararUsuarioMenor(perfil.getUsuario());
+        return perfil;
+    }
+
+    private void prepararUsuarioMenor(Usuario usuario) {
+        usuario.setDataNascimento(LocalDate.now().minusYears(16));
+        usuario.setNomeResponsavel("Responsável Original");
+        usuario.setTelefoneResponsavel("11911112222");
+        usuario.setEmailResponsavel("responsavel-original@teste.com");
+        usuarioRepository.save(usuario);
+    }
+
     private Usuario novoUsuario(String email, TipoUsuario tipo) {
         Usuario usuario = new Usuario();
         usuario.setNome("Usuário RF08");
@@ -347,29 +611,85 @@ class PerfilEdicaoRf08IntegrationTest {
         return usuarioRepository.save(usuario);
     }
 
-    private Map<String, Object> perfilArtistaPayload(Long usuarioId) {
-        Map<String, Object> payload = new LinkedHashMap<>();
+    private Tag novaTag(String nome) {
+        Tag tag = new Tag();
+        tag.setNome(nome);
+        return tagRepository.save(tag);
+    }
+
+    private void completarArtista(PerfilArtista artista, Tag tag) throws Exception {
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(perfilArtistaPayload(artista.getUsuarioId(), tag.getId()))))
+                .andExpect(status().isOk());
+    }
+
+    private void completarContratante(PerfilContratante contratante, String nomeEmpresa) throws Exception {
+        mockMvc.perform(put("/api/perfis-contratantes/{id}", contratante.getUsuarioId())
+                        .header("Authorization", bearer(contratante.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(perfilContratantePayload(contratante.getUsuarioId(), nomeEmpresa))))
+                .andExpect(status().isOk());
+    }
+
+    private Map<String, Object> perfilArtistaPayload(Long usuarioId, Long tagId) {
+        return new java.util.LinkedHashMap<>(Map.of(
+                "usuarioId", usuarioId,
+                "biografia", "Biografia completa",
+                "localizacao", "São Paulo, SP",
+                "urlPortfolio", "https://portfolio.example",
+                "tagIds", List.of(tagId)));
+    }
+
+    private Map<String, Object> perfilContratantePayload(Long usuarioId, String nomeEmpresa) {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("usuarioId", usuarioId);
+        payload.put("nomeEmpresa", nomeEmpresa);
+        payload.put("tipoPerfil", null);
         payload.put("biografia", "Biografia completa");
         payload.put("localizacao", "São Paulo, SP");
+        payload.put("bannerUrl", null);
         return payload;
     }
 
     private Map<String, Object> dadosUsuario(Usuario usuario) {
-        return new LinkedHashMap<>(Map.of(
+        return new java.util.LinkedHashMap<>(Map.of(
                 "nome", usuario.getNome(),
                 "telefone", usuario.getTelefone(),
                 "email", usuario.getEmail()));
     }
 
-    private Map<String, Object> cadastroPayload(String email, LocalDate nascimento) {
-        return new LinkedHashMap<>(Map.of(
-                "nome", "Menor RF08",
-                "dataNascimento", nascimento.toString(),
-                "telefone", "11999999999",
-                "email", email,
-                "senha", "SenhaAtual123!",
-                "tipoUsuario", "ARTISTA"));
+    private Vaga novaVaga(PerfilContratante contratante, String titulo) {
+        Vaga vaga = new Vaga();
+        vaga.setContratante(contratante);
+        vaga.setTitulo(titulo);
+        vaga.setDescricao("Descrição");
+        vaga.setRequisitos("Requisitos");
+        vaga.setRemuneraValor(new BigDecimal("1000.00"));
+        vaga.setFormaPagamento("Pix");
+        vaga.setCidade("São Paulo");
+        vaga.setEstado("SP");
+        vaga.setModeloTrabalho(ModeloTrabalho.REMOTO);
+        vaga.setTipoContrato("Freelance");
+        vaga.setStatus(StatusVaga.ABERTA);
+        vaga.setDataPublicacao(LocalDateTime.now());
+        vaga.setTags(new HashSet<>());
+        return vagaRepository.save(vaga);
+    }
+
+    private String candidaturaPayload(Long vagaId, Long artistaId) throws Exception {
+        return json(Map.of(
+                "vagaId", vagaId,
+                "artistaId", artistaId,
+                "mensagemApresentacao", "Tenho interesse",
+                "linkPortfolioCandidatura", "https://portfolio.example"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions login(String email, String senha) throws Exception {
+        return mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("email", email, "senha", senha, "rememberMe", false))));
     }
 
     private String json(Object valor) throws Exception {

@@ -23,7 +23,6 @@ public enum StatusVaga implements DatabaseEnum {
         return Arrays.stream(values())
                 .filter(status -> status.databaseValue.equals(value))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Status de vaga inválido: " + value));
+                .orElseThrow(() -> new IllegalArgumentException("Status de vaga inválido: " + value));
     }
 }

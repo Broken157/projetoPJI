@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Conversas profissionais privadas na Palco.">
+  <title>Mensagens — Palco</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/componentes.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/mensagens.css">
+</head>
+<body class="pagina-app mensagens-pagina">
+  <header>
+    <nav class="app-navbar" aria-label="Navegação principal">
+      <a href="dashboard-contratante.html" aria-label="Palco — painel principal">
+        <img class="navbar__logo" src="assets/logo-palco.png" alt="Palco">
+      </a>
+      <ul class="app-navbar__menu">
+        <li><a class="navbar__link" href="dashboard-contratante.html">Painel</a></li>
+        <li><a class="navbar__link navbar__link--destaque" href="mensagens.html" aria-current="page">Mensagens</a></li>
+      </ul>
+      <div class="app-navbar__acoes">
+        <a class="app-navbar__icone" href="perfil.html" aria-label="Editar meu perfil">
+          <img class="app-navbar__perfil" src="assets/avatar-perfil.png" alt="Meu perfil" data-chat-avatar>
+        </a>
+        <button class="mensagens-sair" type="button" data-chat-sair>Sair</button>
+      </div>
+    </nav>
+  </header>
+
+  <main class="mensagens" data-chat aria-busy="true">
+    <header class="mensagens__cabecalho">
+      <div>
+        <p class="mensagens__sobrelinha">CONVERSAS PROFISSIONAIS</p>
+        <h1>Mensagens</h1>
+        <p>Fale diretamente com artistas e contratantes com quem você se conecta.</p>
+      </div>
+      <span class="mensagens__conexao" data-chat-conexao>Conectando…</span>
+    </header>
+
+    <section class="mensagens__erro" data-chat-erro hidden role="alert"></section>
+
+    <div class="mensagens-layout" data-chat-conteudo hidden>
+      <aside class="conversas" aria-label="Conversas">
+        <div class="conversas__topo">
+          <h2>Conversas</h2>
+          <span class="conversas__badge" data-chat-total-nao-lidas>0</span>
+        </div>
+        <div class="conversas__lista" data-chat-salas></div>
+      </aside>
+
+      <section class="conversa" aria-label="Conversa selecionada">
+        <header class="conversa__topo">
+          <div>
+            <p class="conversa__rotulo">Conversando com</p>
+            <h2 data-chat-participante>Selecione uma conversa</h2>
+          </div>
+        </header>
+
+        <div class="conversa__vazia" data-chat-vazia>
+          <p>Selecione uma conversa para consultar o histórico.</p>
+        </div>
+        <div class="conversa__historico" data-chat-mensagens hidden aria-live="polite"></div>
+
+        <form class="conversa__form" data-chat-form hidden>
+          <label class="sr-only" for="chat-texto">Mensagem</label>
+          <textarea id="chat-texto" maxlength="4000" rows="2" required
+                    placeholder="Escreva uma mensagem…" data-chat-texto></textarea>
+          <button type="submit">Enviar</button>
+        </form>
+      </section>
+    </div>
+
+    <aside class="mensagens__disclaimer" role="note">
+      A plataforma apenas fornece o meio de comunicação e não se responsabiliza por acordos realizados entre os usuários.
+    </aside>
+  </main>
+
+  <script src="js/mensagens.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Perfil público de artista ou contratante na Palco.">
+  <title>Perfil público — Palco</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/componentes.css">
+  <link rel="stylesheet" href="css/perfil-publico.css">
+</head>
+<body class="perfil-publico-pagina">
+  <header class="perfil-publico-topo">
+    <nav class="perfil-publico-nav" aria-label="Navegação principal">
+      <a class="perfil-publico-nav__marca" href="login.html" aria-label="Palco — início">
+        <img src="assets/logo-palco.png" alt="Palco">
+      </a>
+      <div class="perfil-publico-nav__acoes">
+        <a href="login.html">Entrar</a>
+        <a class="perfil-publico-nav__cadastro" href="cadastro-contratante.html">Criar conta</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="perfil-publico" aria-live="polite">
+    <section class="perfil-publico__estado" data-estado-carregando>
+      <span class="perfil-publico__spinner" aria-hidden="true"></span>
+      <p>Carregando perfil público...</p>
+    </section>
+
+    <section class="perfil-publico__estado perfil-publico__estado--erro" data-estado-erro hidden>
+      <p class="perfil-publico__sobretitulo">PERFIL PÚBLICO</p>
+      <h1 data-erro-titulo>Não foi possível abrir este perfil</h1>
+      <p data-erro-mensagem>Confira o endereço e tente novamente.</p>
+      <a class="perfil-publico__voltar" href="login.html">Voltar para a Palco</a>
+    </section>
+
+    <article class="perfil-publico__cartao" data-perfil hidden>
+      <div class="perfil-publico__banner">
+        <img data-banner alt="" hidden>
+      </div>
+
+      <div class="perfil-publico__conteudo">
+        <div class="perfil-publico__identidade">
+          <img class="perfil-publico__avatar" data-avatar alt="">
+          <div>
+            <p class="perfil-publico__tipo" data-tipo></p>
+            <h1 data-nome></h1>
+            <p class="perfil-publico__local" data-localizacao hidden></p>
+            <button class="perfil-publico__mensagem" type="button" data-iniciar-mensagem hidden>
+              Enviar mensagem
+            </button>
+            <p class="perfil-publico__mensagem-erro" data-mensagem-erro hidden role="alert"></p>
+          </div>
+        </div>
+
+        <div class="perfil-publico__tags" data-tags aria-label="Áreas de atuação" hidden></div>
+
+        <div class="perfil-publico__abas" role="tablist" aria-label="Informações do perfil">
+          <button id="aba-sobre" class="perfil-publico__aba" type="button" role="tab"
+                  aria-selected="true" aria-controls="painel-sobre" data-aba="sobre">
+            Sobre
+          </button>
+          <button id="aba-portfolio" class="perfil-publico__aba" type="button" role="tab"
+                  aria-selected="false" aria-controls="painel-portfolio" data-aba="portfolio" hidden>
+            Portfólio
+          </button>
+        </div>
+
+        <section id="painel-sobre" class="perfil-publico__painel" role="tabpanel"
+                 aria-labelledby="aba-sobre" data-painel="sobre">
+          <h2>Sobre</h2>
+          <p data-biografia>Este perfil ainda não adicionou uma apresentação.</p>
+          <dl class="perfil-publico__detalhes" data-detalhes-contratante hidden>
+            <div>
+              <dt>Tipo de perfil</dt>
+              <dd data-tipo-perfil></dd>
+            </div>
+          </dl>
+        </section>
+
+        <section id="painel-portfolio" class="perfil-publico__painel" role="tabpanel"
+                 aria-labelledby="aba-portfolio" data-painel="portfolio" hidden>
+          <h2>Portfólio</h2>
+          <p>O portfólio completo será aberto em uma nova aba.</p>
+          <a class="perfil-publico__portfolio-link" data-portfolio target="_blank"
+             rel="noopener noreferrer">Acessar portfólio</a>
+        </section>
+      </div>
+    </article>
+  </main>
+
+  <script src="js/perfil-publico.js" defer></script>
+</body>
+</html>

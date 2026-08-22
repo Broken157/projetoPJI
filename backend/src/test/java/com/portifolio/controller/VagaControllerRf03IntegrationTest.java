@@ -77,7 +77,7 @@ class VagaControllerRf03IntegrationTest {
     @AfterEach
     void limparBanco() {
         jdbcTemplate.execute(
-                "TRUNCATE candidaturas, vagas, perfis_artistas, perfis_contratantes, usuarios RESTART IDENTITY CASCADE");
+                "TRUNCATE candidaturas, vagas, tags, perfis_artistas, perfis_contratantes, usuarios RESTART IDENTITY CASCADE");
     }
 
     // ---------- helpers de setup (via repository, nao via REST) ----------
@@ -281,6 +281,285 @@ class VagaControllerRf03IntegrationTest {
                 .andExpect(jsonPath("$.status").value(400));
     }
 
+    @Test
+    void deveFiltrarPorTodosOsCamposCompativeisComOModelo() throws Exception {
+        Usuario usuarioAlvo = criarUsuario("filtros-alvo@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratanteAlvo = criarContratante(usuarioAlvo);
+        contratanteAlvo.setNomeEmpresa("Palco Cultural");
+        perfilContratanteRepository.save(contratanteAlvo);
+
+        Usuario usuarioOutro = criarUsuario("filtros-outro@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratanteOutro = criarContratante(usuarioOutro);
+        contratanteOutro.setNomeEmpresa("Outra Empresa");
+        perfilContratanteRepository.save(contratanteOutro);
+
+        var alvo = criarVaga(contratanteAlvo, "Guitarrista Jazz", "Campinas",
+                ModeloTrabalho.HIBRIDO, new BigDecimal("2500"), StatusVaga.ABERTA);
+        alvo.setEstado("SP");
+        alvo.setTipoContrato("Temporário");
+        alvo.setCategoria("Música ao vivo");
+        vagaRepository.save(alvo);
+
+        var outro = criarVaga(contratanteOutro, "Fotógrafo", "Niterói",
+                ModeloTrabalho.PRESENCIAL, new BigDecimal("900"), StatusVaga.ABERTA);
+        outro.setEstado("RJ");
+        outro.setTipoContrato("Freelance");
+        outro.setCategoria("Fotografia");
+        vagaRepository.save(outro);
+
+        Long tagAlvo = jdbcTemplate.queryForObject(
+                "insert into tags (nome) values (?) returning id", Long.class, "Jazz");
+        Long tagOutra = jdbcTemplate.queryForObject(
+                "insert into tags (nome) values (?) returning id", Long.class, "Retrato");
+        jdbcTemplate.update("insert into tags_vaga (vaga_id, tag_id) values (?, ?)", alvo.getId(), tagAlvo);
+        jdbcTemplate.update("insert into tags_vaga (vaga_id, tag_id) values (?, ?)", outro.getId(), tagOutra);
+
+        String[][] filtros = {
+                {"titulo", "guitarrista"},
+                {"empresa", "palco cultural"},
+                {"cidade", "Campinas"},
+                {"estado", "sp"},
+                {"modeloTrabalho", "HIBRIDO"},
+                {"tipoContrato", "temporário"},
+                {"faixaSalarialMin", "2000"},
+                {"areaAtuacao", "música"},
+                {"tagIds", tagAlvo.toString()}
+        };
+
+        for (String[] filtro : filtros) {
+            mockMvc.perform(get("/api/vagas").param(filtro[0], filtro[1]))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(alvo.getId()));
+        }
+
+        mockMvc.perform(get("/api/vagas")
+                        .param("empresa", "Palco")
+                        .param("cidade", "Campinas")
+                        .param("modeloTrabalho", "HIBRIDO")
+                        .param("areaAtuacao", "Música")
+                        .param("tagIds", tagAlvo.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(alvo.getId()));
+    }
+
+    @Test
+    void filtrosOmitidosNaoDevemRestringirResultados() throws Exception {
+        Usuario usuario = criarUsuario("sem-filtros@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(usuario);
+        criarVaga(contratante, "Primeira", "São Paulo", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        criarVaga(contratante, "Segunda", "Recife", ModeloTrabalho.PRESENCIAL,
+                new BigDecimal("2000"), StatusVaga.ABERTA);
+
+        mockMvc.perform(get("/api/vagas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2));
+    }
+
+    @Test
+    void deveUsarPadraoVinteEInformarUltimaPagina() throws Exception {
+        Usuario usuario = criarUsuario("paginacao-padrao@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(usuario);
+        for (int i = 1; i <= 25; i++) {
+            criarVaga(contratante, "Vaga padrão " + i, "SP", ModeloTrabalho.REMOTO,
+                    new BigDecimal("1000"), StatusVaga.ABERTA);
+        }
+
+        MvcResult primeira = mockMvc.perform(get("/api/vagas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(20))
+                .andExpect(jsonPath("$.hasMore").value(true))
+                .andReturn();
+        JsonNode jsonPrimeira = objectMapper.readTree(primeira.getResponse().getContentAsString());
+
+        MvcResult ultima = mockMvc.perform(get("/api/vagas")
+                        .param("cursor", jsonPrimeira.get("nextCursor").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(5))
+                .andExpect(jsonPath("$.hasMore").value(false))
+                .andReturn();
+        JsonNode jsonUltima = objectMapper.readTree(ultima.getResponse().getContentAsString());
+
+        assertThat(jsonUltima.get("nextCursor").isNull()).isTrue();
+        assertThat(java.util.Collections.disjoint(
+                extrairTitulos(jsonPrimeira), extrairTitulos(jsonUltima))).isTrue();
+
+        mockMvc.perform(get("/api/vagas").param("size", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(20));
+    }
+
+    @Test
+    void deveRejeitarFiltrosEstruturalmenteInvalidos() throws Exception {
+        mockMvc.perform(get("/api/vagas").param("cursor", "-1"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/vagas").param("cursorCanceladas", "-1"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/vagas").param("estado", "S"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/vagas").param("faixaSalarialMin", "-0.01"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/vagas")
+                        .param("faixaSalarialMin", "2000")
+                        .param("faixaSalarialMax", "1000"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/vagas").param("tagIds", "0"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void vagasCanceladasDoArtistaDevemTerCursorProprioEIsolamento() throws Exception {
+        Usuario contratanteUsuario = criarUsuario("canceladas-paginadas-c@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(contratanteUsuario);
+        Usuario artistaAUsuario = criarUsuario("canceladas-paginadas-a@teste.com", TipoUsuario.ARTISTA);
+        PerfilArtista artistaA = criarArtista(artistaAUsuario);
+        Usuario artistaBUsuario = criarUsuario("canceladas-paginadas-b@teste.com", TipoUsuario.ARTISTA);
+        PerfilArtista artistaB = criarArtista(artistaBUsuario);
+
+        for (int i = 1; i <= 3; i++) {
+            var vaga = criarVaga(contratante, "Cancelada A " + i, "SP", ModeloTrabalho.REMOTO,
+                    new BigDecimal("1000"), StatusVaga.CANCELADA);
+            criarCandidatura(vaga, artistaA);
+        }
+        var vagaDoOutro = criarVaga(contratante, "Cancelada B", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.CANCELADA);
+        criarCandidatura(vagaDoOutro, artistaB);
+
+        MvcResult primeira = mockMvc.perform(get("/api/vagas")
+                        .header("Authorization", "Bearer " + tokenPara(artistaAUsuario))
+                        .param("size", "2")
+                        .param("artistaId", artistaBUsuario.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vagasCanceladasComCandidatura.length()").value(2))
+                .andExpect(jsonPath("$.hasMoreCanceladas").value(true))
+                .andReturn();
+        JsonNode jsonPrimeira = objectMapper.readTree(primeira.getResponse().getContentAsString());
+
+        MvcResult segunda = mockMvc.perform(get("/api/vagas")
+                        .header("Authorization", "Bearer " + tokenPara(artistaAUsuario))
+                        .param("size", "2")
+                        .param("cursorCanceladas", jsonPrimeira.get("nextCursorCanceladas").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vagasCanceladasComCandidatura.length()").value(1))
+                .andExpect(jsonPath("$.hasMoreCanceladas").value(false))
+                .andReturn();
+        JsonNode jsonSegunda = objectMapper.readTree(segunda.getResponse().getContentAsString());
+
+        assertThat(jsonSegunda.get("nextCursorCanceladas").isNull()).isTrue();
+        assertThat(jsonPrimeira.toString()).doesNotContain("Cancelada B");
+        assertThat(jsonSegunda.toString()).doesNotContain("Cancelada B");
+    }
+
+    @Test
+    void similaresDevemUsarTagsSomenteAbertasEExcluirOrigem() throws Exception {
+        Usuario usuario = criarUsuario("similares@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(usuario);
+        Long tagComum = jdbcTemplate.queryForObject(
+                "insert into tags (nome) values (?) returning id", Long.class, "Música");
+        Long tagDiferente = jdbcTemplate.queryForObject(
+                "insert into tags (nome) values (?) returning id", Long.class, "Fotografia similar");
+
+        var origem = criarVaga(contratante, "Origem", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        var similar = criarVaga(contratante, "Similar aberta", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        var pausada = criarVaga(contratante, "Similar pausada", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.PAUSADA);
+        var semCorrespondencia = criarVaga(contratante, "Sem correspondência", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        jdbcTemplate.update("insert into tags_vaga (vaga_id, tag_id) values (?, ?)", origem.getId(), tagComum);
+        jdbcTemplate.update("insert into tags_vaga (vaga_id, tag_id) values (?, ?)", similar.getId(), tagComum);
+        jdbcTemplate.update("insert into tags_vaga (vaga_id, tag_id) values (?, ?)", pausada.getId(), tagComum);
+        jdbcTemplate.update("insert into tags_vaga (vaga_id, tag_id) values (?, ?)", semCorrespondencia.getId(), tagDiferente);
+
+        mockMvc.perform(get("/api/vagas/{id}/similares", origem.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(similar.getId()))
+                .andExpect(jsonPath("$.content[0].status").value("ABERTA"));
+    }
+
+    @Test
+    void similaresSemTagsDevemRetornarPaginaVaziaEEndpointDeveSerPublico() throws Exception {
+        Usuario usuario = criarUsuario("similares-sem-tag@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(usuario);
+        var origem = criarVaga(contratante, "Origem sem tag", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+
+        mockMvc.perform(get("/api/vagas/{id}/similares", origem.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0))
+                .andExpect(jsonPath("$.hasMore").value(false));
+    }
+
+    @Test
+    void similaresDevemSerPaginadosSemDuplicacao() throws Exception {
+        Usuario usuario = criarUsuario("similares-paginados@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(usuario);
+        Long tag = jdbcTemplate.queryForObject(
+                "insert into tags (nome) values (?) returning id", Long.class, "Teatro");
+        var origem = criarVaga(contratante, "Origem teatro", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        jdbcTemplate.update("insert into tags_vaga (vaga_id, tag_id) values (?, ?)", origem.getId(), tag);
+        for (int i = 1; i <= 3; i++) {
+            var similar = criarVaga(contratante, "Teatro " + i, "SP", ModeloTrabalho.REMOTO,
+                    new BigDecimal("1000"), StatusVaga.ABERTA);
+            jdbcTemplate.update("insert into tags_vaga (vaga_id, tag_id) values (?, ?)", similar.getId(), tag);
+        }
+
+        MvcResult primeira = mockMvc.perform(get("/api/vagas/{id}/similares", origem.getId())
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.hasMore").value(true))
+                .andReturn();
+        JsonNode jsonPrimeira = objectMapper.readTree(primeira.getResponse().getContentAsString());
+
+        MvcResult segunda = mockMvc.perform(get("/api/vagas/{id}/similares", origem.getId())
+                        .param("size", "2")
+                        .param("cursor", jsonPrimeira.get("nextCursor").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.hasMore").value(false))
+                .andReturn();
+        JsonNode jsonSegunda = objectMapper.readTree(segunda.getResponse().getContentAsString());
+        assertThat(java.util.Collections.disjoint(
+                extrairTitulos(jsonPrimeira), extrairTitulos(jsonSegunda))).isTrue();
+    }
+
+    @Test
+    void deveCalcularPropriedadePeloJwtESemExporDadosPrivados() throws Exception {
+        Usuario dono = criarUsuario("privacidade-dono@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante perfilDono = criarContratante(dono);
+        var vagaDono = criarVaga(perfilDono, "Vaga própria", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+
+        Usuario outro = criarUsuario("privacidade-outro@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante perfilOutro = criarContratante(outro);
+        var vagaOutro = criarVaga(perfilOutro, "Vaga alheia", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+
+        mockMvc.perform(get("/api/vagas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].propriaDoContratante").value(false))
+                .andExpect(jsonPath("$.content[1].propriaDoContratante").value(false))
+                .andExpect(jsonPath("$.content[0].email").doesNotExist())
+                .andExpect(jsonPath("$.content[0].telefone").doesNotExist())
+                .andExpect(jsonPath("$.content[0].senha").doesNotExist())
+                .andExpect(jsonPath("$.content[0].tokenRecuperacao").doesNotExist())
+                .andExpect(jsonPath("$.content[0].dataNascimento").doesNotExist());
+
+        mockMvc.perform(get("/api/vagas")
+                        .header("Authorization", "Bearer " + tokenPara(dono)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(vagaDono.getId()))
+                .andExpect(jsonPath("$.content[0].propriaDoContratante").value(true))
+                .andExpect(jsonPath("$.content[1].id").value(vagaOutro.getId()))
+                .andExpect(jsonPath("$.content[1].propriaDoContratante").value(false));
+    }
+
     // ---------- Fase 2: vagas CANCELADA visíveis só pra quem se candidatou ----------
 
     @Test
@@ -412,11 +691,156 @@ class VagaControllerRf03IntegrationTest {
                 .andExpect(jsonPath("$.categoria").value("Fotografia"));
 
         mockMvc.perform(delete("/api/vagas/{id}", vagaId)
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"confirmacao":true,"motivo":"Projeto encerrado pelo contratante."}
+                                """))
                 .andExpect(status().isNoContent());
 
         assertThat(vagaRepository.findById(vagaId).orElseThrow().getStatus()).isEqualTo(StatusVaga.CANCELADA);
         assertThat(jdbcTemplate.queryForObject(
                 "select count(*) from log_vagas_canceladas where vaga_id = ?", Integer.class, vagaId)).isEqualTo(1);
+    }
+
+    @Test
+    void perfilArtistaNovoDeveAplicarDefaultsDoSchema() {
+        Usuario usuario = criarUsuario("defaults-artista@teste.com", TipoUsuario.ARTISTA);
+
+        PerfilArtista perfil = criarArtista(usuario);
+
+        assertThat(perfil.getNivelMedalha()).isEqualTo(1);
+        assertThat(perfil.getScoreEngajamento()).isEqualByComparingTo("0.00");
+        assertThat(perfil.getUltimaAtualizacao()).isNotNull();
+    }
+
+    @Test
+    void artistaComPerfilCompletoDeveCriarCandidaturaSemprePendente() throws Exception {
+        Usuario contratanteUsuario = criarUsuario("candidatura-contratante@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(contratanteUsuario);
+        var vaga = criarVaga(contratante, "Vaga aberta", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+
+        Usuario artistaUsuario = criarUsuario("candidatura-artista@teste.com", TipoUsuario.ARTISTA);
+        artistaUsuario.setPerfilCompleto(true);
+        usuarioRepository.save(artistaUsuario);
+        criarArtista(artistaUsuario);
+
+        String corpo = """
+                {
+                  "vagaId": %d,
+                  "artistaId": %d,
+                  "mensagemApresentacao": "Tenho interesse nesta oportunidade.",
+                  "linkPortfolioCandidatura": "https://exemplo.com/portfolio",
+                  "status": "APROVADO"
+                }
+                """.formatted(vaga.getId(), artistaUsuario.getId());
+
+        mockMvc.perform(post("/api/candidaturas")
+                        .header("Authorization", "Bearer " + tokenPara(artistaUsuario))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDENTE"))
+                .andExpect(jsonPath("$.artistaId").value(artistaUsuario.getId()));
+    }
+
+    @Test
+    void candidaturaDeveRecusarPerfilIncompletoEVagaCancelada() throws Exception {
+        Usuario contratanteUsuario = criarUsuario("candidatura-regras-c@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(contratanteUsuario);
+        var vagaAberta = criarVaga(contratante, "Vaga aberta", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        var vagaCancelada = criarVaga(contratante, "Vaga cancelada", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.CANCELADA);
+
+        Usuario artistaUsuario = criarUsuario("candidatura-regras-a@teste.com", TipoUsuario.ARTISTA);
+        criarArtista(artistaUsuario);
+        String token = tokenPara(artistaUsuario);
+
+        String perfilIncompleto = corpoCandidatura(vagaAberta.getId(), artistaUsuario.getId());
+        mockMvc.perform(post("/api/candidaturas")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(perfilIncompleto))
+                .andExpect(status().isUnprocessableEntity());
+
+        artistaUsuario.setPerfilCompleto(true);
+        usuarioRepository.save(artistaUsuario);
+        String vagaSemCandidatura = corpoCandidatura(vagaCancelada.getId(), artistaUsuario.getId());
+        mockMvc.perform(post("/api/candidaturas")
+                        .header("Authorization", "Bearer " + tokenPara(artistaUsuario))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(vagaSemCandidatura))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void artistaNaoPodeCriarCandidaturaEmNomeDeOutro() throws Exception {
+        Usuario contratanteUsuario = criarUsuario("candidatura-identidade-c@teste.com", TipoUsuario.CONTRATANTE);
+        PerfilContratante contratante = criarContratante(contratanteUsuario);
+        var vaga = criarVaga(contratante, "Vaga aberta", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+
+        Usuario autenticado = criarUsuario("artista-autenticado@teste.com", TipoUsuario.ARTISTA);
+        autenticado.setPerfilCompleto(true);
+        usuarioRepository.save(autenticado);
+        criarArtista(autenticado);
+
+        Usuario outro = criarUsuario("outro-artista@teste.com", TipoUsuario.ARTISTA);
+        outro.setPerfilCompleto(true);
+        usuarioRepository.save(outro);
+        criarArtista(outro);
+
+        mockMvc.perform(post("/api/candidaturas")
+                        .header("Authorization", "Bearer " + tokenPara(autenticado))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoCandidatura(vaga.getId(), outro.getId())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void atualizacaoDoProprioPerfilArtistaDeveMarcaLoComoCompleto() throws Exception {
+        Usuario artista = criarUsuario("perfil-proprio@teste.com", TipoUsuario.ARTISTA);
+        criarArtista(artista);
+        Usuario outroArtista = criarUsuario("perfil-outro@teste.com", TipoUsuario.ARTISTA);
+        criarArtista(outroArtista);
+        Long tagId = jdbcTemplate.queryForObject(
+                "insert into tags (nome) values (?) returning id", Long.class, "Tag perfil completo");
+
+        String corpo = """
+                {
+                  "usuarioId": %d,
+                  "biografia": "Biografia completa",
+                  "localizacao": "São Paulo, SP",
+                  "urlPortfolio": "https://portfolio.example",
+                  "tagIds": [%d]
+                }
+                """.formatted(artista.getId(), tagId);
+
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getId())
+                        .header("Authorization", "Bearer " + tokenPara(outroArtista))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getId())
+                        .header("Authorization", "Bearer " + tokenPara(artista))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo))
+                .andExpect(status().isOk());
+
+        assertThat(usuarioRepository.findById(artista.getId()).orElseThrow().getPerfilCompleto()).isTrue();
+    }
+
+    private String corpoCandidatura(Long vagaId, Long artistaId) {
+        return """
+                {
+                  "vagaId": %d,
+                  "artistaId": %d,
+                  "mensagemApresentacao": "Tenho interesse nesta oportunidade.",
+                  "linkPortfolioCandidatura": "https://exemplo.com/portfolio"
+                }
+                """.formatted(vagaId, artistaId);
     }
 }

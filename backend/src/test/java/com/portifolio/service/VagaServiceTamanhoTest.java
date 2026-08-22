@@ -13,7 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 // a necessidade de reflection aqui.
 class VagaServiceTamanhoTest {
 
-    private final VagaService service = new VagaService(null, null, null, null, null, null);
+    private final VagaService service = new VagaService(
+            null, null, null, null, null, null, null, null);
 
     @ParameterizedTest
     @CsvSource({

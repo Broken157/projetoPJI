@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "project": {
+    "name": "PJI Palco",
+    "role_focus": "BACKEND"
+  },
+  "repositories": {
+    "fork": "https://github.com/Broken157/projetoPJI.git",
+    "upstream": "https://github.com/manugomesds/projetoPJI.git"
+  },
+  "branches": {
+    "integration": {
+      "name": "projetoPJI-10-08-ajustes",
+      "repository": "upstream",
+      "sha": "d351ff909266884446f78eac32364816c2b1e4b6"
+    },
+    "checkpoint": {
+      "name": "checkpoint/pre-automacao-2026-08-22",
+      "repository": "fork",
+      "sha": "fe4a18a638a47cdc50acb5680c999280f8c26545",
+      "immutable": true
+    },
+    "automation": {
+      "name": "pji-automation",
+      "repository": "fork",
+      "upstream_integration_forbidden": true
+    }
+  },
+  "phase": "BASELINE_SYNC",
+  "checkpoint_sha": "fe4a18a638a47cdc50acb5680c999280f8c26545",
+  "current_week": "2026-W34",
+  "current_rf": "NONE_DURING_BASELINE_SYNC",
+  "tests": {
+    "backend": {
+      "executed": 280,
+      "passed": 280,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "result": "PASSED",
+      "build": "BUILD_SUCCESS",
+      "environment": "PostgreSQL 18 via Testcontainers",
+      "command": ".\\mvnw.cmd clean test '-Dspring.jpa.show-sql=false'"
+    },
+    "frontend": {
+      "result": "NOT_EXECUTED",
+      "reason": "Node/npm unavailable in the checkpoint validation environment",
+      "next_phase_action": "TRY_NODE_IN_ISOLATED_DOCKER"
+    }
+  },
+  "database_changed": "historical_rf25_only",
+  "frontend_changed": true,
+  "pr_ready": false,
+  "blockers": [
+    "SECURITY-JWT-001",
+    "FRONTEND-TEST-001",
+    "RF24-SCHEMA-001",
+    "BASELINE-SYNC-001"
+  ]
+}

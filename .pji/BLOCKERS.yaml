@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0.0",
+  "as_of": "2026-08-22",
+  "blockers": [
+    {
+      "id": "SECURITY-JWT-001",
+      "type": "SECURITY_REGRESSION",
+      "status": "OPEN",
+      "title": "Predictable JWT fallback secret in checkpoint",
+      "evidence": {
+        "checkpoint": "backend/src/main/resources/application.properties contains jwt.secret=${JWT_SECRET:MinhaChaveSuperSecreta2026SosArtistas}",
+        "previous_state": "The preceding tracked state required jwt.secret=${JWT_SECRET} without a fallback"
+      },
+      "required_action": "Obtain explicit authorization before any significant JWT/security configuration change; do not fix during bootstrap",
+      "automation_action": "DO_NOT_FIX",
+      "blocks": ["PR_READY"]
+    },
+    {
+      "id": "FRONTEND-TEST-001",
+      "type": "TEST_GAP",
+      "status": "OPEN",
+      "title": "Frontend changed without an executed automated frontend suite",
+      "evidence": "Checkpoint includes frontend changes; Node/npm was unavailable in the checkpoint validation environment",
+      "next_phase_action": "Try Node in an isolated Docker environment without changing functional code",
+      "automation_action": "DO_NOT_CLOSE_WITHOUT_EXECUTED_EVIDENCE",
+      "blocks": ["PR_READY"]
+    },
+    {
+      "id": "RF24-SCHEMA-001",
+      "type": "FUNCTIONAL_BLOCKER",
+      "status": "BLOCKED_BY_DATABASE",
+      "title": "RF24 cannot be completed using the current official schema",
+      "evidence": "RELATORIO_RF24_SISTEMA_MENSAGENS.md classifies RF24 as partial because secure attachments, a persistent edited marker, and full RF30 anonymization compatibility require schema support",
+      "required_action": "Request a new, explicitly scoped database approval before any schema design or implementation",
+      "automation_action": "DO_NOT_CHANGE_DATABASE_OR_MARK_RF24_COMPLETE",
+      "blocks": ["RF24_COMPLETE"]
+    },
+    {
+      "id": "BASELINE-SYNC-001",
+      "type": "INTEGRATION_PENDING",
+      "status": "OPEN",
+      "title": "Checkpoint is not integrated into the official original branch",
+      "evidence": {
+        "checkpoint_sha": "fe4a18a638a47cdc50acb5680c999280f8c26545",
+        "upstream_integration_sha": "d351ff909266884446f78eac32364816c2b1e4b6",
+        "checkpoint_branch_present_upstream": false
+      },
+      "required_action": "Perform only an explicitly authorized baseline synchronization workflow; this bootstrap creates no PR or merge",
+      "automation_action": "DO_NOT_START_NEW_RF",
+      "blocks": ["NEW_RF", "PR_READY"]
+    }
+  ]
+}

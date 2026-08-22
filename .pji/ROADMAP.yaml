@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0.0",
+  "as_of": "2026-08-22",
+  "current_phase": "BASELINE_SYNC",
+  "automatic_execution_enabled": false,
+  "next_automatic_rf": null,
+  "source_policy": "Use only existing RF reports, tracked code, machine state, and explicit user decisions. Unknown items remain UNKNOWN.",
+  "phase_gate": {
+    "id": "BASELINE-SYNC-001",
+    "status": "OPEN",
+    "effect": "No new RF may start"
+  },
+  "items": [
+    {
+      "id": "BASELINE_SYNC",
+      "status": "IN_PROGRESS",
+      "evidence": [".pji/STATE.yaml", ".pji/BLOCKERS.yaml"],
+      "implementation_authorized": false
+    },
+    {
+      "id": "RF03",
+      "status": "BACKEND_COMPLETE_UI_INTEGRATION_PENDING",
+      "evidence": ["RELATORIO_RF03_LISTAGEM_BUSCA_VAGAS.md"]
+    },
+    {
+      "id": "RF04",
+      "status": "COMPLETE_IN_CHECKPOINT",
+      "evidence": ["RELATORIO_RF04_PUBLICACAO_VAGAS.md"]
+    },
+    {
+      "id": "RF05",
+      "status": "BACKEND_COMPLETE",
+      "evidence": ["RELATORIO_RF05_DETALHES_VAGA_SUGESTAO_TALENTOS.md"]
+    },
+    {
+      "id": "RF06",
+      "status": "BACKEND_VALIDATED_WITH_RECORDED_PENDING_ITEMS",
+      "evidence": ["RELATORIO_RF06_CANDIDATURAS.md"]
+    },
+    {
+      "id": "RF07",
+      "status": "COMPLETE_IN_CHECKPOINT",
+      "evidence": ["RELATORIO_RF07_EDICAO_VAGAS.md"]
+    },
+    {
+      "id": "RF08",
+      "status": "COMPLETE_IN_CHECKPOINT",
+      "evidence": ["RELATORIO_RF08_EDICAO_PERFIL.md", "RELATORIO_RF08_VALIDACAO_FINAL.md"]
+    },
+    {
+      "id": "RF09",
+      "status": "COMPLETE_WITH_FRONTEND_TEST_GAP",
+      "evidence": ["RELATORIO_RF09_RECUPERACAO_SENHA.md", "RELATORIO_RF09_FINALIZACAO_EMAIL_FRONTEND.md"],
+      "blocker": "FRONTEND-TEST-001"
+    },
+    {
+      "id": "RF10",
+      "status": "COMPLETE_IN_CHECKPOINT",
+      "evidence": ["RELATORIO_RF10_PERFIL_PUBLICO.md"]
+    },
+    {
+      "id": "RF11",
+      "status": "PARTIAL",
+      "evidence": ["RELATORIO_RF11_PAINEL_PRINCIPAL.md"]
+    },
+    {
+      "id": "RF23",
+      "status": "COMPLETE_IN_CHECKPOINT",
+      "evidence": ["RELATORIO_RF23_NOTIFICACOES_TEMPO_REAL.md"]
+    },
+    {
+      "id": "RF24",
+      "status": "PARTIAL_BLOCKED_BY_DATABASE",
+      "evidence": ["RELATORIO_RF24_SISTEMA_MENSAGENS.md"],
+      "blocker": "RF24-SCHEMA-001",
+      "implementation_authorized": false
+    },
+    {
+      "id": "RF25",
+      "status": "COMPLETE_IN_CHECKPOINT_WITH_HISTORICAL_DATABASE_APPROVAL",
+      "evidence": ["RELATORIO_RF25_CANCELAMENTO_VAGAS.md", "RELATORIO_RF25_FINALIZACAO_MOTIVO_CONFIRMACAO.md"],
+      "approval": "DB-RF25-001"
+    },
+    {
+      "id": "RF31",
+      "status": "BACKEND_COMPLETE",
+      "evidence": ["RELATORIO_RF31_GERENCIAMENTO_VAGA_SUSPENSA.md"]
+    }
+  ],
+  "unknown_items": {
+    "status": "UNKNOWN",
+    "rule": "Do not infer priority, completeness, dependencies, or authorization without evidence"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0.0",
+  "policy_name": "PJI Palco controlled automation",
+  "principle": "AUDIT_FIRST_REUSE_CORRECT_FIX_ONLY_NECESSARY_TEST_REPORT",
+  "allowed_automatic": [
+    "Read-only inspection, audit, and evidence analysis",
+    "Backend implementation only for an explicitly authorized RF and only after phase gates are open",
+    "Tests and validation within the authorized scope",
+    "Self-regression fixes caused by the authorized change",
+    "Commits and pushes only to the fork within the authorized branch",
+    "Documentation, reports, machine-readable state, and validation scripts"
+  ],
+  "approval_required": [
+    "Any new database, schema, SQL, or migration change",
+    "Functional frontend changes",
+    "Incompatible public API changes",
+    "Structural authentication or authorization changes",
+    "Significant Spring Security or JWT changes",
+    "Structural dependency changes",
+    "Java or Spring Boot version changes",
+    "Docker, CI/CD, or production infrastructure changes",
+    "New external services",
+    "Large refactors",
+    "Requirement definition changes",
+    "Functional deletion",
+    "Destructive operations",
+    "Any merge into upstream",
+    "Starting a new week after the current week is closed"
+  ],
+  "always_prohibited": [
+    "Direct push to upstream",
+    "Forced integration or force-push",
+    "Destructive reset",
+    "Deleting history",
+    "Disabling tests",
+    "Removing constraints to make tests pass",
+    "Using ddl-auto=create or ddl-auto=update to bypass schema validation",
+    "Hiding or falsifying failures",
+    "Committing secrets or personal credentials",
+    "Reusing approvals outside their exact recorded scope"
+  ],
+  "branch_rules": {
+    "checkpoint/pre-automacao-2026-08-22": "IMMUTABLE",
+    "pji-automation": "FORK_ONLY_AUTOMATION_INFRASTRUCTURE",
+    "projetoPJI-10-08-ajustes": "OFFICIAL_INTEGRATION_DO_NOT_MUTATE_DURING_BOOTSTRAP"
+  },
+  "phase_rules": {
+    "BASELINE_SYNC": {
+      "new_rf_allowed": false,
+      "pr_creation_allowed": false,
+      "automatic_execution_allowed": false
+    }
+  }
+}

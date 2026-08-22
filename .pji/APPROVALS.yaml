@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "active_new_database_approvals": [],
+  "approvals": [
+    {
+      "approval_id": "DB-RF25-001",
+      "requirement": "RF25",
+      "type": "DATABASE_CHANGE",
+      "status": "APPROVED_HISTORICAL",
+      "scope": "Add the motivo field to log_vagas_canceladas and keep the official and test schemas aligned",
+      "files": [
+        "database/migration_rf25_motivo.sql",
+        "database/schema-test.sql",
+        "database/sos_artistas.sql",
+        "backend/src/test/resources/db/schema-test.sql"
+      ],
+      "scope_reuse_allowed": false,
+      "notes": "Historical evidence only. It does not authorize any new database, schema, or migration change."
+    }
+  ]
+}

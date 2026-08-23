@@ -1,6 +1,9 @@
 {
   "schema_version": "1.0.0",
-  "active_new_database_approvals": [],
+  "active_new_database_approvals": [
+    "DB-RF23-001",
+    "DB-RF24-001"
+  ],
   "approvals": [
     {
       "approval_id": "DB-RF25-001",
@@ -16,6 +19,54 @@
       ],
       "scope_reuse_allowed": false,
       "notes": "Historical evidence only. It does not authorize any new database, schema, or migration change."
+    },
+    {
+      "approval_id": "DB-RF23-001",
+      "requirement": "RF23",
+      "type": "DATABASE_CHANGE",
+      "status": "APPROVED",
+      "scope": "Alterações mínimas e estritamente necessárias no banco para completar RF23, após auditoria do requisito e do schema atual.",
+      "scope_reuse_allowed": false,
+      "implementation_status": "NOT_STARTED",
+      "authorization_rules": {
+        "exclusive_requirement_scope": true,
+        "general_schema_refactor_allowed": false,
+        "convenience_changes_allowed": false,
+        "audit_required_before_concrete_change": true,
+        "minimum_structural_change_required": true,
+        "implementation_artifacts_required": [
+          "migration",
+          "official_and_test_schema_updates",
+          "tests",
+          "report"
+        ],
+        "implementation_executed_in_this_action": false
+      },
+      "notes": "Nenhuma alteração de banco foi inferida ou executada. Uma auditoria específica do RF23 deve identificar primeiro qualquer lacuna concreta."
+    },
+    {
+      "approval_id": "DB-RF24-001",
+      "requirement": "RF24",
+      "type": "DATABASE_CHANGE",
+      "status": "APPROVED",
+      "scope": "Alterações mínimas e estritamente necessárias no banco para completar RF24, após auditoria do requisito e do schema atual.",
+      "scope_reuse_allowed": false,
+      "implementation_status": "NOT_STARTED",
+      "authorization_rules": {
+        "exclusive_requirement_scope": true,
+        "general_schema_refactor_allowed": false,
+        "convenience_changes_allowed": false,
+        "audit_required_before_concrete_change": true,
+        "minimum_structural_change_required": true,
+        "implementation_artifacts_required": [
+          "migration",
+          "official_and_test_schema_updates",
+          "tests",
+          "report"
+        ],
+        "implementation_executed_in_this_action": false
+      },
+      "notes": "A autorização não fecha RF24-SCHEMA-001. O blocker só poderá fechar após a alteração necessária ser implementada e validada."
     }
   ]
 }

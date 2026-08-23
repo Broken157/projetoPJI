@@ -49,8 +49,10 @@
       "status": "BLOCKED_BY_DATABASE",
       "title": "RF24 cannot be completed using the current official schema",
       "evidence": "RELATORIO_RF24_SISTEMA_MENSAGENS.md classifies RF24 as partial because secure attachments, a persistent edited marker, and full RF30 anonymization compatibility require schema support",
-      "required_action": "Request a new, explicitly scoped database approval before any schema design or implementation",
-      "automation_action": "DO_NOT_CHANGE_DATABASE_OR_MARK_RF24_COMPLETE",
+      "database_approval": "DB-RF24-001",
+      "required_action": "Audit RF24 and the current schema, then implement and validate only the minimum structural change allowed by DB-RF24-001",
+      "approval_effect": "Authorization alone does not close this blocker",
+      "automation_action": "DO_NOT_MARK_RF24_COMPLETE_UNTIL_DATABASE_CHANGE_IS_IMPLEMENTED_AND_VALIDATED",
       "blocks": ["RF24_COMPLETE"],
       "blocks_historical_baseline_pr": false
     },

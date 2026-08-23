@@ -22,7 +22,9 @@ YAML_FILES = (
 )
 CHECKPOINT = "fe4a18a638a47cdc50acb5680c999280f8c26545"
 INTEGRATION_SHA = "d351ff909266884446f78eac32364816c2b1e4b6"
-BASELINE_SHA = "fc2f8ec8eabc864a8ed98054e458971ab6dd664d"
+BASELINE_SHA = "fc64478efdd5e2bdff81f44df32597f9a31c6131"
+PR_NUMBER = 3
+PR_URL = "https://github.com/manugomesds/projetoPJI/pull/3"
 MANDATORY_BLOCKERS = {
     "SECURITY-JWT-001": ("SECURITY_REGRESSION", "CLOSED"),
     "FRONTEND-TEST-001": ("TEST_GAP", "CLOSED"),
@@ -120,8 +122,12 @@ def main() -> int:
     delivery = state.get("delivery", {})
     baseline_sync = state.get("baseline_sync", {})
     fork_backup = delivery.get("fork_backup", {})
-    if delivery.get("ready_for_pr") is not True or any(delivery.get(key) is not False for key in ("pr_created", "merge_approved", "merged")):
-        failures.append("delivery state must be PR-ready without PR or merge authorization")
+    if delivery.get("ready_for_pr") is not True or delivery.get("pr_created") is not True:
+        failures.append("delivery state must record the created historical PR")
+    elif delivery.get("pr_number") != PR_NUMBER or delivery.get("pr_url") != PR_URL:
+        failures.append("delivery state must identify historical PR #3")
+    elif delivery.get("merge_approved") is not False or delivery.get("merged") is not False:
+        failures.append("delivery state must preserve the absence of merge approval and merge execution")
     elif fork_backup.get("allowed_when_blocked") is not True or fork_backup.get("baseline_pushed") is not True or fork_backup.get("baseline_remote_sha") != BASELINE_SHA:
         failures.append("fork backup state must record the preserved baseline SHA")
     elif baseline_sync.get("branch") != "sync/baseline-2026-08-25" or baseline_sync.get("base_sha") != INTEGRATION_SHA:
@@ -129,7 +135,7 @@ def main() -> int:
     elif baseline_sync.get("head_sha") != BASELINE_SHA or baseline_sync.get("prepared") is not True or baseline_sync.get("preserved_on_fork") is not True:
         failures.append("baseline sync head/prepared state does not match the closed frontend gate")
     else:
-        passes.append("delivery and baseline sync state record technical PR readiness without merge authorization")
+        passes.append("delivery and baseline sync state record historical PR #3 without merge authorization")
 
     if set(state.get("blockers", [])) != set(MANDATORY_BLOCKERS):
         failures.append("STATE blocker references do not match mandatory blockers")
@@ -155,6 +161,32 @@ def main() -> int:
         failures.append("DB-RF25-001 must not be reusable")
     else:
         passes.append("historical DB-RF25-001 scope is exact and non-reusable")
+
+    active_database_approvals = {"DB-RF23-001", "DB-RF24-001"}
+    if set(documents["APPROVALS.yaml"].get("active_new_database_approvals", [])) != active_database_approvals:
+        failures.append("active database approvals must be exactly DB-RF23-001 and DB-RF24-001")
+    for approval_id, requirement in (("DB-RF23-001", "RF23"), ("DB-RF24-001", "RF24")):
+        item = approvals.get(approval_id)
+        rules = item.get("authorization_rules", {}) if item else {}
+        expected_artifacts = {"migration", "official_and_test_schema_updates", "tests", "report"}
+        if not item or item.get("requirement") != requirement or item.get("type") != "DATABASE_CHANGE":
+            failures.append(f"{approval_id} is missing or assigned outside {requirement}")
+        elif item.get("status") != "APPROVED" or item.get("scope_reuse_allowed") is not False:
+            failures.append(f"{approval_id} must be approved and non-reusable")
+        elif item.get("implementation_status") != "NOT_STARTED":
+            failures.append(f"{approval_id} must not imply that a database change was implemented")
+        elif rules.get("exclusive_requirement_scope") is not True:
+            failures.append(f"{approval_id} must be exclusive to its requirement")
+        elif rules.get("general_schema_refactor_allowed") is not False or rules.get("convenience_changes_allowed") is not False:
+            failures.append(f"{approval_id} must prohibit general or convenience schema changes")
+        elif rules.get("audit_required_before_concrete_change") is not True or rules.get("minimum_structural_change_required") is not True:
+            failures.append(f"{approval_id} must require an audit and the minimum structural change")
+        elif set(rules.get("implementation_artifacts_required", [])) != expected_artifacts:
+            failures.append(f"{approval_id} must require migration, schema updates, tests, and report")
+        elif rules.get("implementation_executed_in_this_action") is not False:
+            failures.append(f"{approval_id} must record that no database implementation occurred")
+        else:
+            passes.append(f"{approval_id} is exact-scope, non-reusable, audited-first, and not yet implemented")
 
     policy = documents["POLICY.yaml"]
     if not all(policy.get(key) for key in ("allowed_automatic", "approval_required", "always_prohibited")):

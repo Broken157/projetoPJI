@@ -84,13 +84,15 @@
   "pr_ready": true,
   "delivery": {
     "ready_for_pr": true,
-    "pr_created": false,
+    "pr_created": true,
+    "pr_number": 3,
+    "pr_url": "https://github.com/manugomesds/projetoPJI/pull/3",
     "merge_approved": false,
     "merged": false,
     "fork_backup": {
       "allowed_when_blocked": true,
       "baseline_pushed": true,
-      "baseline_remote_sha": "fc2f8ec8eabc864a8ed98054e458971ab6dd664d",
+      "baseline_remote_sha": "fc64478efdd5e2bdff81f44df32597f9a31c6131",
       "repository": "Broken157/projetoPJI",
       "does_not_imply_pr_ready": true
     }
@@ -98,7 +100,7 @@
   "baseline_sync": {
     "branch": "sync/baseline-2026-08-25",
     "base_sha": "d351ff909266884446f78eac32364816c2b1e4b6",
-    "head_sha": "fc2f8ec8eabc864a8ed98054e458971ab6dd664d",
+    "head_sha": "fc64478efdd5e2bdff81f44df32597f9a31c6131",
     "prepared": true,
     "preserved_on_fork": true
   },

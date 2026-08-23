@@ -4,19 +4,21 @@
   "current_phase": "BASELINE_SYNC",
   "automatic_execution_enabled": false,
   "next_automatic_rf": null,
+  "next_cycle_status": "AWAITING_WEEKLY_REPORT_CLOSE_AND_EXPLICIT_AUTHORIZATION",
   "source_policy": "Use only existing RF reports, tracked code, machine state, and explicit user decisions. Unknown items remain UNKNOWN.",
   "phase_gate": {
     "id": "BASELINE-SYNC-001",
-    "status": "OPEN",
-    "effect": "No new RF, DEVELOPMENT phase, or next functional cycle may start; this gate does not block technical PR readiness or creation of the historical baseline PR"
+    "status": "CLOSED",
+    "effect": "Baseline integrated through PR #3; no DEVELOPMENT phase, new RF, or next cycle starts before weekly report closure and explicit authorization"
   },
   "items": [
     {
       "id": "BASELINE_SYNC",
-      "status": "IN_PROGRESS",
-      "evidence": [".pji/STATE.yaml", ".pji/BLOCKERS.yaml"],
+      "status": "COMPLETED",
+      "evidence": [".pji/STATE.yaml", ".pji/BLOCKERS.yaml", ".pji/WEEKLY_LOG.md"],
       "implementation_authorized": false,
-      "delivery_ready": true
+      "delivery_ready": true,
+      "merge_commit_sha": "bcf2d563ca3abf7f2c59e79eb21133dc2d65abec"
     },
     {
       "id": "RF03",

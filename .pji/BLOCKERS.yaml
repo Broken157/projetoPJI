@@ -59,16 +59,19 @@
     {
       "id": "BASELINE-SYNC-001",
       "type": "INTEGRATION_PENDING",
-      "status": "OPEN",
-      "title": "Checkpoint is not integrated into the official original branch",
+      "status": "CLOSED",
+      "title": "Historical baseline integrated into the official original branch",
       "evidence": {
         "checkpoint_sha": "fe4a18a638a47cdc50acb5680c999280f8c26545",
-        "upstream_integration_sha": "d351ff909266884446f78eac32364816c2b1e4b6",
-        "checkpoint_branch_present_upstream": false
+        "baseline_sha": "fc64478efdd5e2bdff81f44df32597f9a31c6131",
+        "pull_request": "https://github.com/manugomesds/projetoPJI/pull/3",
+        "merge_commit_sha": "bcf2d563ca3abf7f2c59e79eb21133dc2d65abec",
+        "upstream_integration_sha": "bcf2d563ca3abf7f2c59e79eb21133dc2d65abec"
       },
-      "required_action": "Integrate the reviewed baseline through an explicitly approved original-repository workflow; no merge is authorized by this state",
-      "automation_action": "DO_NOT_START_NEW_RF",
-      "blocks": ["NEW_RF", "PHASE_DEVELOPMENT", "NEXT_FUNCTIONAL_CYCLE"],
+      "resolution": "PR #3 merged and the official integration branch points to the recorded merge commit",
+      "required_action": "Await weekly report closure and explicit authorization for the next cycle",
+      "automation_action": "DO_NOT_START_NEW_RF_WITHOUT_EXPLICIT_NEXT_CYCLE_AUTHORIZATION",
+      "blocks": [],
       "blocks_pr_ready": false,
       "blocks_pr_creation": false
     }

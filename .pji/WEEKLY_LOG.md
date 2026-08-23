@@ -46,3 +46,13 @@
 - `RF24-SCHEMA-001` permanece `BLOCKED_BY_DATABASE`; `BASELINE-SYNC-001` permanece `OPEN`; fase continua `BASELINE_SYNC` e nenhum RF novo foi iniciado.
 
 O fechamento desta semana e a abertura de uma semana seguinte exigem decisão explícita conforme `.pji/POLICY.yaml`.
+
+### Fechamento pós-merge do baseline
+
+- PR #3 integrado no original; merge commit `bcf2d563ca3abf7f2c59e79eb21133dc2d65abec`.
+- Baseline sync concluído.
+- Backend validado anteriormente: 280/280, `BUILD SUCCESS`.
+- Frontend validado anteriormente: 13/13, 4/4 suites, build PASS.
+- Nenhuma nova alteração de banco neste fechamento.
+- RF24 continua pendente por schema.
+- As autorizações `DB-RF23-001` e `DB-RF24-001` permanecem aprovadas e não executadas (`NOT_STARTED`).

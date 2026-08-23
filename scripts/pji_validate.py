@@ -21,7 +21,8 @@ YAML_FILES = (
     "BLOCKERS.yaml",
 )
 CHECKPOINT = "fe4a18a638a47cdc50acb5680c999280f8c26545"
-INTEGRATION_SHA = "d351ff909266884446f78eac32364816c2b1e4b6"
+INTEGRATION_SHA = "bcf2d563ca3abf7f2c59e79eb21133dc2d65abec"
+BASELINE_BASE_SHA = "d351ff909266884446f78eac32364816c2b1e4b6"
 BASELINE_SHA = "fc64478efdd5e2bdff81f44df32597f9a31c6131"
 PR_NUMBER = 3
 PR_URL = "https://github.com/manugomesds/projetoPJI/pull/3"
@@ -29,7 +30,7 @@ MANDATORY_BLOCKERS = {
     "SECURITY-JWT-001": ("SECURITY_REGRESSION", "CLOSED"),
     "FRONTEND-TEST-001": ("TEST_GAP", "CLOSED"),
     "RF24-SCHEMA-001": ("FUNCTIONAL_BLOCKER", "BLOCKED_BY_DATABASE"),
-    "BASELINE-SYNC-001": ("INTEGRATION_PENDING", "OPEN"),
+    "BASELINE-SYNC-001": ("INTEGRATION_PENDING", "CLOSED"),
 }
 ALLOWED_DIFF_PREFIXES = (
     ".pji/",
@@ -126,16 +127,20 @@ def main() -> int:
         failures.append("delivery state must record the created historical PR")
     elif delivery.get("pr_number") != PR_NUMBER or delivery.get("pr_url") != PR_URL:
         failures.append("delivery state must identify historical PR #3")
-    elif delivery.get("merge_approved") is not False or delivery.get("merged") is not False:
-        failures.append("delivery state must preserve the absence of merge approval and merge execution")
+    elif delivery.get("merge_approved") is not True or delivery.get("merged") is not True:
+        failures.append("delivery state must record the approved and completed merge")
+    elif delivery.get("merge_commit_sha") != INTEGRATION_SHA:
+        failures.append("delivery state must record the official merge commit")
     elif fork_backup.get("allowed_when_blocked") is not True or fork_backup.get("baseline_pushed") is not True or fork_backup.get("baseline_remote_sha") != BASELINE_SHA:
         failures.append("fork backup state must record the preserved baseline SHA")
-    elif baseline_sync.get("branch") != "sync/baseline-2026-08-25" or baseline_sync.get("base_sha") != INTEGRATION_SHA:
+    elif baseline_sync.get("branch") != "sync/baseline-2026-08-25" or baseline_sync.get("base_sha") != BASELINE_BASE_SHA:
         failures.append("baseline sync branch/base does not match the audited upstream")
     elif baseline_sync.get("head_sha") != BASELINE_SHA or baseline_sync.get("prepared") is not True or baseline_sync.get("preserved_on_fork") is not True:
-        failures.append("baseline sync head/prepared state does not match the closed frontend gate")
+        failures.append("baseline sync head/prepared state does not match the integrated baseline")
+    elif baseline_sync.get("status") != "COMPLETED" or baseline_sync.get("integrated") is not True or baseline_sync.get("merge_commit_sha") != INTEGRATION_SHA:
+        failures.append("baseline sync must record completed integration through the official merge commit")
     else:
-        passes.append("delivery and baseline sync state record historical PR #3 without merge authorization")
+        passes.append("delivery and baseline sync state record the completed merge of historical PR #3")
 
     if set(state.get("blockers", [])) != set(MANDATORY_BLOCKERS):
         failures.append("STATE blocker references do not match mandatory blockers")
@@ -215,10 +220,14 @@ def main() -> int:
         failures.append("roadmap must not schedule automatic RF execution")
     elif not rf24 or rf24.get("status") != "PARTIAL_BLOCKED_BY_DATABASE":
         failures.append("roadmap must keep RF24 partial and database-blocked")
-    elif not baseline_item or baseline_item.get("delivery_ready") is not True:
-        failures.append("roadmap must record technical baseline delivery readiness")
+    elif roadmap.get("phase_gate", {}).get("status") != "CLOSED":
+        failures.append("roadmap must close BASELINE-SYNC-001 after the confirmed merge")
+    elif roadmap.get("next_cycle_status") != "AWAITING_WEEKLY_REPORT_CLOSE_AND_EXPLICIT_AUTHORIZATION":
+        failures.append("roadmap must remain stopped pending weekly closure and explicit next-cycle authorization")
+    elif not baseline_item or baseline_item.get("status") != "COMPLETED" or baseline_item.get("merge_commit_sha") != INTEGRATION_SHA:
+        failures.append("roadmap must record the completed baseline merge")
     else:
-        passes.append("roadmap has no automatic RF and preserves RF24 partial status")
+        passes.append("roadmap completes baseline sync without starting DEVELOPMENT or another RF")
 
     try:
         branch = git("branch", "--show-current")
@@ -232,10 +241,11 @@ def main() -> int:
             failures.append("checkpoint local/fork ref drifted from immutable SHA")
         if origin_baseline != BASELINE_SHA:
             failures.append("fork baseline ref differs from the preserved local SHA")
-        if upstream_integration != INTEGRATION_SHA:
-            failures.append("upstream integration tracking SHA differs from recorded baseline")
+        if state["branches"]["integration"].get("sha") != INTEGRATION_SHA:
+            failures.append("STATE integration SHA differs from the official baseline merge commit")
+        git("merge-base", "--is-ancestor", INTEGRATION_SHA, "refs/remotes/upstream/projetoPJI-10-08-ajustes")
         if not failures:
-            passes.append("Git branch and baseline refs match recorded state")
+            passes.append(f"Git branch and baseline refs contain the official merge commit (current upstream head {upstream_integration})")
     except (subprocess.CalledProcessError, OSError) as exc:
         failures.append(f"Git invariant check failed: {exc}")
 

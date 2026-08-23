@@ -12,7 +12,7 @@
     "integration": {
       "name": "projetoPJI-10-08-ajustes",
       "repository": "upstream",
-      "sha": "d351ff909266884446f78eac32364816c2b1e4b6"
+      "sha": "bcf2d563ca3abf7f2c59e79eb21133dc2d65abec"
     },
     "checkpoint": {
       "name": "checkpoint/pre-automacao-2026-08-22",
@@ -87,8 +87,9 @@
     "pr_created": true,
     "pr_number": 3,
     "pr_url": "https://github.com/manugomesds/projetoPJI/pull/3",
-    "merge_approved": false,
-    "merged": false,
+    "merge_approved": true,
+    "merged": true,
+    "merge_commit_sha": "bcf2d563ca3abf7f2c59e79eb21133dc2d65abec",
     "fork_backup": {
       "allowed_when_blocked": true,
       "baseline_pushed": true,
@@ -102,7 +103,10 @@
     "base_sha": "d351ff909266884446f78eac32364816c2b1e4b6",
     "head_sha": "fc64478efdd5e2bdff81f44df32597f9a31c6131",
     "prepared": true,
-    "preserved_on_fork": true
+    "preserved_on_fork": true,
+    "status": "COMPLETED",
+    "integrated": true,
+    "merge_commit_sha": "bcf2d563ca3abf7f2c59e79eb21133dc2d65abec"
   },
   "security_observations": [
     {
@@ -119,7 +123,6 @@
     "BASELINE-SYNC-001"
   ],
   "open_blockers": [
-    "RF24-SCHEMA-001",
-    "BASELINE-SYNC-001"
+    "RF24-SCHEMA-001"
   ]
 }

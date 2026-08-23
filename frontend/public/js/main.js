@@ -1,5 +1,4 @@
-// Integração das telas Palco com a API Spring Boot existente. 
-
+/* Integração das telas Palco com a API Spring Boot existente. */
 (function () {
   'use strict';
 
@@ -40,6 +39,21 @@
     return 'Não foi possível concluir a operação (HTTP ' + status + ').';
   }
 
+  async function renovarToken() {
+    var sessao = lerSessao();
+    if (!sessao || !sessao.refreshToken) return null;
+    var resposta = await fetch(API_BASE + '/auth/refresh', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: sessao.refreshToken })
+    });
+    if (!resposta.ok) return null;
+    var corpo = await resposta.json();
+    sessao.token = corpo.token;
+    salvarSessao(sessao);
+    return corpo.token;
+  }
+
   async function api(caminho, opcoes) {
     var config = Object.assign({}, opcoes || {});
     var headers = Object.assign({ Accept: 'application/json' }, config.headers || {});
@@ -55,6 +69,14 @@
     config.headers = headers;
 
     var resposta = await fetch(API_BASE + caminho, config);
+    if (resposta.status === 401 && caminho !== '/auth/refresh' && !config._tentativaRenovada) {
+      var tokenRenovado = await renovarToken();
+      if (tokenRenovado) {
+        config._tentativaRenovada = true;
+        config.headers.Authorization = 'Bearer ' + tokenRenovado;
+        resposta = await fetch(API_BASE + caminho, config);
+      }
+    }
     var tipo = resposta.headers.get('content-type') || '';
     var corpo = tipo.indexOf('application/json') >= 0 ? await resposta.json() : null;
     if (!resposta.ok) {
@@ -71,6 +93,15 @@
     }
     if (sessao.tipoUsuario !== 'CONTRATANTE') {
       alert('Esta área é exclusiva para contratantes.');
+      window.location.href = 'login.html';
+      return null;
+    }
+    return sessao;
+  }
+
+  function exigirSessao() {
+    var sessao = lerSessao();
+    if (!sessao || !sessao.token) {
       window.location.href = 'login.html';
       return null;
     }
@@ -187,9 +218,7 @@
           body: { email: email, senha: senha, rememberMe: false }
         });
         salvarSessao(resposta);
-        window.location.href = resposta.tipoUsuario === 'CONTRATANTE'
-          ? 'dashboard-contratante.html'
-          : 'perfil.html';
+        window.location.href = 'dashboard-contratante.html';
       } catch (erro) {
         alert(erro.message);
       } finally {
@@ -357,6 +386,7 @@
     var modal = document.querySelector('[data-modal-exclusao]');
     if (!modal) return;
     var input = modal.querySelector('[data-modal-input]');
+    var motivo = modal.querySelector('[data-modal-motivo]');
     var confirmar = modal.querySelector('[data-modal-confirmar]');
     var vagaId = new URLSearchParams(window.location.search).get('id');
     function alternar(aberto) {
@@ -364,6 +394,7 @@
       document.body.style.overflow = aberto ? 'hidden' : '';
       if (aberto && input) {
         input.value = '';
+        if (motivo) motivo.value = '';
         confirmar.disabled = true;
         input.focus();
       }
@@ -382,9 +413,17 @@
         alert('Não foi possível identificar a vaga.');
         return;
       }
+      if (!motivo || !motivo.value.trim()) {
+        alert('Informe o motivo do cancelamento.');
+        if (motivo) motivo.focus();
+        return;
+      }
       confirmar.disabled = true;
       try {
-        await api('/vagas/' + encodeURIComponent(vagaId), { method: 'DELETE' });
+        await api('/vagas/' + encodeURIComponent(vagaId), {
+          method: 'DELETE',
+          body: { confirmacao: true, motivo: motivo.value.trim() }
+        });
         alert('Vaga cancelada com sucesso.');
         window.location.href = 'minhas-vagas.html';
       } catch (erro) {
@@ -475,53 +514,426 @@
 
   async function iniciarDashboard() {
     if (paginaAtual !== 'dashboard-contratante.html') return;
-    var sessao = exigirSessaoContratante();
-    if (!sessao) return;
-    try {
-      var resultados = await Promise.all([
-        api('/vagas/minhas?size=50'),
-        api('/candidaturas/minhas-vagas').catch(function () { return []; })
-      ]);
-      var vagas = resultados[0].content || [];
-      var candidaturas = resultados[1] || [];
-      var abertas = vagas.filter(function (vaga) { return vaga.status === 'ABERTA'; }).length;
-      var saudacao = document.querySelector('.resumo__saudacao');
-      if (saudacao) saudacao.textContent = 'Olá, ' + sessao.nome;
-      var resumo = document.querySelector('.resumo__texto');
-      if (resumo) resumo.textContent = 'Você tem ' + candidaturas.length + ' candidaturas e ' + abertas + ' vagas ativas aguardando análise.';
-      var mini = document.querySelectorAll('.mini-metrica__valor');
-      if (mini[0]) mini[0].textContent = candidaturas.length;
-      if (mini[1]) mini[1].textContent = abertas;
-      if (mini[2]) mini[2].textContent = '0';
-      var metricas = document.querySelectorAll('.metrica__valor');
-      if (metricas[0]) metricas[0].textContent = String(candidaturas.length).padStart(2, '0');
-      if (metricas[1]) metricas[1].textContent = String(abertas).padStart(2, '0');
-      if (metricas[2]) metricas[2].textContent = '0';
-      if (metricas[3]) metricas[3].textContent = '0';
+    if (!exigirSessao()) return;
+    var raiz = document.querySelector('[data-dashboard]');
+    var carregando = document.querySelector('[data-dashboard-carregando]');
+    var erroBox = document.querySelector('[data-dashboard-erro]');
+    var conteudo = document.querySelector('[data-dashboard-conteudo]');
+    var tentar = document.querySelector('[data-dashboard-tentar]');
+    var websocket = null;
+    var sseAbortController = null;
+    var iniciandoFallback = false;
 
-      var listas = document.querySelectorAll('.painel__lista');
-      if (listas[1]) listas[1].innerHTML = vagas.slice(0, 3).map(function (vaga) {
-        return '<article class="vaga-ativa"><img class="vaga-ativa__icone" src="assets/icone-vaga-lista.svg" alt="">' +
-          '<div class="vaga-ativa__dados"><h3 class="vaga-ativa__nome">' + escapar(vaga.titulo) + '</h3>' +
-          '<p class="vaga-ativa__stats">' + escapar(vaga.cidade + ', ' + vaga.estado) + '</p></div>' +
-          '<span class="vaga-ativa__status">' + rotuloStatus(vaga.status) + '</span></article>';
-      }).join('') || '<p>Nenhuma vaga cadastrada.</p>';
-
-      if (listas[0]) {
-        var primeiras = candidaturas.slice(0, 3);
-        var usuarios = await Promise.all(primeiras.map(function (c) {
-          return api('/usuarios/' + c.artistaId).catch(function () { return { nome: 'Artista' }; });
-        }));
-        listas[0].innerHTML = primeiras.map(function (candidatura, indice) {
-          return '<article class="candidatura"><img class="candidatura__avatar" src="assets/avatar-livia.svg" alt="">' +
-            '<div class="candidatura__dados"><h3 class="candidatura__nome">' + escapar(usuarios[indice].nome) + '</h3>' +
-            '<p class="candidatura__papel">Candidatura #' + candidatura.id + '</p></div>' +
-            '<span class="candidatura__score">' + escapar(candidatura.status) + '</span></article>';
-        }).join('') || '<p>Nenhuma candidatura recebida.</p>';
-      }
-    } catch (erro) {
-      alert(erro.message);
+    function elemento(tag, classe, texto) {
+      var node = document.createElement(tag);
+      if (classe) node.className = classe;
+      if (texto != null) node.textContent = texto;
+      return node;
     }
+
+    function link(texto, href, classe) {
+      var ancora = elemento('a', classe || 'btn-dash btn-dash--secundario', texto);
+      ancora.href = href;
+      return ancora;
+    }
+
+    function limpar(node) {
+      while (node && node.firstChild) node.removeChild(node.firstChild);
+    }
+
+    function renderModulo(seletor, titulo, estado) {
+      var modulo = document.querySelector(seletor);
+      limpar(modulo);
+      var topo = elemento('div', 'modulo-status__topo');
+      topo.appendChild(elemento('strong', '', titulo));
+      topo.appendChild(elemento('span', 'modulo-status__selo', estado.disponivel ? 'Disponível' : 'Em breve'));
+      modulo.appendChild(topo);
+      modulo.appendChild(elemento('p', '', estado.mensagem));
+    }
+
+    function linkInternoSeguro(valor) {
+      if (!valor || typeof valor !== 'string') return null;
+      try {
+        var url = new URL(valor, window.location.href);
+        var permitidos = [
+          '/dashboard-contratante.html',
+          '/detalhe-vaga.html',
+          '/detalhe-vaga-proprietario.html',
+          '/perfil-publico.html',
+          '/mensagens.html'
+        ];
+        return url.origin === window.location.origin && permitidos.indexOf(url.pathname) >= 0
+          ? url.pathname.substring(1) + url.search
+          : null;
+      } catch (erro) {
+        return null;
+      }
+    }
+
+    function mostrarPopup(notificacao) {
+      var popup = elemento('div', 'notificacao-popup', notificacao.mensagem);
+      popup.setAttribute('role', 'status');
+      popup.setAttribute('aria-live', 'polite');
+      document.body.appendChild(popup);
+      window.setTimeout(function () { popup.remove(); }, 5000);
+    }
+
+    async function marcarNotificacao(id) {
+      await api('/notificacoes/' + encodeURIComponent(id) + '/lida', { method: 'PATCH' });
+      await carregarNotificacoes();
+    }
+
+    function renderNotificacoes(pagina, contagem) {
+      var modulo = document.querySelector('[data-dashboard-notificacoes]');
+      limpar(modulo);
+      modulo.classList.add('modulo-status--notificacoes');
+      var topo = elemento('div', 'modulo-status__topo');
+      topo.appendChild(elemento('strong', '', 'Notificações'));
+      topo.appendChild(elemento('span', 'notificacao-badge', String(contagem || 0)));
+      modulo.appendChild(topo);
+
+      var acoes = elemento('div', 'notificacao-acoes');
+      var marcarTodas = elemento('button', 'notificacao-acao', 'Marcar todas como lidas');
+      marcarTodas.type = 'button';
+      marcarTodas.disabled = !contagem;
+      marcarTodas.addEventListener('click', async function () {
+        await api('/notificacoes/lidas', { method: 'PATCH' });
+        await carregarNotificacoes();
+      });
+      acoes.appendChild(marcarTodas);
+      modulo.appendChild(acoes);
+
+      var lista = elemento('div', 'notificacao-lista');
+      var itens = (pagina && pagina.content) || [];
+      if (!itens.length) {
+        lista.appendChild(elemento('p', 'notificacao-vazia', 'Nenhuma notificação por enquanto.'));
+      }
+      itens.slice(0, 5).forEach(function (notificacao) {
+        var item = elemento('article', 'notificacao-item' + (notificacao.lida ? '' : ' notificacao-item--nao-lida'));
+        var seguro = linkInternoSeguro(notificacao.link);
+        var mensagem = seguro
+          ? link(notificacao.mensagem, seguro, 'notificacao-item__link')
+          : elemento('span', 'notificacao-item__texto', notificacao.mensagem);
+        item.appendChild(mensagem);
+        if (!notificacao.lida) {
+          var marcar = elemento('button', 'notificacao-item__marcar', 'Marcar como lida');
+          marcar.type = 'button';
+          marcar.addEventListener('click', function () { marcarNotificacao(notificacao.id); });
+          item.appendChild(marcar);
+        }
+        lista.appendChild(item);
+      });
+      modulo.appendChild(lista);
+    }
+
+    async function carregarNotificacoes() {
+      var resultados = await Promise.all([
+        api('/notificacoes?page=0&size=5'),
+        api('/notificacoes/nao-lidas/count')
+      ]);
+      renderNotificacoes(resultados[0], resultados[1].count);
+    }
+
+    function renderMensagens(estado) {
+      var modulo = document.querySelector('[data-dashboard-mensagens]');
+      limpar(modulo);
+      var topo = elemento('div', 'modulo-status__topo');
+      topo.appendChild(elemento('strong', '', 'Mensagens'));
+      topo.appendChild(elemento('span', 'notificacao-badge', String(estado.quantidadeNaoLidas || 0)));
+      modulo.appendChild(topo);
+      modulo.appendChild(elemento('p', '', estado.mensagem));
+      modulo.appendChild(link('Abrir mensagens', 'mensagens.html', 'notificacao-item__link'));
+    }
+
+    async function atualizarMensagens() {
+      var contagem = await api('/chat/nao-lidas/count');
+      renderMensagens({
+        disponivel: true,
+        mensagem: 'Converse com seus contatos profissionais com privacidade.',
+        quantidadeNaoLidas: contagem.count
+      });
+    }
+
+    function processarNotificacao(notificacao) {
+      if (!notificacao || !notificacao.id) return;
+      mostrarPopup(notificacao);
+      carregarNotificacoes().catch(function () {});
+      if (notificacao.tipo === 'MENSAGEM') atualizarMensagens().catch(function () {});
+    }
+
+    function tratarFrameStomp(frame) {
+      var separador = frame.indexOf('\n\n');
+      var cabecalho = separador >= 0 ? frame.substring(0, separador) : frame;
+      var corpo = separador >= 0 ? frame.substring(separador + 2) : '';
+      var comando = cabecalho.split('\n')[0];
+      if (comando === 'CONNECTED' && websocket) {
+        websocket.send('SUBSCRIBE\nid:rf23-notificacoes\ndestination:/user/queue/notificacoes\nack:auto\n\n\0');
+      } else if (comando === 'MESSAGE') {
+        try { processarNotificacao(JSON.parse(corpo)); } catch (erro) {}
+      }
+    }
+
+    async function iniciarSse() {
+      if (iniciandoFallback || sseAbortController) return;
+      iniciandoFallback = true;
+      try {
+        var sessao = lerSessao();
+        if (!sessao || !sessao.token) return;
+        sseAbortController = new AbortController();
+        var resposta = await fetch(API_BASE + '/notificacoes/stream', {
+          headers: { Accept: 'text/event-stream', Authorization: 'Bearer ' + sessao.token },
+          signal: sseAbortController.signal
+        });
+        if (resposta.status === 401) {
+          var renovado = await renovarToken();
+          if (renovado) {
+            resposta = await fetch(API_BASE + '/notificacoes/stream', {
+              headers: { Accept: 'text/event-stream', Authorization: 'Bearer ' + renovado },
+              signal: sseAbortController.signal
+            });
+          }
+        }
+        if (!resposta.ok || !resposta.body) throw new Error('SSE indisponível.');
+        var leitor = resposta.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+        while (true) {
+          var pedaco = await leitor.read();
+          if (pedaco.done) break;
+          buffer += decoder.decode(pedaco.value, { stream: true }).replace(/\r/g, '');
+          var limite;
+          while ((limite = buffer.indexOf('\n\n')) >= 0) {
+            var evento = buffer.substring(0, limite);
+            buffer = buffer.substring(limite + 2);
+            var dados = evento.split('\n').filter(function (linha) {
+              return linha.indexOf('data:') === 0;
+            }).map(function (linha) { return linha.substring(5).trim(); }).join('\n');
+            if (dados && dados !== 'ok') {
+              try { processarNotificacao(JSON.parse(dados)); } catch (erro) {}
+            }
+          }
+        }
+      } catch (erro) {
+        if (erro.name !== 'AbortError') window.setTimeout(iniciarSse, 3000);
+      } finally {
+        sseAbortController = null;
+        iniciandoFallback = false;
+      }
+    }
+
+    function iniciarWebSocket() {
+      var sessao = lerSessao();
+      if (!sessao || !sessao.token || !window.WebSocket) {
+        iniciarSse();
+        return;
+      }
+      var wsBase = API_BASE.replace(/^http/, 'ws').replace(/\/api$/, '');
+      websocket = new WebSocket(wsBase + '/ws');
+      websocket.onopen = function () {
+        websocket.send(
+          'CONNECT\naccept-version:1.2\nhost:' + window.location.host
+          + '\nAuthorization:Bearer ' + lerSessao().token
+          + '\nheart-beat:10000,10000\n\n\0'
+        );
+      };
+      websocket.onmessage = function (evento) {
+        String(evento.data).split('\0').filter(Boolean).forEach(tratarFrameStomp);
+      };
+      websocket.onerror = function () { if (websocket) websocket.close(); };
+      websocket.onclose = function () { iniciarSse(); };
+    }
+
+    function tagsNoCard(card, tags, quantidade) {
+      var area = elemento('div', 'dashboard-card__tags');
+      area.appendChild(elemento('span', 'dashboard-card__match', quantidade + ' área(s) em comum'));
+      (tags || []).slice(0, 4).forEach(function (tag) {
+        area.appendChild(elemento('span', 'dashboard-card__tag', tag.nome));
+      });
+      card.appendChild(area);
+    }
+
+    function painel(titulo, descricao, secao, larguraTotal) {
+      var bloco = elemento('section', 'painel' + (larguraTotal ? ' painel--largo' : ''));
+      var topo = elemento('div', 'painel__topo');
+      topo.appendChild(elemento('h2', 'painel__titulo', titulo));
+      topo.appendChild(elemento('p', 'painel__descricao', descricao));
+      bloco.appendChild(topo);
+      var lista = elemento('div', 'painel__lista');
+      lista.dataset.total = String(secao.totalElements || 0);
+      lista.dataset.hasMore = String(Boolean(secao.hasMore));
+      bloco.appendChild(lista);
+      return { bloco: bloco, lista: lista };
+    }
+
+    function vazio(lista, mensagem) {
+      lista.appendChild(elemento('p', 'dashboard-vazio', mensagem));
+    }
+
+    function renderVagas(secao) {
+      var estrutura = painel(
+        'Vagas recomendadas',
+        'Oportunidades abertas ordenadas pelas áreas do seu perfil.',
+        secao,
+        true
+      );
+      if (!(secao.content || []).length) {
+        vazio(estrutura.lista, 'Nenhuma vaga compatível no momento. Adicione áreas ao perfil para receber recomendações.');
+      }
+      (secao.content || []).forEach(function (vaga) {
+        var card = elemento('article', 'dashboard-card');
+        var dados = elemento('div', 'dashboard-card__conteudo');
+        dados.appendChild(elemento('h3', 'dashboard-card__titulo', vaga.titulo));
+        dados.appendChild(elemento(
+          'p',
+          'dashboard-card__texto',
+          vaga.nomeContratante + ' · ' + vaga.cidade + '/' + vaga.estado + ' · ' + moeda(vaga.remuneraValor)
+        ));
+        tagsNoCard(dados, vaga.tags, vaga.quantidadeTagsCoincidentes);
+        card.appendChild(dados);
+        card.appendChild(link('Ver vaga', 'detalhe-vaga.html?id=' + encodeURIComponent(vaga.id), 'dashboard-card__link'));
+        estrutura.lista.appendChild(card);
+      });
+      return estrutura.bloco;
+    }
+
+    function renderCandidaturas(secao) {
+      var estrutura = painel(
+        'Candidaturas recentes',
+        'Somente inscrições recebidas nas suas vagas abertas ou pausadas.',
+        secao,
+        false
+      );
+      if (!(secao.content || []).length) vazio(estrutura.lista, 'Nenhuma candidatura recente em vaga ativa.');
+      (secao.content || []).forEach(function (candidatura) {
+        var card = elemento('article', 'dashboard-card');
+        var avatar = elemento('img', 'dashboard-card__avatar');
+        avatar.src = candidatura.avatarUrl;
+        avatar.alt = '';
+        var dados = elemento('div', 'dashboard-card__conteudo');
+        dados.appendChild(elemento('h3', 'dashboard-card__titulo', candidatura.nomeArtista));
+        dados.appendChild(elemento(
+          'p',
+          'dashboard-card__texto',
+          candidatura.tituloVaga + ' · ' + String(candidatura.status).replace(/_/g, ' ')
+        ));
+        card.appendChild(avatar);
+        card.appendChild(dados);
+        card.appendChild(link(
+          'Ver perfil',
+          'perfil-publico.html?tipo=ARTISTA&id=' + encodeURIComponent(candidatura.artistaId),
+          'dashboard-card__link'
+        ));
+        estrutura.lista.appendChild(card);
+      });
+      return estrutura.bloco;
+    }
+
+    function renderTalentos(secao) {
+      var estrutura = painel(
+        'Talentos sugeridos',
+        'Artistas adultos com perfil completo e áreas compatíveis com suas vagas ativas.',
+        secao,
+        false
+      );
+      if (!(secao.content || []).length) vazio(estrutura.lista, 'Nenhum talento compatível no momento.');
+      (secao.content || []).forEach(function (talento) {
+        var card = elemento('article', 'dashboard-card');
+        var avatar = elemento('img', 'dashboard-card__avatar');
+        avatar.src = talento.avatarUrl;
+        avatar.alt = '';
+        var dados = elemento('div', 'dashboard-card__conteudo');
+        dados.appendChild(elemento('h3', 'dashboard-card__titulo', talento.nomeExibicao));
+        dados.appendChild(elemento('p', 'dashboard-card__texto', talento.localizacao || 'Localização não informada'));
+        tagsNoCard(dados, talento.tags, talento.quantidadeTagsCoincidentes);
+        card.appendChild(avatar);
+        card.appendChild(dados);
+        card.appendChild(link(
+          'Ver perfil',
+          'perfil-publico.html?tipo=ARTISTA&id=' + encodeURIComponent(talento.artistaId),
+          'dashboard-card__link'
+        ));
+        estrutura.lista.appendChild(card);
+      });
+      return estrutura.bloco;
+    }
+
+    function renderMenu(tipo) {
+      var menu = document.querySelector('[data-menu-contextual]');
+      limpar(menu);
+      var itens = tipo === 'CONTRATANTE'
+        ? [['Minhas vagas', 'minhas-vagas.html'], ['Publicar vaga', 'publicar-vaga.html']]
+        : [['Meu perfil', 'perfil.html']];
+      itens.forEach(function (item) {
+        var li = elemento('li');
+        li.appendChild(link(item[0], item[1], 'navbar__link'));
+        menu.appendChild(li);
+      });
+    }
+
+    function renderDashboard(dados) {
+      var artista = dados.tipoUsuario === 'ARTISTA';
+      document.querySelector('[data-dashboard-tipo]').textContent = artista ? 'PAINEL DO ARTISTA' : 'PAINEL DO CONTRATANTE';
+      document.querySelector('[data-dashboard-titulo]').textContent = artista ? 'Suas oportunidades' : 'Sua produção';
+      document.querySelector('[data-dashboard-subtitulo]').textContent = artista
+        ? 'Descubra vagas alinhadas ao seu perfil profissional.'
+        : 'Acompanhe candidaturas e encontre pessoas para seus projetos.';
+      document.querySelector('[data-dashboard-saudacao]').textContent = 'Olá, ' + dados.nomeExibicao;
+      document.querySelector('[data-dashboard-resumo]').textContent = artista
+        ? 'Estas recomendações consideram apenas vagas abertas com áreas em comum com o seu perfil.'
+        : 'As candidaturas pertencem às suas vagas ativas; os talentos usam as áreas dessas vagas como contexto.';
+      var avatar = document.querySelector('[data-dashboard-avatar]');
+      avatar.src = dados.avatarUrl;
+      avatar.alt = 'Avatar de ' + dados.nomeExibicao;
+      document.querySelector('[data-dashboard-perfil-incompleto]').hidden = !artista || dados.perfilCompleto;
+      if (!dados.notificacoes.disponivel) {
+        renderModulo('[data-dashboard-notificacoes]', 'Notificações', dados.notificacoes);
+      }
+      if (dados.mensagens.disponivel) renderMensagens(dados.mensagens);
+      else renderModulo('[data-dashboard-mensagens]', 'Mensagens', dados.mensagens);
+      renderMenu(dados.tipoUsuario);
+
+      var acoes = document.querySelector('[data-dashboard-acoes]');
+      limpar(acoes);
+      if (artista) {
+        acoes.appendChild(link('Editar perfil', 'perfil.html', 'btn-dash btn-dash--primario'));
+      } else {
+        acoes.appendChild(link('Minhas vagas', 'minhas-vagas.html'));
+        acoes.appendChild(link('Publicar vaga', 'publicar-vaga.html', 'btn-dash btn-dash--primario'));
+      }
+
+      var secoes = document.querySelector('[data-dashboard-secoes]');
+      limpar(secoes);
+      if (artista) {
+        secoes.appendChild(renderVagas(dados.vagasRecomendadas));
+      } else {
+        secoes.appendChild(renderCandidaturas(dados.candidaturasRecentes));
+        secoes.appendChild(renderTalentos(dados.talentosSugeridos));
+      }
+    }
+
+    async function carregar() {
+      raiz.setAttribute('aria-busy', 'true');
+      carregando.hidden = false;
+      erroBox.hidden = true;
+      conteudo.hidden = true;
+      try {
+        var dados = await api('/dashboard?size=5');
+        renderDashboard(dados);
+        await carregarNotificacoes();
+        iniciarWebSocket();
+        carregando.hidden = true;
+        conteudo.hidden = false;
+      } catch (erro) {
+        carregando.hidden = true;
+        erroBox.hidden = false;
+        document.querySelector('[data-dashboard-erro-texto]').textContent = erro.message;
+      } finally {
+        raiz.setAttribute('aria-busy', 'false');
+      }
+    }
+
+    if (tentar) tentar.addEventListener('click', carregar);
+    await carregar();
   }
 
   function preencherRequisitos(vaga) {
@@ -582,6 +994,45 @@
       }).join('');
     } catch (erro) {
       alert(erro.message);
+    }
+  }
+
+  async function iniciarDetalheVagaPublica() {
+    if (paginaAtual !== 'detalhe-vaga.html') return;
+    if (!exigirSessao()) return;
+    var id = new URLSearchParams(window.location.search).get('id');
+    var carregando = document.querySelector('[data-vaga-carregando]');
+    var erro = document.querySelector('[data-vaga-erro]');
+    var conteudo = document.querySelector('[data-vaga-conteudo]');
+    if (!id || !/^\d+$/.test(id)) {
+      carregando.hidden = true;
+      erro.hidden = false;
+      document.querySelector('[data-vaga-erro-texto]').textContent = 'Identificador de vaga inválido.';
+      return;
+    }
+    try {
+      var vaga = await api('/vagas/' + encodeURIComponent(id));
+      document.title = vaga.titulo + ' — Palco';
+      document.querySelector('[data-vaga-status]').textContent = rotuloStatus(vaga.status);
+      document.querySelector('[data-vaga-titulo]').textContent = vaga.titulo;
+      document.querySelector('[data-vaga-empresa]').textContent = vaga.nomeContratante;
+      document.querySelector('[data-vaga-resumo]').textContent =
+        vaga.cidade + '/' + vaga.estado + ' · ' + vaga.modeloTrabalho + ' · ' + moeda(vaga.remuneraValor);
+      document.querySelector('[data-vaga-descricao]').textContent = vaga.descricao;
+      document.querySelector('[data-vaga-requisitos]').textContent = vaga.requisitos;
+      var tags = document.querySelector('[data-vaga-tags]');
+      (vaga.tagIds || []).forEach(function (tagId) {
+        var tag = document.createElement('span');
+        tag.className = 'dashboard-card__tag';
+        tag.textContent = 'Área #' + tagId;
+        tags.appendChild(tag);
+      });
+      carregando.hidden = true;
+      conteudo.hidden = false;
+    } catch (falha) {
+      carregando.hidden = true;
+      erro.hidden = false;
+      document.querySelector('[data-vaga-erro-texto]').textContent = falha.message;
     }
   }
 
@@ -785,12 +1236,21 @@
       form.elements.email.value = usuario.email || '';
       form.elements.biografia.value = perfil.biografia || '';
       form.elements.localizacao.value = perfil.localizacao || '';
+      form.elements.bannerUrl.value = perfil.bannerUrl || '';
       if (contratante) {
         form.elements.nomeEmpresa.value = perfil.nomeEmpresa || '';
         form.elements.tipoPerfil.value = perfil.tipoPerfil || '';
+        document.querySelectorAll('[data-campo-artista]').forEach(function (campo) { campo.hidden = true; });
       } else {
         document.querySelector('[data-campo-empresa]').hidden = true;
         document.querySelector('[data-campo-tipo-perfil]').hidden = true;
+        form.elements.urlPortfolio.value = perfil.urlPortfolio || '';
+        var tagsDisponiveis = await api('/tags');
+        var tagsAtuais = new Set((perfil.tagIds || []).map(Number));
+        form.elements.tagIds.innerHTML = tagsDisponiveis.map(function (tag) {
+          return '<option value="' + tag.id + '"' + (tagsAtuais.has(Number(tag.id)) ? ' selected' : '') + '>' +
+            escapar(tag.nome) + '</option>';
+        }).join('');
       }
     } catch (erro) {
       alert(erro.message);
@@ -806,16 +1266,14 @@
           tipoPerfil: form.elements.tipoPerfil.value.trim() || null,
           biografia: form.elements.biografia.value.trim(),
           localizacao: form.elements.localizacao.value.trim(),
-          bannerUrl: perfil.bannerUrl || null
+          bannerUrl: form.elements.bannerUrl.value.trim() || null
         } : {
           usuarioId: usuario.id,
           biografia: form.elements.biografia.value.trim(),
           localizacao: form.elements.localizacao.value.trim(),
-          urlPortfolio: perfil.urlPortfolio || null,
-          nivelMedalha: perfil.nivelMedalha || null,
-          scoreEngajamento: perfil.scoreEngajamento || null,
-          bannerUrl: perfil.bannerUrl || null,
-          tagIds: perfil.tagIds || []
+          urlPortfolio: form.elements.urlPortfolio.value.trim() || null,
+          bannerUrl: form.elements.bannerUrl.value.trim() || null,
+          tagIds: Array.from(form.elements.tagIds.selectedOptions).map(function (opcao) { return Number(opcao.value); })
         };
         await api((contratante ? '/perfis-contratantes/' : '/perfis-artistas/') + usuario.id, {
           method: 'PUT', body: perfilPayload
@@ -827,7 +1285,8 @@
             dataNascimento: form.elements.dataNascimento.value,
             telefone: form.elements.telefone.value.trim(),
             email: form.elements.email.value.trim(),
-            novaSenha: form.elements.novaSenha.value || null
+            novaSenha: form.elements.novaSenha.value || null,
+            senhaAtual: form.elements.senhaAtual.value || null
           }
         });
         var emailAlterado = atualizado.email !== sessao.email;
@@ -835,6 +1294,7 @@
         sessao.email = atualizado.email;
         salvarSessao(sessao);
         form.elements.novaSenha.value = '';
+        form.elements.senhaAtual.value = '';
         alert(emailAlterado
           ? 'Perfil atualizado. Faça login novamente com o novo e-mail.'
           : 'Perfil atualizado com sucesso.');
@@ -890,6 +1350,7 @@
     iniciarMinhasVagas();
     iniciarDashboard();
     iniciarDetalheVaga();
+    iniciarDetalheVagaPublica();
     iniciarEdicaoVaga();
     iniciarEdicaoMidia();
     iniciarPublicacaoVaga();

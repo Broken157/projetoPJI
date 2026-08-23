@@ -34,7 +34,7 @@
         </div>
         <div class="campo">
           <label class="campo__rotulo" for="perfil-nascimento">Data de nascimento</label>
-          <input class="campo__input" id="perfil-nascimento" name="dataNascimento" type="date" required>
+          <input class="campo__input" id="perfil-nascimento" name="dataNascimento" type="date" required readonly>
         </div>
         <div class="campo">
           <label class="campo__rotulo" for="perfil-telefone">Telefone</label>
@@ -45,8 +45,12 @@
           <input class="campo__input" id="perfil-email" name="email" type="email" required>
         </div>
         <div class="campo">
+          <label class="campo__rotulo" for="perfil-senha-atual">Senha atual (obrigatória para trocar a senha)</label>
+          <input class="campo__input" id="perfil-senha-atual" name="senhaAtual" type="password" maxlength="72" autocomplete="current-password">
+        </div>
+        <div class="campo">
           <label class="campo__rotulo" for="perfil-senha">Nova senha (opcional)</label>
-          <input class="campo__input" id="perfil-senha" name="novaSenha" type="password">
+          <input class="campo__input" id="perfil-senha" name="novaSenha" type="password" maxlength="72" autocomplete="new-password">
         </div>
         <div class="campo" data-campo-empresa>
           <label class="campo__rotulo" for="perfil-empresa">Nome da empresa</label>
@@ -62,7 +66,20 @@
         </div>
         <div class="campo">
           <label class="campo__rotulo" for="perfil-localizacao">Localização</label>
-          <input class="campo__input" id="perfil-localizacao" name="localizacao" type="text" required>
+          <input class="campo__input" id="perfil-localizacao" name="localizacao" type="text" maxlength="150" required>
+        </div>
+        <div class="campo" data-campo-artista>
+          <label class="campo__rotulo" for="perfil-portfolio">URL do portfólio</label>
+          <input class="campo__input" id="perfil-portfolio" name="urlPortfolio" type="url" maxlength="255">
+        </div>
+        <div class="campo" data-campo-artista>
+          <label class="campo__rotulo" for="perfil-tags">Áreas de atuação</label>
+          <select class="campo__input" id="perfil-tags" name="tagIds" multiple aria-describedby="perfil-tags-ajuda"></select>
+          <small id="perfil-tags-ajuda">Selecione ao menos uma área para completar o perfil de artista.</small>
+        </div>
+        <div class="campo">
+          <label class="campo__rotulo" for="perfil-banner">URL do banner (opcional)</label>
+          <input class="campo__input" id="perfil-banner" name="bannerUrl" type="url" maxlength="255">
         </div>
         <div class="cadastro__acoes">
           <button class="btn btn--primario cadastro__registrar" type="submit">Salvar perfil</button>

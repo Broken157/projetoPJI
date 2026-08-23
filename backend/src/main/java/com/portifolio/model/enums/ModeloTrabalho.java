@@ -22,7 +22,6 @@ public enum ModeloTrabalho implements DatabaseEnum {
         return Arrays.stream(values())
                 .filter(modelo -> modelo.databaseValue.equals(value))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Modelo de trabalho inválido: " + value));
+                .orElseThrow(() -> new IllegalArgumentException("Modelo de trabalho inválido: " + value));
     }
 }

@@ -1,6 +1,5 @@
 package com.portifolio.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -10,17 +9,14 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@JsonIgnoreProperties(value = {
-        "id", "senha", "tipoUsuario", "perfilCompleto", "tokenRecuperacao",
-        "tokenExpiracao", "dataCriacao", "googleId", "fotoPerfil"
-})
 public class UsuarioAtualizacaoRequest {
 
     @NotBlank(message = "Nome e obrigatorio")
     @Size(max = 150, message = "Nome deve ter no máximo 150 caracteres")
     private String nome;
 
-    // Mantido apenas para compatibilidade; a data de nascimento é imutável.
+    // Compatibilidade com o frontend existente. O service ignora este valor:
+    // data de nascimento não é editável no RF08.
     private LocalDate dataNascimento;
 
     @NotBlank(message = "Telefone e obrigatorio")
@@ -32,7 +28,7 @@ public class UsuarioAtualizacaoRequest {
     @Size(max = 150, message = "E-mail deve ter no máximo 150 caracteres")
     private String email;
 
-    @Size(min = 8, max = 72, message = "Nova senha deve ter entre 8 e 72 caracteres")
+    @Size(max = 72, message = "Nova senha deve ter no máximo 72 caracteres")
     private String novaSenha;
 
     @Size(max = 72, message = "Senha atual deve ter no máximo 72 caracteres")

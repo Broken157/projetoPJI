@@ -31,6 +31,20 @@ public final class VagaSpecifications {
                 : cb.like(cb.lower(root.get("titulo")), "%" + titulo.trim().toLowerCase() + "%");
     }
 
+    public static Specification<Vaga> empresaContem(String empresa) {
+        return (root, query, cb) -> {
+            if (empresa == null || empresa.isBlank()) {
+                return cb.conjunction();
+            }
+            String termo = "%" + empresa.trim().toLowerCase() + "%";
+            var contratante = root.join("contratante");
+            var usuario = contratante.join("usuario");
+            return cb.or(
+                    cb.like(cb.lower(contratante.get("nomeEmpresa")), termo),
+                    cb.like(cb.lower(usuario.get("nome")), termo));
+        };
+    }
+
     public static Specification<Vaga> cidadeIgual(String cidade) {
         return (root, query, cb) -> (cidade == null || cidade.isBlank())
                 ? cb.conjunction()
@@ -65,6 +79,19 @@ public final class VagaSpecifications {
         return (root, query, cb) -> max == null
                 ? cb.conjunction()
                 : cb.lessThanOrEqualTo(root.get("remuneraValor"), max);
+    }
+
+    public static Specification<Vaga> areaAtuacaoContem(String areaAtuacao) {
+        return (root, query, cb) -> (areaAtuacao == null || areaAtuacao.isBlank())
+                ? cb.conjunction()
+                : cb.like(cb.lower(root.get("categoria")),
+                        "%" + areaAtuacao.trim().toLowerCase() + "%");
+    }
+
+    public static Specification<Vaga> idDiferente(Long id) {
+        return (root, query, cb) -> id == null
+                ? cb.conjunction()
+                : cb.notEqual(root.get("id"), id);
     }
 
     // distinct(true) evita vaga duplicada no resultado quando ela casa com mais de uma tag do filtro

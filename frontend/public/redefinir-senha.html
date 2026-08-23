@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redefinir senha — Palco</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/componentes.css">
+  <link rel="stylesheet" href="css/login.css">
+</head>
+<body class="pagina-login">
+  <header>
+    <nav class="navbar" aria-label="Navegação principal">
+      <a href="index.html">
+        <img class="navbar__logo" src="assets/logo-palco.png" alt="Palco">
+      </a>
+      <ul class="navbar__menu">
+        <li><a class="navbar__link navbar__link--destaque" href="explorar.html">Explorar</a></li>
+        <li><a class="navbar__link" href="comunidade.html">Comunidade</a></li>
+        <li><a class="navbar__link" href="empresa.html">Empresa</a></li>
+      </ul>
+      <div class="navbar__acoes">
+        <a class="navbar__link" href="login.html">Login</a>
+        <a class="navbar__link navbar__link--destaque" href="cadastro-contratante.html">Cadastrar</a>
+      </div>
+    </nav>
+  </header>
+
+  <main class="login">
+    <div class="card login__card">
+      <h1 class="login__titulo">Redefinir <span class="destaque-magenta">senha</span></h1>
+
+      <form class="login__form" id="form-redefinir-senha" novalidate>
+        <div class="campo">
+          <label class="campo__rotulo" for="nova-senha">Nova senha</label>
+          <div class="campo__controle">
+            <input
+              class="campo__input"
+              type="password"
+              id="nova-senha"
+              name="novaSenha"
+              autocomplete="new-password"
+              maxlength="72"
+              required>
+          </div>
+        </div>
+
+        <div class="campo">
+          <label class="campo__rotulo" for="confirmar-senha">Confirmar nova senha</label>
+          <div class="campo__controle">
+            <input
+              class="campo__input"
+              type="password"
+              id="confirmar-senha"
+              name="confirmarSenha"
+              autocomplete="new-password"
+              maxlength="72"
+              required>
+          </div>
+        </div>
+
+        <button class="btn btn--primario login__entrar" type="submit">Redefinir senha</button>
+        <p class="campo__ajuda" id="mensagem-redefinicao" role="status" aria-live="polite"></p>
+        <p class="login__cadastro">
+          <a href="login.html">Voltar ao login</a> ·
+          <a href="recuperar-senha.html">Solicitar novo link</a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <script src="js/recuperacao-senha.js"></script>
+</body>
+</html>

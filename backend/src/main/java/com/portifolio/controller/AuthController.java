@@ -2,13 +2,17 @@ package com.portifolio.controller;
 
 import com.portifolio.dto.CadastroRequest;
 import com.portifolio.dto.CadastroResponse;
+import com.portifolio.dto.ForgotPasswordRequest;
 import com.portifolio.dto.GoogleAuthRequest;
 import com.portifolio.dto.GoogleAuthResponse;
 import com.portifolio.dto.LoginRequest;
 import com.portifolio.dto.LoginResponse;
+import com.portifolio.dto.PasswordRecoveryResponse;
 import com.portifolio.dto.RefreshRequest;
 import com.portifolio.dto.RefreshResponse;
+import com.portifolio.dto.ResetPasswordRequest;
 import com.portifolio.service.AuthService;
+import com.portifolio.service.PasswordRecoveryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -24,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordRecoveryService passwordRecoveryService;
 
     // RF01 — Cadastro convencional (inalterado)
     @PostMapping("/cadastro")
@@ -55,5 +60,17 @@ public class AuthController {
     public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
         authService.logout(request);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<PasswordRecoveryResponse> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        return ResponseEntity.ok(passwordRecoveryService.solicitar(request));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<PasswordRecoveryResponse> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        return ResponseEntity.ok(passwordRecoveryService.redefinir(request));
     }
 }

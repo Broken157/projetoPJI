@@ -16,4 +16,6 @@ public class VagaListagemResponse {
     // candidatou. Vazia se ninguém estiver logado, se for CONTRATANTE,
     // ou se o artista não tiver candidaturas em vagas canceladas.
     private List<VagaResponse> vagasCanceladasComCandidatura;
+    private Long nextCursorCanceladas;
+    private boolean hasMoreCanceladas;
 }

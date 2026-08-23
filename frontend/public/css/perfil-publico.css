@@ -1,0 +1,320 @@
+.perfil-publico-pagina {
+  min-width: 280px;
+  color: var(--cor-navy);
+  background:
+    radial-gradient(circle at 85% 12%, rgba(255, 191, 0, 0.18), transparent 28rem),
+    linear-gradient(150deg, #fff9ff 0%, #f5effa 55%, #ececf8 100%);
+}
+
+.perfil-publico-topo {
+  padding: 1.5rem 1rem 0;
+}
+
+.perfil-publico-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: min(100%, 1120px);
+  min-height: 76px;
+  margin-inline: auto;
+  padding: 0.6rem 1.4rem;
+  color: var(--cor-branco);
+  background: var(--cor-navy);
+  border-radius: var(--raio-pill);
+  box-shadow: var(--sombra-navbar);
+}
+
+.perfil-publico-nav__marca img {
+  width: 66px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.perfil-publico-nav__acoes {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  font-weight: 600;
+}
+
+.perfil-publico-nav__cadastro,
+.perfil-publico__voltar,
+.perfil-publico__portfolio-link {
+  display: inline-flex;
+  justify-content: center;
+  padding: 0.65rem 1.2rem;
+  color: var(--cor-navy);
+  background: var(--cor-amarelo);
+  border-radius: var(--raio-pill);
+  font-weight: 700;
+}
+
+.perfil-publico {
+  width: min(calc(100% - 2rem), 980px);
+  min-height: calc(100vh - 120px);
+  margin: 2.5rem auto 4rem;
+}
+
+.perfil-publico__cartao,
+.perfil-publico__estado {
+  overflow: hidden;
+  background: rgba(255, 249, 255, 0.94);
+  border: 1px solid rgba(10, 14, 42, 0.08);
+  border-radius: var(--raio-lg);
+  box-shadow: 0 24px 70px -38px rgba(10, 14, 42, 0.6);
+}
+
+.perfil-publico__estado {
+  display: grid;
+  place-items: center;
+  gap: 1rem;
+  min-height: 420px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.perfil-publico__estado--erro h1 {
+  max-width: 580px;
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+}
+
+.perfil-publico__estado--erro p:not(.perfil-publico__sobretitulo) {
+  color: var(--cor-texto-suave);
+}
+
+.perfil-publico__sobretitulo,
+.perfil-publico__tipo {
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--cor-magenta);
+}
+
+.perfil-publico__tipo {
+  display: inline-flex;
+  margin-bottom: 0.2rem;
+  padding: 0.18rem 0.5rem;
+  background: rgba(255, 249, 255, 0.9);
+  border-radius: var(--raio-pill);
+}
+
+.perfil-publico__spinner {
+  width: 42px;
+  height: 42px;
+  border: 4px solid rgba(156, 0, 136, 0.18);
+  border-top-color: var(--cor-magenta);
+  border-radius: 50%;
+  animation: perfil-girar 0.8s linear infinite;
+}
+
+@keyframes perfil-girar {
+  to { transform: rotate(360deg); }
+}
+
+.perfil-publico__banner {
+  height: 230px;
+  overflow: hidden;
+  background: linear-gradient(120deg, var(--cor-navy), #3f165b 64%, var(--cor-magenta));
+}
+
+.perfil-publico__banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.perfil-publico__conteudo {
+  padding: 0 3rem 3rem;
+}
+
+.perfil-publico__identidade {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5rem;
+  margin-top: -62px;
+}
+
+.perfil-publico__avatar {
+  flex: 0 0 auto;
+  width: 132px;
+  height: 132px;
+  object-fit: cover;
+  background: #fff;
+  border: 5px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 12px 32px -18px rgba(10, 14, 42, 0.8);
+}
+
+.perfil-publico__identidade > div {
+  padding-bottom: 0.5rem;
+}
+
+.perfil-publico__identidade h1 {
+  overflow-wrap: anywhere;
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.perfil-publico__local {
+  margin-top: 0.35rem;
+  color: var(--cor-texto-suave);
+}
+
+.perfil-publico__mensagem {
+  margin-top: 0.75rem;
+  padding: 0.65rem 1.1rem;
+  color: var(--cor-navy);
+  background: var(--cor-amarelo);
+  border-radius: var(--raio-pill);
+  font-weight: 800;
+}
+
+.perfil-publico__mensagem:disabled { opacity: 0.65; }
+.perfil-publico__mensagem-erro { margin-top: 0.5rem; color: #8a1736; font-size: var(--texto-sm); }
+
+.perfil-publico__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1.5rem;
+}
+
+.perfil-publico__tag {
+  padding: 0.35rem 0.8rem;
+  color: var(--cor-magenta);
+  background: rgba(156, 0, 136, 0.08);
+  border: 1px solid rgba(156, 0, 136, 0.24);
+  border-radius: var(--raio-pill);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+}
+
+.perfil-publico__abas {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 2rem;
+  border-bottom: 1px solid var(--cor-linha);
+}
+
+.perfil-publico__aba {
+  position: relative;
+  padding: 0.8rem 0.15rem;
+  color: var(--cor-texto-suave);
+  font-weight: 700;
+}
+
+.perfil-publico__aba[aria-selected="true"] {
+  color: var(--cor-navy);
+}
+
+.perfil-publico__aba[aria-selected="true"]::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  content: "";
+  background: var(--cor-amarelo);
+}
+
+.perfil-publico__painel {
+  min-height: 160px;
+  padding-top: 1.8rem;
+}
+
+.perfil-publico__painel h2 {
+  margin-bottom: 0.75rem;
+  font-size: var(--texto-xl);
+}
+
+.perfil-publico__painel p {
+  max-width: 740px;
+  color: var(--cor-texto-suave);
+  white-space: pre-line;
+}
+
+.perfil-publico__detalhes {
+  margin-top: 1.4rem;
+}
+
+.perfil-publico__detalhes dt {
+  font-size: var(--texto-sm);
+  color: var(--cor-texto-suave);
+}
+
+.perfil-publico__detalhes dd {
+  font-weight: 600;
+}
+
+.perfil-publico__portfolio-link {
+  margin-top: 1.3rem;
+}
+
+@media (max-width: 620px) {
+  .perfil-publico-topo {
+    padding: 0;
+  }
+
+  .perfil-publico-nav {
+    min-height: 68px;
+    padding-inline: 1rem;
+    border-radius: 0 0 var(--raio-md) var(--raio-md);
+  }
+
+  .perfil-publico-nav__marca img {
+    width: 54px;
+    height: 48px;
+  }
+
+  .perfil-publico-nav__acoes {
+    gap: 0.7rem;
+    font-size: var(--texto-sm);
+  }
+
+  .perfil-publico-nav__cadastro {
+    padding: 0.55rem 0.8rem;
+  }
+
+  .perfil-publico {
+    width: min(calc(100% - 1rem), 980px);
+    margin-top: 1rem;
+  }
+
+  .perfil-publico__banner {
+    height: 150px;
+  }
+
+  .perfil-publico__conteudo {
+    padding: 0 1.25rem 2rem;
+  }
+
+  .perfil-publico__identidade {
+    align-items: center;
+    gap: 1rem;
+    margin-top: -44px;
+  }
+
+  .perfil-publico__avatar {
+    width: 94px;
+    height: 94px;
+  }
+
+  .perfil-publico__identidade > div {
+    min-width: 0;
+    padding-top: 3.5rem;
+  }
+
+  .perfil-publico__identidade h1 {
+    font-size: 1.7rem;
+  }
+
+  .perfil-publico__painel {
+    min-height: 130px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perfil-publico__spinner {
+    animation: none;
+  }
+}

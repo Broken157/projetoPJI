@@ -1000,7 +1000,6 @@
 
   async function iniciarDetalheVagaPublica() {
     if (paginaAtual !== 'detalhe-vaga.html') return;
-    if (!exigirSessao()) return;
     var id = new URLSearchParams(window.location.search).get('id');
     var carregando = document.querySelector('[data-vaga-carregando]');
     var erro = document.querySelector('[data-vaga-erro]');

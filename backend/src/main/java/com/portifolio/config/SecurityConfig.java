@@ -13,6 +13,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -50,6 +51,7 @@ public class SecurityConfig {
                         // RF03: listagem/busca de vagas e publica (feed tipo LinkedIn).
                         // Candidatura (RF06) e criacao/edicao continuam exigindo autenticacao.
                         .requestMatchers(HttpMethod.GET, "/api/vagas").permitAll()
+                        .requestMatchers(new RegexRequestMatcher("^/api/vagas/\\d+$", "GET")).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/vagas/*/similares").permitAll()
                         // RF10: somente a consulta publica por tipo e ID dispensa JWT.
                         .requestMatchers(HttpMethod.GET, "/api/perfis/publicos/*/*").permitAll()

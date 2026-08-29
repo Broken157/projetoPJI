@@ -89,6 +89,18 @@ class CandidaturaControllerRf06IntegrationTest {
     }
 
     @Test
+    void candidaturaAnonimaContinuaExigindoAutenticacao() throws Exception {
+        PerfilContratante contratante = novoContratante("contratante-anonimo@teste.com");
+        Vaga vaga = novaVaga(contratante, StatusVaga.ABERTA);
+        PerfilArtista artista = novoArtista("artista-anonimo@teste.com", true);
+
+        mockMvc.perform(post("/api/candidaturas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoCriacao(vaga.getId(), artista.getUsuarioId(), null)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void perfilIncompletoRetorna422() throws Exception {
         PerfilContratante contratante = novoContratante("contratante-incompleto@teste.com");
         Vaga vaga = novaVaga(contratante, StatusVaga.ABERTA);

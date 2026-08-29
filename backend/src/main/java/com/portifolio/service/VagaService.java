@@ -261,12 +261,14 @@ public class VagaService {
 
     @Transactional(readOnly = true)
     public VagaResponse buscarPorId(Long id) {
-        Usuario usuario = exigirUsuarioAtual();
+        Usuario usuario = authenticatedUserResolver.usuarioAtual().orElse(null);
         Vaga vaga = vagaRepository.findDetalhesById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
-        boolean proprietario = usuario.getTipoUsuario() == TipoUsuario.CONTRATANTE
+        boolean proprietario = usuario != null
+                && usuario.getTipoUsuario() == TipoUsuario.CONTRATANTE
                 && vaga.getContratante().getUsuarioId().equals(usuario.getId());
-        Optional<Candidatura> candidaturaDoArtista = usuario.getTipoUsuario() == TipoUsuario.ARTISTA
+        Optional<Candidatura> candidaturaDoArtista = usuario != null
+                && usuario.getTipoUsuario() == TipoUsuario.ARTISTA
                 ? candidaturaRepository.findByVagaIdAndArtistaUsuarioId(vaga.getId(), usuario.getId())
                 : Optional.empty();
 

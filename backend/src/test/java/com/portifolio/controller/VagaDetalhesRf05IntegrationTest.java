@@ -42,6 +42,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -127,8 +128,29 @@ class VagaDetalhesRf05IntegrationTest {
         detalhar(vaga, outro.getUsuario())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.propriaDoContratante").value(false));
+    }
+
+    @Test
+    void anonimoDeveAcessarVagaAbertaSemContextoDaSessao() throws Exception {
+        PerfilContratante dono = novoContratante("anonimo-aberta@rf05.test");
+        Vaga vaga = novaVaga(dono, StatusVaga.ABERTA);
+
         mockMvc.perform(get("/api/vagas/{id}", vaga.getId()))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ABERTA"))
+                .andExpect(jsonPath("$.propriaDoContratante").value(false))
+                .andExpect(jsonPath("$.minhaCandidaturaId").value(nullValue()))
+                .andExpect(jsonPath("$.statusMinhaCandidatura").value(nullValue()));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StatusVaga.class, names = {"PAUSADA", "ENCERRADA", "CANCELADA"})
+    void anonimoNaoDeveDescobrirVagaForaDoFeed(StatusVaga statusVaga) throws Exception {
+        PerfilContratante dono = novoContratante("anonimo-oculta-" + statusVaga + "@rf05.test");
+        Vaga vaga = novaVaga(dono, statusVaga);
+
+        mockMvc.perform(get("/api/vagas/{id}", vaga.getId()))
+                .andExpect(status().isNotFound());
     }
 
     @ParameterizedTest
@@ -155,11 +177,13 @@ class VagaDetalhesRf05IntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    @Test
-    void artistaCandidatoDeveAcessarCanceladaComContextoDaPropriaCandidatura() throws Exception {
-        PerfilContratante dono = novoContratante("historico@rf05.test");
-        Vaga vaga = novaVaga(dono, StatusVaga.CANCELADA);
-        PerfilArtista artista = novoArtista("candidato-historico@rf05.test",
+    @ParameterizedTest
+    @EnumSource(value = StatusVaga.class, names = {"PAUSADA", "ENCERRADA", "CANCELADA"})
+    void artistaCandidatoDeveAcessarVagaForaDoFeedComContextoDaPropriaCandidatura(
+            StatusVaga statusVaga) throws Exception {
+        PerfilContratante dono = novoContratante("historico-" + statusVaga + "@rf05.test");
+        Vaga vaga = novaVaga(dono, statusVaga);
+        PerfilArtista artista = novoArtista("candidato-historico-" + statusVaga + "@rf05.test",
                 LocalDateTime.of(2026, 8, 1, 10, 0));
         Candidatura candidatura = novaCandidatura(vaga, artista, 0);
 
@@ -168,6 +192,14 @@ class VagaDetalhesRf05IntegrationTest {
                 .andExpect(jsonPath("$.minhaCandidaturaId").value(candidatura.getId()))
                 .andExpect(jsonPath("$.statusMinhaCandidatura").value("PENDENTE"))
                 .andExpect(jsonPath("$.propriaDoContratante").value(false));
+    }
+
+    @Test
+    void liberacaoPublicaNaoDeveExporRotasNomeadasDeVagas() throws Exception {
+        mockMvc.perform(get("/api/vagas/minhas"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/vagas/nao-numerico"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

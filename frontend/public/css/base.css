@@ -4,7 +4,7 @@
    Tokens extraidos do arquivo Figma "PJI-NOVO".
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600;700;800;900&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,900&display=swap');
 
 /* --------------------------------------------------------------------------
    1. Design tokens
@@ -23,10 +23,17 @@
   --cor-texto-suave: #5e5252;
   --cor-texto-claro: rgba(255, 249, 255, 0.72);
   --cor-linha: rgba(10, 14, 42, 0.12);
+  /* Superficie elevada sobre o navy e fundo de item de lista.
+     Ja eram usados como hex solto no dashboard.css. */
+  --cor-navy-elevado: #12183a;
+  --cor-lilas: #f7f3f8;
 
   /* Tipografia */
   --fonte-display: 'Anton', 'Impact', sans-serif;
   --fonte-corpo: 'Inter', system-ui, -apple-system, sans-serif;
+  /* A HomeOficial usa Lato nos rotulos e nas palavras gigantes
+     ARTISTAS / CONTRATANTES / COMUNIDADE. */
+  --fonte-lato: 'Lato', 'Inter', system-ui, sans-serif;
 
   --texto-xs: 0.8125rem;   /* 13px  */
   --texto-sm: 0.875rem;    /* 14px  */
@@ -53,6 +60,7 @@
   --gap-sm: 1rem;
   --gap-md: 1.5rem;
   --gap-lg: 2.5rem;
+  --gap-xl: 4rem;
 
   /* Layout */
   --largura-max: 1238px;

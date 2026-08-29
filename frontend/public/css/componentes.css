@@ -238,6 +238,14 @@ textarea.campo__input {
     margin-left: 0;
   }
 
+  /* Sem wrap, os tres links do menu somam mais que a largura da pilula
+     e vazam para fora dela no celular. Vale para home, login e cadastro. */
+  .navbar__menu,
+  .navbar__acoes {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
   .navbar__link {
     font-size: var(--texto-base);
   }

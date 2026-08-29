@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Palco — onde artistas encontram oportunidades</title>
+  <meta name="description" content="A Palco conecta artistas independentes a quem contrata: vagas por área artística, portfólios reais, Top da Semana e uma comunidade que faz a cena acontecer.">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/componentes.css">
+  <link rel="stylesheet" href="css/home.css?v=2.6.1">
+</head>
+<body class="pagina-home">
+
+  <!-- ============================================================
+       Hero — navbar + chamada + carrossel de vagas
+       O <header> embrulha navbar e hero para o fundo navy ser um
+       elemento só, sem posicionar a navbar por absolute.
+       ============================================================ -->
+  <header class="topo">
+
+    <nav class="navbar navbar--home" aria-label="Navegação principal">
+      <a class="marca" href="home.html" aria-current="page">
+        <img class="navbar__logo" src="assets/home/logo-palco-branco.png" alt="">
+        <span class="marca__nome titulo-display">Palco</span>
+      </a>
+
+      <ul class="navbar__menu">
+        <li class="explorar">
+          <button class="navbar__link navbar__link--ativo explorar__gatilho"
+                  type="button"
+                  data-explorar-gatilho
+                  aria-expanded="false"
+                  aria-controls="menu-explorar">
+            Explorar
+          </button>
+
+          <div class="explorar__menu" id="menu-explorar" data-explorar-menu hidden>
+            <a class="explorar__item explorar__item--ativo rota-pendente" role="link"
+               aria-disabled="true" tabindex="0"
+               title="Busca de vagas: integração frontend do RF03 pendente">Vagas</a>
+            <a class="explorar__item rota-pendente" role="link" aria-disabled="true" tabindex="0"
+               title="Busca de artistas ainda não disponível">Artistas</a>
+            <a class="explorar__item rota-pendente" role="link" aria-disabled="true" tabindex="0"
+               title="Catálogo de contratantes ainda não disponível">Contratantes</a>
+            <a class="explorar__item rota-pendente" role="link" aria-disabled="true" tabindex="0"
+               title="Galeria Virtual (RF20) ainda não disponível">Galeria Virtual</a>
+            <a class="explorar__item rota-pendente" role="link" aria-disabled="true" tabindex="0"
+               title="Top da semana (RF28) ainda não disponível">Top da semana</a>
+          </div>
+        </li>
+        <li><a class="navbar__link rota-pendente" role="link" aria-disabled="true" tabindex="0"
+               title="Comunidade (RF19) ainda não disponível">Comunidade</a></li>
+        <li><a class="navbar__link" href="#sobre">Empresa</a></li>
+      </ul>
+
+      <div class="navbar__acoes">
+        <a class="navbar__link" href="login.html">Login</a>
+        <a class="navbar__link navbar__link--destaque" href="cadastro-contratante.html">Cadastrar</a>
+      </div>
+    </nav>
+
+    <div class="hero">
+      <div class="hero__texto">
+        <h1 class="hero__titulo titulo-display">
+          Palco onde<br>
+          artistas encontram<br>
+          <span class="hero__titulo-forte">oportunidades</span>
+        </h1>
+
+        <p class="hero__marca">Atividade - Fim</p>
+
+        <div class="hero__acoes">
+          <a class="btn-palco btn-palco--amarelo rota-pendente" role="link"
+             aria-disabled="true" tabindex="0"
+             title="Busca de vagas: integração frontend do RF03 pendente">Conheça Vagas</a>
+          <a class="btn-palco btn-palco--texto rota-pendente" role="link"
+             aria-disabled="true" tabindex="0"
+             title="Busca de artistas ainda não disponível">
+            <span aria-hidden="true">&larr;</span> Conheça Artistas
+          </a>
+        </div>
+      </div>
+
+      <!-- O painel magenta inclinado com o brilho âmbar é um único asset
+           exportado do Figma, não uma forma redesenhada em CSS. -->
+      <div class="hero__vitrine">
+        <img class="hero__luz" src="assets/home/hero-luz.svg" alt="">
+
+        <div class="vitrine" data-carrossel>
+          <button class="seta seta--anterior" type="button" data-carrossel-anterior>
+            <span class="sr-only">Vaga anterior</span>
+            <span aria-hidden="true">&#8249;</span>
+          </button>
+
+          <ul class="vitrine__trilha" data-carrossel-trilha aria-label="Vagas demonstrativas da landing">
+            <li class="vaga-mini">
+              <img class="vaga-mini__foto" src="assets/home/hero-vaga-jardim.png" alt="Jardim preparado para uma apresentação musical">
+              <div class="vaga-mini__corpo">
+                <h2 class="vaga-mini__titulo">Cantora para recepção cultural</h2>
+                <p class="vaga-mini__autor">Vaga demonstrativa · Música</p>
+                <p class="vaga-mini__local">São José dos Campos, SP · Evento presencial</p>
+                <p class="vaga-mini__descricao">
+                  <strong>Descrição</strong>
+                  Voz solo para repertório brasileiro em uma recepção cultural ao ar livre.
+                </p>
+                <a class="btn-palco btn-palco--amarelo vaga-mini__cta rota-pendente" role="link"
+                   aria-disabled="true" tabindex="0" title="Vaga demonstrativa sem identificador real do RF03">
+                  Me candidatar
+                </a>
+              </div>
+            </li>
+
+            <li class="vaga-mini vaga-mini--destaque">
+              <img class="vaga-mini__foto" src="assets/home/hero-vaga-bar.png" alt="Palco de bar com iluminação vermelha e instrumentos">
+              <div class="vaga-mini__corpo">
+                <h2 class="vaga-mini__titulo">Cantora de jazz</h2>
+                <p class="vaga-mini__autor">Vaga demonstrativa · Música</p>
+                <p class="vaga-mini__local">São Paulo, SP · R$ 180 por noite</p>
+                <p class="vaga-mini__descricao">
+                  <strong>Descrição</strong>
+                  Cantora de bar com repertório de jazz e disponibilidade para apresentações noturnas.
+                </p>
+                <a class="btn-palco btn-palco--amarelo vaga-mini__cta rota-pendente" role="link"
+                   aria-disabled="true" tabindex="0" title="Vaga demonstrativa sem identificador real do RF03">
+                  Me candidatar
+                </a>
+              </div>
+            </li>
+
+            <li class="vaga-mini">
+              <img class="vaga-mini__foto" src="assets/vaga-foto-1.png" alt="Equipe artística reunida em estúdio">
+              <div class="vaga-mini__corpo">
+                <h2 class="vaga-mini__titulo">Banda para festival independente</h2>
+                <p class="vaga-mini__autor">Vaga demonstrativa · Música</p>
+                <p class="vaga-mini__local">Campinas, SP · Apresentação única</p>
+                <p class="vaga-mini__descricao">
+                  <strong>Descrição</strong>
+                  Formação autoral para integrar a programação de um festival de novos talentos.
+                </p>
+                <a class="btn-palco btn-palco--amarelo vaga-mini__cta rota-pendente" role="link"
+                   aria-disabled="true" tabindex="0" title="Vaga demonstrativa sem identificador real do RF03">
+                  Me candidatar
+                </a>
+              </div>
+            </li>
+
+            <li class="vaga-mini">
+              <img class="vaga-mini__foto" src="assets/home/vaga-detalhe-3.png" alt="Câmera fotográfica em primeiro plano">
+              <div class="vaga-mini__corpo">
+                <h2 class="vaga-mini__titulo">Fotógrafa de bastidores</h2>
+                <p class="vaga-mini__autor">Vaga demonstrativa · Artes visuais</p>
+                <p class="vaga-mini__local">Rio de Janeiro, RJ · Projeto cultural</p>
+                <p class="vaga-mini__descricao">
+                  <strong>Descrição</strong>
+                  Registro de ensaios, montagem e apresentação para memória de um espetáculo.
+                </p>
+                <a class="btn-palco btn-palco--amarelo vaga-mini__cta rota-pendente" role="link"
+                   aria-disabled="true" tabindex="0" title="Vaga demonstrativa sem identificador real do RF03">
+                  Me candidatar
+                </a>
+              </div>
+            </li>
+
+            <li class="vaga-mini">
+              <img class="vaga-mini__foto" src="assets/home/trajetoria-jottape.png" alt="Artista se apresentando sob luzes de palco">
+              <div class="vaga-mini__corpo">
+                <h2 class="vaga-mini__titulo">Dançarino para espetáculo urbano</h2>
+                <p class="vaga-mini__autor">Vaga demonstrativa · Dança</p>
+                <p class="vaga-mini__local">Belo Horizonte, MG · Temporada curta</p>
+                <p class="vaga-mini__descricao">
+                  <strong>Descrição</strong>
+                  Intérprete com experiência em dança urbana para criação coletiva e quatro apresentações.
+                </p>
+                <a class="btn-palco btn-palco--amarelo vaga-mini__cta rota-pendente" role="link"
+                   aria-disabled="true" tabindex="0" title="Vaga demonstrativa sem identificador real do RF03">
+                  Me candidatar
+                </a>
+              </div>
+            </li>
+
+            <li class="vaga-mini">
+              <img class="vaga-mini__foto" src="assets/home/vaga-paisagem-sonora.jpg" alt="Cartaz verde do Festival Paisagem Sonora 2025">
+              <div class="vaga-mini__corpo">
+                <h2 class="vaga-mini__titulo">Produtor de evento cultural</h2>
+                <p class="vaga-mini__autor">Vaga demonstrativa · Produção</p>
+                <p class="vaga-mini__local">Salvador, BA · Festival presencial</p>
+                <p class="vaga-mini__descricao">
+                  <strong>Descrição</strong>
+                  Apoio à produção, contato com artistas e acompanhamento da programação cultural.
+                </p>
+                <a class="btn-palco btn-palco--amarelo vaga-mini__cta rota-pendente" role="link"
+                   aria-disabled="true" tabindex="0" title="Vaga demonstrativa sem identificador real do RF03">
+                  Me candidatar
+                </a>
+              </div>
+            </li>
+
+            <li class="vaga-mini">
+              <img class="vaga-mini__foto" src="assets/vaga-thumb-1.png" alt="Plateia e palco de um teatro">
+              <div class="vaga-mini__corpo">
+                <h2 class="vaga-mini__titulo">Músico instrumental para teatro</h2>
+                <p class="vaga-mini__autor">Vaga demonstrativa · Música</p>
+                <p class="vaga-mini__local">Curitiba, PR · Ensaios remunerados</p>
+                <p class="vaga-mini__descricao">
+                  <strong>Descrição</strong>
+                  Instrumentista para trilha executada ao vivo durante temporada de artes cênicas.
+                </p>
+                <a class="btn-palco btn-palco--amarelo vaga-mini__cta rota-pendente" role="link"
+                   aria-disabled="true" tabindex="0" title="Vaga demonstrativa sem identificador real do RF03">
+                  Me candidatar
+                </a>
+              </div>
+            </li>
+
+            <li class="vaga-mini">
+              <img class="vaga-mini__foto" src="assets/home/apresentacao-silhueta.png" alt="Performer em silhueta sob iluminação magenta">
+              <div class="vaga-mini__corpo">
+                <h2 class="vaga-mini__titulo">Performer para intervenção artística</h2>
+                <p class="vaga-mini__autor">Vaga demonstrativa · Arte integrada</p>
+                <p class="vaga-mini__local">Recife, PE · Circuito cultural</p>
+                <p class="vaga-mini__descricao">
+                  <strong>Descrição</strong>
+                  Artista para intervenção que combina corpo, música e recursos audiovisuais.
+                </p>
+                <a class="btn-palco btn-palco--amarelo vaga-mini__cta rota-pendente" role="link"
+                   aria-disabled="true" tabindex="0" title="Vaga demonstrativa sem identificador real do RF03">
+                  Me candidatar
+                </a>
+              </div>
+            </li>
+          </ul>
+
+          <button class="seta seta--proxima" type="button" data-carrossel-proximo>
+            <span class="sr-only">Próxima vaga</span>
+            <span aria-hidden="true">&#8250;</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ============================================================
+         Apresentação — colagem + os três públicos
+         ============================================================ -->
+    <section class="apresentacao" aria-labelledby="titulo-apresentacao">
+      <div class="apresentacao__interno">
+
+        <div class="colagem">
+          <img class="colagem__foto colagem__foto--discos" src="assets/home/apresentacao-discos.png" alt="">
+          <figure class="colagem__foto colagem__foto--principal">
+            <img src="assets/home/apresentacao-tyla.png" alt="">
+            <figcaption class="colagem__credito">
+              <span class="colagem__nome">Tyla</span>
+              <span class="colagem__arroba">@tylaGomes</span>
+            </figcaption>
+          </figure>
+          <img class="colagem__foto colagem__foto--silhueta" src="assets/home/apresentacao-silhueta.png" alt="">
+        </div>
+
+        <div class="publicos">
+          <h2 class="sr-only" id="titulo-apresentacao">
+            O lugar em que artistas, contratantes e comunidade se encontram
+          </h2>
+          <p class="publicos__intro" aria-hidden="true">O lugar em que</p>
+          <ul class="publicos__lista" aria-hidden="true">
+            <li class="publicos__item publicos__item--fraco">Artistas</li>
+            <li class="publicos__item publicos__item--forte">Contratantes</li>
+            <li class="publicos__item publicos__item--fraco">Comunidade</li>
+          </ul>
+          <p class="publicos__fim" aria-hidden="true">se encontram</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================================================
+         Vagas — busca + card de detalhe da oportunidade
+         ============================================================ -->
+    <section class="vagas" aria-labelledby="titulo-vagas">
+      <img class="vagas__fundo" src="assets/home/faixa-show.png" alt="">
+
+      <div class="vagas__interno">
+        <div class="vagas__texto">
+          <h2 class="vagas__titulo titulo-display" id="titulo-vagas">
+            Encontre a sua<br>
+            <span class="vagas__titulo-forte">vaga</span> ideal
+          </h2>
+
+          <p class="vagas__lead">
+            Separada por área artística, subcategoria e com tickets personalizados,
+            <strong>palco</strong> oferece sua melhor oportunidade no mercado artístico.
+          </p>
+
+          <!-- O backend RF03 existe, mas ainda nao ha tela publica de listagem/busca. -->
+          <form class="busca busca--pendente" method="get" role="search" aria-disabled="true"
+                title="Busca de vagas: integração frontend do RF03 pendente">
+            <label class="sr-only" for="busca-vaga">Buscar vagas</label>
+            <input class="busca__input" type="search" id="busca-vaga" name="q"
+                   placeholder="Busque por área, cidade ou palavra-chave" disabled>
+            <button class="busca__botao" type="submit" disabled>Buscar</button>
+          </form>
+        </div>
+
+        <article class="vaga-detalhe">
+          <div class="vaga-detalhe__topo">
+            <div class="vaga-detalhe__cartaz">
+              <img src="assets/home/vaga-paisagem-sonora.jpg" alt="Cartaz do Festival Paisagem Sonora 2025">
+              <p class="vaga-detalhe__publico">
+                <span class="sr-only">12 pessoas já se candidataram</span>
+                <span class="publico-pilha" aria-hidden="true"><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""><img src="assets/home/avatar-publico.svg" alt=""></span>
+              </p>
+            </div>
+
+            <div class="vaga-detalhe__cabecalho">
+              <h3 class="vaga-detalhe__cargo">Produtor(a) de Eventos</h3>
+              <p class="vaga-detalhe__meta">Festival Sonora • Publicada em 12/05/2025</p>
+              <ul class="chips">
+                <li class="chip">Produção</li>
+                <li class="chip">Evento</li>
+                <li class="chip">Regional</li>
+                <li class="chip">Presencial</li>
+              </ul>
+            </div>
+          </div>
+
+          <h4 class="vaga-detalhe__rotulo">Descrição da oportunidade</h4>
+          <p class="vaga-detalhe__texto">
+            Procuramos uma pessoa organizada, criativa e comunicativa para integrar a equipe
+            de produção do Festival Sonora 2025. A pessoa selecionada dará apoio na logística
+            do evento, contato com artistas, organização de agenda e acompanhamento de bastidores.
+          </p>
+
+          <div class="vaga-detalhe__linha">
+            <div>
+              <h4 class="vaga-detalhe__rotulo">Requisitos principais</h4>
+              <p class="vaga-detalhe__texto">Experiência com eventos culturais, boa comunicação.</p>
+            </div>
+
+            <dl class="fichas">
+              <div class="ficha">
+                <img class="ficha__icone" src="assets/home/icone-valor.svg" alt="">
+                <dt class="ficha__valor">R$ 1.200</dt>
+                <dd class="ficha__rotulo">Valor fixo</dd>
+              </div>
+              <div class="ficha">
+                <img class="ficha__icone" src="assets/home/icone-data.svg" alt="">
+                <dt class="ficha__valor">15/06/2025</dt>
+                <dd class="ficha__rotulo">Data do evento</dd>
+              </div>
+              <div class="ficha">
+                <img class="ficha__icone" src="assets/home/icone-local-vaga.svg" alt="">
+                <dt class="ficha__valor">São Paulo</dt>
+                <dd class="ficha__rotulo">Local presencial</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="vaga-detalhe__galeria">
+            <img src="assets/home/vaga-detalhe-1.png" alt="">
+            <img src="assets/home/vaga-detalhe-2.png" alt="">
+            <img src="assets/home/vaga-detalhe-3.png" alt="">
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         Portfólios
+         ============================================================ -->
+    <section class="portfolios" aria-labelledby="titulo-portfolios">
+      <img class="portfolios__sombra" src="assets/home/portfolios-sombra-base.svg" alt="">
+      <img class="portfolios__luz portfolios__luz--esquerda" src="assets/home/luz-esquerda.svg" alt="">
+      <img class="portfolios__luz portfolios__luz--direita" src="assets/home/luz-direita.svg" alt="">
+
+      <div class="portfolios__interno">
+        <p class="eyebrow">Inspire-se. Conecte-se. Transforme.</p>
+
+        <h2 class="portfolios__titulo titulo-display" id="titulo-portfolios">
+          Acesse <span class="portfolios__titulo-forte">portfólio</span><br>
+          dos nossos artistas.
+        </h2>
+
+        <p class="portfolios__lead">Explore trabalhos reais de artistas independentes.</p>
+
+        <ul class="filtros-arte" aria-label="Filtrar portfólios por categoria">
+          <li><button class="chip-filtro chip-filtro--ativo" type="button"
+                      data-portfolio-filtro="todos" aria-controls="lista-portfolios" aria-pressed="true">
+            <img src="assets/home/chip-todos.png" alt=""> Todos
+          </button></li>
+          <li><button class="chip-filtro" type="button"
+                      data-portfolio-filtro="musica" aria-controls="lista-portfolios" aria-pressed="false">
+            <img src="assets/home/chip-musica.png" alt=""> Música
+          </button></li>
+          <li><button class="chip-filtro" type="button"
+                      data-portfolio-filtro="artes-visuais" aria-controls="lista-portfolios" aria-pressed="false">
+            <img src="assets/home/chip-artes-visuais.png" alt=""> Artes Visuais
+          </button></li>
+          <li><button class="chip-filtro" type="button"
+                      data-portfolio-filtro="artes-cenicas" aria-controls="lista-portfolios" aria-pressed="false">
+            <img src="assets/home/chip-teatro.png" alt=""> Artes Cênicas
+          </button></li>
+          <li><button class="chip-filtro" type="button"
+                      data-portfolio-filtro="danca" aria-controls="lista-portfolios" aria-pressed="false">
+            <img src="assets/home/chip-danca.png" alt=""> Dança
+          </button></li>
+          <li><button class="chip-filtro" type="button"
+                      data-portfolio-filtro="arte-integrada" aria-controls="lista-portfolios" aria-pressed="false">
+            <img src="assets/home/chip-fotografia.png" alt=""> Arte Integrada
+          </button></li>
+        </ul>
+
+        <p class="sr-only" data-portfolio-status aria-live="polite"></p>
+
+        <ul class="portfolio-cards" id="lista-portfolios">
+          <li class="portfolio-card" data-categoria="artes-visuais">
+            <img class="portfolio-card__foto" src="assets/home/portfolio-sofhie.png" alt="Portfólio de Sophie Petrova">
+            <div class="portfolio-card__corpo">
+              <h3 class="portfolio-card__nome">Sophie Petrova</h3>
+              <p class="portfolio-card__area"><span>Artes Visuais ·</span> Design</p>
+              <p class="portfolio-card__local">
+                <img src="assets/home/icone-local.png" alt=""> São Paulo, SP
+              </p>
+            </div>
+          </li>
+
+          <li class="portfolio-card" data-categoria="arte-integrada">
+            <img class="portfolio-card__foto" src="assets/home/portfolio-nina.png" alt="Portfólio de Nina Martins">
+            <div class="portfolio-card__corpo">
+              <h3 class="portfolio-card__nome">Nina Martins</h3>
+              <p class="portfolio-card__area"><span>Arte Integrada ·</span> Video Maker</p>
+              <p class="portfolio-card__local">
+                <img src="assets/home/icone-local.png" alt=""> Belo Horizonte, MG
+              </p>
+            </div>
+          </li>
+
+          <li class="portfolio-card" data-categoria="danca">
+            <img class="portfolio-card__foto" src="assets/home/portfolio-beatriz.png" alt="Portfólio de Beatriz Lima">
+            <div class="portfolio-card__corpo">
+              <h3 class="portfolio-card__nome">Beatriz Lima</h3>
+              <p class="portfolio-card__area"><span>Dança ·</span> Coreógrafa</p>
+              <p class="portfolio-card__local">
+                <img src="assets/home/icone-local.png" alt=""> Salvador, BA
+              </p>
+            </div>
+          </li>
+
+          <li class="portfolio-card" data-categoria="artes-cenicas">
+            <img class="portfolio-card__foto" src="assets/home/portfolio-rafael-julia.png" alt="Portfólio de Rafael e Júlia">
+            <div class="portfolio-card__corpo">
+              <h3 class="portfolio-card__nome">Rafael e Júlia</h3>
+              <p class="portfolio-card__area"><span>Artes Cênicas ·</span> Performance</p>
+              <p class="portfolio-card__local">
+                <img src="assets/home/icone-local.png" alt=""> Curitiba, PR
+              </p>
+            </div>
+          </li>
+
+          <li class="portfolio-card" data-categoria="musica">
+            <img class="portfolio-card__foto" src="assets/home/portfolio-abel.png" alt="Portfólio de Abel">
+            <div class="portfolio-card__corpo">
+              <h3 class="portfolio-card__nome">Abel</h3>
+              <p class="portfolio-card__area"><span>Música ·</span> Cantor</p>
+              <p class="portfolio-card__local">
+                <img src="assets/home/icone-local.png" alt=""> Rio de Janeiro, RJ
+              </p>
+            </div>
+          </li>
+        </ul>
+
+        <a class="btn-palco btn-palco--amarelo btn-palco--largo portfolios__cta rota-pendente"
+           role="link" aria-disabled="true" tabindex="0"
+           title="Galeria Virtual (RF20) ainda não disponível">
+          Explorar Portfólios <span aria-hidden="true">&rarr;</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Comunidade: mantém o asset oficial e recupera a composição textual do Figma. -->
+    <section class="comunidades" aria-labelledby="titulo-comunidades">
+      <img class="comunidades__fundo" src="assets/home/faixa-show.png"
+           alt="Banda tocando em silhueta contra uma cortina roxa iluminada">
+      <div class="comunidades__interno">
+        <p class="comunidades__eyebrow">Comunidades</p>
+        <h2 class="comunidades__titulo titulo-display" id="titulo-comunidades">
+          Nossas<br>comunidades
+        </h2>
+        <a class="btn-palco btn-palco--amarelo comunidades__cta rota-pendente" role="link"
+           aria-disabled="true" tabindex="0" title="Comunidade (RF19) ainda não disponível">
+          Saiba mais
+        </a>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         Top da semana
+         ============================================================ -->
+    <section class="top-semana" aria-labelledby="titulo-top-semana">
+      <img class="top-semana__arco" src="assets/home/top-semana-arco.svg" alt="">
+      <img class="top-semana__glow top-semana__glow--magenta" src="assets/home/top-semana-glow-magenta.svg" alt="">
+      <img class="top-semana__glow top-semana__glow--ambar" src="assets/home/top-semana-glow-ambar.svg" alt="">
+
+      <div class="top-semana__interno">
+
+        <div class="palco-artistas" data-carrossel>
+          <button class="seta seta--anterior" type="button" data-carrossel-anterior>
+            <span class="sr-only">Artista anterior</span>
+            <span aria-hidden="true">&#8249;</span>
+          </button>
+
+          <ul class="palco-artistas__trilha" data-carrossel-trilha aria-label="Artistas demonstrativos do Top da Semana">
+            <li class="artista-card">
+              <img class="artista-card__foto" src="assets/home/top-semana-julia.jpg" alt="Retrato de Julia Costa">
+              <span class="artista-card__selo" aria-hidden="true"><img src="assets/home/selo-estrela.svg" alt=""><span class="artista-card__estrela">★</span></span>
+              <div class="artista-card__corpo">
+                <h3 class="artista-card__nome">Julia Costa</h3>
+                <p class="artista-card__meta"><span class="artista-card__area">Dança</span> · São Paulo, SP</p>
+                <ul class="chips chips--claro"><li class="chip">Dança</li><li class="chip">Portfólio</li><li class="chip">Ativa</li></ul>
+                <p class="artista-card__interacoes">96 interações esta semana</p>
+              </div>
+              <a class="artista-card__ver rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Perfil demonstrativo sem identificador real do RF10"><img src="assets/home/botao-ver-perfil.svg" alt=""><span class="sr-only">Perfil demonstrativo de Julia Costa indisponível</span></a>
+            </li>
+
+            <li class="artista-card artista-card--destaque">
+              <img class="artista-card__foto" src="assets/home/top-semana-ebony.png" alt="Retrato de Ebony">
+              <span class="artista-card__selo" aria-hidden="true"><img src="assets/home/selo-estrela.svg" alt=""><span class="artista-card__estrela">★</span></span>
+              <div class="artista-card__corpo">
+                <h3 class="artista-card__nome">Ebony</h3>
+                <p class="artista-card__meta"><span class="artista-card__area">Artes visuais</span> · Rio de Janeiro, RJ</p>
+                <ul class="chips chips--claro"><li class="chip">Artes visuais</li><li class="chip">Portfólio</li><li class="chip">Ativa</li></ul>
+                <p class="artista-card__interacoes">128 interações esta semana</p>
+              </div>
+              <a class="artista-card__ver rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Perfil demonstrativo sem identificador real do RF10"><img src="assets/home/botao-ver-perfil.svg" alt=""><span class="sr-only">Perfil demonstrativo de Ebony indisponível</span></a>
+            </li>
+
+            <li class="artista-card">
+              <img class="artista-card__foto" src="assets/home/top-semana-tyla.jpg" alt="Retrato de Tyla">
+              <span class="artista-card__selo" aria-hidden="true"><img src="assets/home/selo-estrela.svg" alt=""><span class="artista-card__estrela">★</span></span>
+              <div class="artista-card__corpo">
+                <h3 class="artista-card__nome">Tyla</h3>
+                <p class="artista-card__meta"><span class="artista-card__area">Dança</span> · Minas Gerais</p>
+                <ul class="chips chips--claro"><li class="chip">Dança</li><li class="chip">Cena</li><li class="chip">Ativa</li></ul>
+                <p class="artista-card__interacoes">112 interações esta semana</p>
+              </div>
+              <a class="artista-card__ver rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Perfil demonstrativo sem identificador real do RF10"><img src="assets/home/botao-ver-perfil.svg" alt=""><span class="sr-only">Perfil demonstrativo de Tyla indisponível</span></a>
+            </li>
+
+            <li class="artista-card">
+              <img class="artista-card__foto" src="assets/home/trajetoria-jottape.png" alt="Jotta Pê em uma apresentação">
+              <span class="artista-card__selo" aria-hidden="true"><img src="assets/home/selo-estrela.svg" alt=""><span class="artista-card__estrela">★</span></span>
+              <div class="artista-card__corpo">
+                <h3 class="artista-card__nome">Jotta Pê</h3>
+                <p class="artista-card__meta"><span class="artista-card__area">Performance</span> · São Paulo, SP</p>
+                <ul class="chips chips--claro"><li class="chip">Performance</li><li class="chip">Palco</li><li class="chip">Ativo</li></ul>
+                <p class="artista-card__interacoes">88 interações esta semana</p>
+              </div>
+              <a class="artista-card__ver rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Perfil demonstrativo sem identificador real do RF10"><img src="assets/home/botao-ver-perfil.svg" alt=""><span class="sr-only">Perfil demonstrativo de Jotta Pê indisponível</span></a>
+            </li>
+
+            <li class="artista-card">
+              <img class="artista-card__foto" src="assets/home/portfolio-beatriz.png" alt="Composição do portfólio de Beatriz Lima">
+              <span class="artista-card__selo" aria-hidden="true"><img src="assets/home/selo-estrela.svg" alt=""><span class="artista-card__estrela">★</span></span>
+              <div class="artista-card__corpo">
+                <h3 class="artista-card__nome">Beatriz Lima</h3>
+                <p class="artista-card__meta"><span class="artista-card__area">Dança</span> · Salvador, BA</p>
+                <ul class="chips chips--claro"><li class="chip">Dança</li><li class="chip">Coreografia</li><li class="chip">Ativa</li></ul>
+                <p class="artista-card__interacoes">79 interações esta semana</p>
+              </div>
+              <a class="artista-card__ver rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Perfil demonstrativo sem identificador real do RF10"><img src="assets/home/botao-ver-perfil.svg" alt=""><span class="sr-only">Perfil demonstrativo de Beatriz Lima indisponível</span></a>
+            </li>
+
+            <li class="artista-card">
+              <img class="artista-card__foto" src="assets/home/portfolio-sofhie.png" alt="Composição do portfólio de Sophie Petrova">
+              <span class="artista-card__selo" aria-hidden="true"><img src="assets/home/selo-estrela.svg" alt=""><span class="artista-card__estrela">★</span></span>
+              <div class="artista-card__corpo">
+                <h3 class="artista-card__nome">Sophie Petrova</h3>
+                <p class="artista-card__meta"><span class="artista-card__area">Artes visuais</span> · São Paulo, SP</p>
+                <ul class="chips chips--claro"><li class="chip">Design</li><li class="chip">Portfólio</li><li class="chip">Ativa</li></ul>
+                <p class="artista-card__interacoes">71 interações esta semana</p>
+              </div>
+              <a class="artista-card__ver rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Perfil demonstrativo sem identificador real do RF10"><img src="assets/home/botao-ver-perfil.svg" alt=""><span class="sr-only">Perfil demonstrativo de Sophie Petrova indisponível</span></a>
+            </li>
+
+            <li class="artista-card">
+              <img class="artista-card__foto" src="assets/home/portfolio-abel.png" alt="Composição do portfólio de Abel">
+              <span class="artista-card__selo" aria-hidden="true"><img src="assets/home/selo-estrela.svg" alt=""><span class="artista-card__estrela">★</span></span>
+              <div class="artista-card__corpo">
+                <h3 class="artista-card__nome">Abel</h3>
+                <p class="artista-card__meta"><span class="artista-card__area">Música</span> · Rio de Janeiro, RJ</p>
+                <ul class="chips chips--claro"><li class="chip">Música</li><li class="chip">Voz</li><li class="chip">Ativo</li></ul>
+                <p class="artista-card__interacoes">65 interações esta semana</p>
+              </div>
+              <a class="artista-card__ver rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Perfil demonstrativo sem identificador real do RF10"><img src="assets/home/botao-ver-perfil.svg" alt=""><span class="sr-only">Perfil demonstrativo de Abel indisponível</span></a>
+            </li>
+          </ul>
+
+          <button class="seta seta--proxima" type="button" data-carrossel-proximo>
+            <span class="sr-only">Próximo artista</span>
+            <span aria-hidden="true">&#8250;</span>
+          </button>
+
+          <div class="pontos" data-carrossel-pontos aria-hidden="true"></div>
+        </div>
+
+        <div class="top-semana__texto">
+          <h2 class="top-semana__titulo titulo-display" id="titulo-top-semana">
+            Top da<br><span class="top-semana__titulo-forte">semana</span>
+          </h2>
+          <p class="top-semana__lead">
+            Uma vitrine semanal para descobrir novos perfis e aproximar contratantes
+            de artistas independentes.
+          </p>
+          <a class="btn-palco btn-palco--amarelo rota-pendente" role="link"
+             aria-disabled="true" tabindex="0" title="Top da semana (RF28) ainda não disponível">
+            Ver artistas em destaque <span aria-hidden="true">&rarr;</span>
+          </a>
+        </div>
+      </div>
+
+      <p class="top-semana__nota">
+        Atualizado toda segunda-feira com base em atividade, portfólio e engajamento.
+      </p>
+    </section>
+
+    <!-- ============================================================
+         Trajetórias
+         ============================================================ -->
+    <section class="trajetorias" aria-labelledby="titulo-trajetorias">
+      <img class="trajetorias__glow trajetorias__glow--magenta" src="assets/home/trajetoria-glow-magenta.svg" alt="">
+      <img class="trajetorias__glow trajetorias__glow--ambar" src="assets/home/trajetoria-glow-ambar.svg" alt="">
+
+      <div class="trajetorias__interno">
+        <div class="trajetorias__texto">
+          <p class="eyebrow">Histórias reais</p>
+          <h2 class="trajetorias__titulo titulo-display" id="titulo-trajetorias">
+            Trajetórias<br>dos artistas
+          </h2>
+          <p class="trajetorias__lead">
+            Do perfil organizado à oportunidade conquistada: uma jornada simples para
+            mostrar como o Palco transforma visibilidade em conexão profissional.
+          </p>
+        </div>
+
+        <ol class="passos">
+          <li class="passo">
+            <span class="passo__numero">01</span>
+            <div>
+              <h3 class="passo__titulo">Perfil completo</h3>
+              <p class="passo__texto">O artista organiza bio, localização, tags e portfólio.</p>
+            </div>
+          </li>
+          <li class="passo">
+            <span class="passo__numero">02</span>
+            <div>
+              <h3 class="passo__titulo">Ganha visibilidade</h3>
+              <p class="passo__texto">O perfil aparece em buscas, destaques e recomendações.</p>
+            </div>
+          </li>
+          <li class="passo">
+            <span class="passo__numero">03</span>
+            <div>
+              <h3 class="passo__titulo">Novas oportunidades</h3>
+              <p class="passo__texto">Convites, vagas e projetos começam a fazer parte da jornada.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      <figure class="depoimento">
+        <img class="depoimento__avatar" src="assets/home/depoimento-avatar.png" alt="">
+        <blockquote class="depoimento__texto">
+          <span class="depoimento__aspas" aria-hidden="true">&ldquo;</span>
+          Consegui meu primeiro contrato pelo Palco. Aqui meu trabalho ganhou
+          visibilidade de verdade.
+        </blockquote>
+        <figcaption class="depoimento__autor">
+          <strong>Aline Costa</strong> <span>· Cantora e Compositora</span>
+        </figcaption>
+        <a class="btn-palco btn-palco--navy depoimento__cta rota-pendente" role="link"
+           aria-disabled="true" tabindex="0"
+           title="Perfil demonstrativo sem identificador real do RF10">
+          Conhecer perfil <span aria-hidden="true">&rarr;</span>
+        </a>
+      </figure>
+
+      <!-- Painel escuro com a prova social em imagens -->
+      <div class="bastidores">
+        <img class="bastidores__foto" src="assets/home/sobre-video-1.png" alt="">
+
+        <article class="bastidores__perfil">
+          <img class="bastidores__fundo" src="assets/home/trajetoria-jottape.png" alt="">
+          <div class="bastidores__cartao">
+            <div class="bastidores__identidade">
+              <img src="assets/home/trajetoria-contratacao-1.png" alt="">
+              <span>
+                <span class="bastidores__nome titulo-display">Jottapê</span>
+                <span class="bastidores__arroba">@jottapê</span>
+              </span>
+            </div>
+
+            <p class="bastidores__texto">
+              Jottapê iniciou seu cadastro no site em julho de 2024. Dessa forma, se
+              consolidou no mercado artístico fazendo shows particulares, lotando casas
+              de show e festivais.
+            </p>
+
+            <h3 class="bastidores__rotulo">Contratações</h3>
+            <ul class="bastidores__contratacoes">
+              <li><img src="assets/home/trajetoria-contratacao-2.png" alt=""> @museuFavelas</li>
+              <li><img src="assets/home/trajetoria-contratacao-3.png" alt=""> @TeatroMunicipal</li>
+            </ul>
+          </div>
+        </article>
+
+        <img class="bastidores__foto" src="assets/home/sobre-video-3.png" alt="">
+      </div>
+    </section>
+
+    <!-- ============================================================
+         Sobre nós
+         ============================================================ -->
+    <section class="sobre" aria-labelledby="titulo-sobre" id="sobre">
+      <div class="sobre__interno">
+        <h2 class="sobre__titulo titulo-display" id="titulo-sobre">Sobre nós</h2>
+        <p class="sobre__texto">
+          Um projeto que nasceu do coração do IFSP de São Miguel paulista. Devido a alta
+          demanda da valorização e da necessidade da criação de conexões de artistas
+          independentes locais nasce: <strong>palco</strong>.
+        </p>
+      </div>
+
+      <div class="equipe" data-carrossel>
+        <button class="seta seta--anterior seta--clara" type="button" data-carrossel-anterior>
+          <span class="sr-only">Pessoa anterior</span>
+          <span aria-hidden="true">&#8249;</span>
+        </button>
+
+        <ul class="equipe__trilha" data-carrossel-trilha>
+          <li class="equipe__pessoa">
+            <img src="assets/home/equipe-placeholder.png" alt="">
+            <p class="equipe__nome">Giovana</p>
+            <p class="equipe__papel">Scrum Master</p>
+          </li>
+          <li class="equipe__pessoa">
+            <img src="assets/home/equipe-placeholder.png" alt="">
+            <p class="equipe__nome">Larissa</p>
+            <p class="equipe__papel">Product Owner</p>
+          </li>
+          <li class="equipe__pessoa">
+            <img src="assets/home/equipe-placeholder.png" alt="">
+            <p class="equipe__nome">Rayza</p>
+            <p class="equipe__papel">Designer</p>
+          </li>
+          <li class="equipe__pessoa">
+            <img src="assets/home/equipe-placeholder.png" alt="">
+            <p class="equipe__nome">Mariana</p>
+            <p class="equipe__papel">Designer</p>
+          </li>
+        </ul>
+
+        <button class="seta seta--proxima seta--clara" type="button" data-carrossel-proximo>
+          <span class="sr-only">Próxima pessoa</span>
+          <span aria-hidden="true">&#8250;</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SAQ — perguntas frequentes
+         <details> nativo: acordeão acessível e sem JS nenhum.
+         ============================================================ -->
+    <section class="saq" aria-labelledby="titulo-saq" id="saq">
+      <div class="saq__interno">
+        <div class="saq__texto">
+          <h2 class="saq__titulo titulo-display" id="titulo-saq">Perguntas<br>frequentes</h2>
+          <a class="btn-palco btn-palco--amarelo btn-palco--pequeno" href="mailto:suporte@palco.com.br">Enviar</a>
+        </div>
+
+        <div class="saq__lista">
+          <details class="pergunta">
+            <summary class="pergunta__titulo">
+              <span>1. Quais são as áreas artísticas implementadas no site?</span>
+              <span class="pergunta__seta" aria-hidden="true"></span>
+            </summary>
+            <p class="pergunta__resposta">
+              Música, artes visuais, artes cênicas, dança e arte integrada — e as
+              subcategorias de cada uma delas.
+            </p>
+          </details>
+
+          <details class="pergunta" open>
+            <summary class="pergunta__titulo">
+              <span>2. O site aceita o cadastro de menores de 18?</span>
+              <span class="pergunta__seta" aria-hidden="true"></span>
+            </summary>
+            <p class="pergunta__resposta">
+              Sim! Desde que os responsáveis assinem um termo de responsabilidade.
+            </p>
+          </details>
+
+          <details class="pergunta">
+            <summary class="pergunta__titulo">
+              <span>3. Como faço para denunciar uma vaga ou perfil?</span>
+              <span class="pergunta__seta" aria-hidden="true"></span>
+            </summary>
+            <p class="pergunta__resposta">
+              Todo perfil e toda vaga têm um botão de denúncia. A equipe do Palco analisa
+              cada aviso antes de tomar qualquer medida.
+            </p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================================================
+       Rodapé
+       ============================================================ -->
+  <footer class="rodape">
+    <div class="rodape__interno">
+
+      <a class="rodape__marca" href="home.html" aria-label="Palco — voltar ao início">
+        <img class="rodape__logo" src="assets/home/logo-palco-branco.png" alt="">
+      </a>
+
+      <nav class="rodape__coluna" aria-labelledby="rodape-navegar">
+        <h2 class="rodape__rotulo" id="rodape-navegar">Navegar</h2>
+        <ul>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Busca de artistas ainda não disponível">Artistas</a></li>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Catálogo de contratantes ainda não disponível">Contratantes</a></li>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Comunidade (RF19) ainda não disponível">Comunidade</a></li>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Top da semana (RF28) ainda não disponível">Top da semana</a></li>
+          <li><a href="#sobre">Sobre nós</a></li>
+        </ul>
+      </nav>
+
+      <nav class="rodape__coluna" aria-labelledby="rodape-bastidores">
+        <h2 class="rodape__rotulo" id="rodape-bastidores">Bastidores</h2>
+        <ul>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Busca de artistas ainda não disponível">Artistas</a></li>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Catálogo de contratantes ainda não disponível">Contratantes</a></li>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Comunidade (RF19) ainda não disponível">Comunidade</a></li>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Top da semana (RF28) ainda não disponível">Top da semana</a></li>
+          <li><a href="#sobre">Sobre nós</a></li>
+        </ul>
+      </nav>
+
+      <nav class="rodape__coluna" aria-labelledby="rodape-suporte">
+        <h2 class="rodape__rotulo" id="rodape-suporte">Suporte</h2>
+        <ul>
+          <li><a href="#saq">SAQ</a></li>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Canal de denúncia ainda não disponível">Denúncia de plágio</a></li>
+          <li><a href="mailto:suporte@palco.com.br">Email de suporte</a></li>
+          <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+                 title="Telefone de suporte ainda não configurado">Telefone de suporte</a></li>
+        </ul>
+      </nav>
+
+      <p class="rodape__manifesto">
+        Conectando artistas independentes com oportunidades imperdíveis. Inovando o
+        setor tecnológico de empregabilidade com uma pincelada artística e criativa.
+      </p>
+    </div>
+
+    <div class="rodape__base">
+      <ul class="rodape__legal">
+        <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+               title="Política de privacidade ainda não publicada">Política de privacidade</a></li>
+        <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+               title="Termos de Uso ainda não publicados">Termos de Uso</a></li>
+        <li><a class="rota-pendente" role="link" aria-disabled="true" tabindex="0"
+               title="Política de cookies ainda não publicada">Política de cookies</a></li>
+      </ul>
+
+      <ul class="rodape__sociais">
+        <li><a class="rota-pendente" role="link" aria-label="Instagram — indisponível"
+               aria-disabled="true" tabindex="0" title="Perfil oficial não configurado"><img src="assets/home/social-instagram.png" alt=""></a></li>
+        <li><a class="rota-pendente" role="link" aria-label="Facebook — indisponível"
+               aria-disabled="true" tabindex="0" title="Perfil oficial não configurado"><img src="assets/home/social-facebook.png" alt=""></a></li>
+        <li><a class="rota-pendente" role="link" aria-label="TikTok — indisponível"
+               aria-disabled="true" tabindex="0" title="Perfil oficial não configurado"><img src="assets/home/social-instagram.png" alt=""></a></li>
+        <li><a class="rota-pendente" role="link" aria-label="YouTube — indisponível"
+               aria-disabled="true" tabindex="0" title="Perfil oficial não configurado"><img src="assets/home/social-instagram.png" alt=""></a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <button class="voltar-topo" type="button" data-voltar-topo
+          aria-label="Voltar ao topo" aria-hidden="true" tabindex="-1" hidden>
+    <img src="assets/seta-select.svg" alt="">
+  </button>
+
+  <script src="js/home.js?v=2.6.1"></script>
+</body>
+</html>

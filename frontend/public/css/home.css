@@ -1,0 +1,2316 @@
+/* ==========================================================================
+   Palco — home.css
+   HomeOficial (frame 2122:216 do Figma). Hero com carrossel de vagas,
+   apresentacao, vagas, portfolios, faixa de show, Top da Semana,
+   trajetorias, sobre nos, SAQ e rodape.
+
+   O Figma e fixo em 1920x11831 com posicionamento absoluto. Aqui e
+   flexbox/grid com largura maxima e breakpoints: o visual bate no desktop
+   e se adapta abaixo, mas as posicoes nao sao identicas ao pixel.
+
+   O rodape mora aqui porque hoje so a home tem um. Quando a segunda pagina
+   publica existir, mover o bloco "Rodape" para componentes.css.
+   ========================================================================== */
+
+.pagina-home {
+  /* O layout do Figma e mais largo que o --largura-max de 1238px do resto
+     do site; a home tem faixa propria. */
+  --largura-home: 1440px;
+  overflow-x: hidden;
+  background-color: var(--cor-fundo);
+}
+
+/* Faixa central reutilizada por todas as secoes */
+.apresentacao__interno,
+.vagas__interno,
+.top-semana__interno,
+.trajetorias__interno,
+.sobre__interno,
+.saq__interno,
+.rodape__interno,
+.rodape__base {
+  width: min(100% - 3rem, var(--largura-home));
+  margin-inline: auto;
+}
+
+/* Item de grid nasce com min-width:auto e nao encolhe abaixo do conteudo.
+   Sem isto, em coluna unica o texto do hero estourava a faixa (932px numa
+   trilha de 342) e so nao aparecia porque o .topo corta o que sobra. */
+.hero > *,
+.apresentacao__interno > *,
+.vagas__interno > *,
+.top-semana__interno > *,
+.trajetorias__interno > *,
+.saq__interno > * {
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Botoes da home
+   O .btn de componentes.css e grande demais para esta tela (2rem de fonte,
+   69px de altura). Aqui os botoes sao compactos, como no frame.
+   -------------------------------------------------------------------------- */
+.btn-palco {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 50px;
+  padding: 0 1.5rem;
+  font-size: var(--texto-base);
+  font-weight: 700;
+  text-align: center;
+  border-radius: 11px;
+  transition: filter 0.2s ease, transform 0.1s ease;
+}
+
+.btn-palco:hover {
+  filter: brightness(1.06);
+}
+
+.btn-palco:active {
+  transform: translateY(1px);
+}
+
+.btn-palco--amarelo {
+  color: var(--cor-texto);
+  background-color: var(--cor-amarelo);
+  box-shadow: var(--sombra-botao);
+}
+
+.btn-palco--navy {
+  color: var(--cor-branco);
+  background-color: var(--cor-navy);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.btn-palco--texto {
+  min-height: auto;
+  padding: 0;
+  color: var(--cor-branco);
+  box-shadow: none;
+}
+
+.btn-palco--texto:hover {
+  color: var(--cor-amarelo);
+  filter: none;
+}
+
+.btn-palco--largo {
+  min-height: 72px;
+  min-width: 540px;
+  font-size: var(--texto-lg);
+  border-radius: 16px;
+}
+
+.btn-palco--pequeno {
+  min-height: 34px;
+  padding: 0 1.25rem;
+  font-size: var(--texto-xs);
+  border-radius: var(--raio-pill);
+}
+
+/* Rotas ainda sem tela real permanecem visiveis, mas nao simulam navegacao.
+   aria-disabled conserva a informacao para tecnologia assistiva e o cursor
+   comunica o estado sem mudar a identidade visual aprovada. */
+.rota-pendente,
+.busca[aria-disabled="true"],
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+}
+
+.rota-pendente:focus-visible {
+  outline: 3px solid var(--cor-amarelo);
+  outline-offset: 3px;
+}
+
+.btn-palco.rota-pendente:hover {
+  filter: none;
+}
+
+.btn-palco.rota-pendente:active {
+  transform: none;
+}
+
+.btn-palco--texto.rota-pendente:hover {
+  color: var(--cor-branco);
+}
+
+/* Rotulo pequeno em maiuscula que abre varias secoes */
+.eyebrow {
+  margin-bottom: 0.75rem;
+  font-family: var(--fonte-lato);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  color: var(--cor-magenta);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   Setas de carrossel
+   O chevron vem do texto porque no Figma ele tambem e um caractere.
+   -------------------------------------------------------------------------- */
+.seta {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--cor-amarelo);
+  background-color: rgba(156, 0, 136, 0.55);
+  border: 1px solid rgba(255, 249, 255, 0.16);
+  border-radius: 50%;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.seta:hover {
+  background-color: rgba(156, 0, 136, 0.85);
+}
+
+.seta--anterior { left: -18px; }
+.seta--proxima  { right: -18px; }
+
+.seta--clara {
+  color: var(--cor-navy);
+  background-color: rgba(255, 249, 255, 0.85);
+  border-color: rgba(10, 14, 42, 0.12);
+}
+
+.seta--clara:hover {
+  background-color: var(--cor-branco);
+}
+
+.seta[hidden] {
+  display: none;
+}
+
+.seta:disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
+}
+
+.seta:focus-visible {
+  outline: 3px solid var(--cor-amarelo);
+  outline-offset: 3px;
+}
+
+/* Trilhas de carrossel: rolagem com encaixe, para funcionar no toque
+   mesmo sem o JS das setas. */
+.vitrine__trilha,
+.palco-artistas__trilha,
+.equipe__trilha,
+.portfolio-cards {
+  display: flex;
+  gap: var(--gap-sm);
+  overflow-x: auto;
+  /* proximity, nao mandatory: com mandatory o navegador devolve toda
+     rolagem programatica para o encaixe mais proximo e as setas do
+     carrossel simplesmente nao saem do lugar. */
+  scroll-snap-type: x proximity;
+  /* A animacao das setas e controlada em home.js. Manter auto aqui evita
+     animar a centralizacao tecnica feita no primeiro paint e no resize. */
+  scroll-behavior: auto;
+  scrollbar-width: none;
+}
+
+.vitrine__trilha::-webkit-scrollbar,
+.palco-artistas__trilha::-webkit-scrollbar,
+.equipe__trilha::-webkit-scrollbar,
+.portfolio-cards::-webkit-scrollbar {
+  display: none;
+}
+
+/* Durante a navegacao pelas setas, o JS interpola cada quadro. O snap fica
+   suspenso so nesse intervalo; gestos manuais continuam com encaixe nativo. */
+.vitrine__trilha.carrossel-trilha--animando,
+.palco-artistas__trilha.carrossel-trilha--animando,
+.equipe__trilha.carrossel-trilha--animando {
+  scroll-snap-type: none;
+}
+
+.vitrine__trilha > *,
+.palco-artistas__trilha > *,
+.equipe__trilha > *,
+.portfolio-cards > * {
+  flex-shrink: 0;
+  scroll-snap-align: center;
+}
+
+/* Pontinhos indicadores */
+.pontos {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: var(--gap-md);
+}
+
+.ponto {
+  width: 9px;
+  height: 9px;
+  background-color: rgba(255, 249, 255, 0.3);
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.ponto--ativo {
+  background-color: var(--cor-amarelo);
+}
+
+/* --------------------------------------------------------------------------
+   Topo — navbar + hero
+   -------------------------------------------------------------------------- */
+.topo {
+  /* flow-root cria contexto de bloco: sem ele o margin-top da .navbar
+     colapsa para fora e abre uma faixa clara acima do navy. */
+  display: flow-root;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--cor-navy);
+}
+
+.navbar--home {
+  width: min(100% - 3rem, 1290px);
+  gap: var(--gap-lg);
+  padding: 0.75rem 1.5rem;
+  background-color: rgba(10, 14, 42, 0.96);
+  border: none;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.navbar--home .navbar__logo {
+  width: 34px;
+  height: 32px;
+}
+
+.marca__nome {
+  font-size: var(--texto-lg);
+  color: var(--cor-branco);
+  letter-spacing: 0.04em;
+}
+
+.navbar--home .navbar__menu {
+  gap: var(--gap-md);
+  margin-left: auto;
+}
+
+.navbar--home .navbar__acoes {
+  gap: var(--gap-sm);
+  margin-left: 0;
+}
+
+.navbar--home .navbar__link {
+  padding: 0.25rem 0;
+  font-size: var(--texto-base);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.navbar--home .navbar__link--destaque {
+  padding: 0.55rem 1.25rem;
+  border-radius: 11px;
+}
+
+/* Item atual: amarelo sublinhado, como no frame */
+.navbar__link--ativo {
+  color: var(--cor-amarelo);
+  border-bottom: 1px solid currentColor;
+}
+
+.navbar__link--ativo:hover {
+  color: var(--cor-amarelo);
+}
+
+/* Menu suspenso do Explorar */
+.explorar {
+  position: relative;
+}
+
+.explorar__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 1.6rem);
+  left: -1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 210px;
+  padding: 0.85rem;
+  background-color: var(--cor-navy);
+  border: 1px solid rgba(255, 249, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.explorar__item {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--cor-branco);
+  border-radius: var(--raio-pill);
+}
+
+.explorar__item:hover {
+  background-color: rgba(255, 249, 255, 0.08);
+}
+
+.explorar__item--ativo {
+  color: var(--cor-magenta);
+  background-color: var(--cor-amarelo);
+}
+
+.explorar__item--ativo:hover {
+  background-color: var(--cor-amarelo);
+}
+
+.explorar__item.rota-pendente:not(.explorar__item--ativo):hover {
+  background-color: transparent;
+}
+
+/* Hero */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: var(--gap-lg);
+  align-items: center;
+  width: min(100% - 3rem, 1600px);
+  margin-inline: auto;
+  padding-block: clamp(3rem, 7vw, 7rem);
+}
+
+.hero__titulo {
+  font-size: clamp(2.25rem, 3.6vw, 4rem);
+  font-weight: 400;
+  line-height: 1.06;
+  color: var(--cor-branco);
+  letter-spacing: 0.05em;
+}
+
+/* A terceira linha e maior e amarela */
+.hero__titulo-forte {
+  display: inline-block;
+  font-size: 1.4em;
+  line-height: 1;
+  color: var(--cor-amarelo);
+  letter-spacing: 0.05em;
+}
+
+.hero__marca {
+  margin-top: var(--gap-sm);
+  font-family: var(--fonte-lato);
+  font-size: var(--texto-base);
+  font-weight: 700;
+  color: var(--cor-branco);
+  letter-spacing: 0.05em;
+}
+
+.hero__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-md);
+  align-items: center;
+  margin-top: clamp(2rem, 5vw, 4rem);
+}
+
+/* Vitrine de vagas: o painel magenta inclinado fica atras dos cards */
+.hero__vitrine {
+  position: relative;
+}
+
+.hero__luz {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: -4%;
+  width: 122%;
+  max-width: none;
+  height: 118%;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.vitrine {
+  position: relative;
+  z-index: 1;
+}
+
+.vitrine__trilha {
+  --carrossel-item-largura: 300px;
+  align-items: center;
+  gap: clamp(1.25rem, 2vw, 1.75rem);
+  min-height: 580px;
+  padding-block: 3.75rem;
+  padding-inline: max(1rem, calc((100% - var(--carrossel-item-largura)) / 2));
+}
+
+/* Card de vaga do hero */
+.vaga-mini {
+  width: var(--carrossel-item-largura);
+  overflow: hidden;
+  background-color: #ffffff;
+  border-radius: var(--raio-md);
+  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
+  transform: scale(1);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* O card do meio e o protagonista: maior e a frente */
+.vaga-mini--destaque {
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+  transform: scale(1.12);
+}
+
+.vaga-mini__foto {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.vaga-mini--destaque .vaga-mini__foto {
+  aspect-ratio: 16 / 8;
+}
+
+.vaga-mini__corpo {
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.vaga-mini__titulo {
+  font-size: var(--texto-lg);
+  font-weight: 700;
+  color: var(--cor-texto);
+}
+
+.vaga-mini__autor {
+  margin-top: 0.15rem;
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  color: var(--cor-magenta);
+}
+
+.vaga-mini__local {
+  margin-top: 0.3rem;
+  font-size: var(--texto-sm);
+  color: var(--cor-texto);
+}
+
+.vaga-mini__descricao {
+  margin-top: 0.85rem;
+  font-size: var(--texto-xs);
+  line-height: 1.6;
+  color: var(--cor-texto);
+}
+
+.vaga-mini__descricao strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: var(--texto-base);
+  font-weight: 700;
+}
+
+.vaga-mini__cta {
+  display: flex;
+  width: fit-content;
+  margin-top: 1.25rem;
+  margin-left: auto;
+}
+
+.vaga-mini:not(.vaga-mini--destaque) .vaga-mini__cta {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Apresentacao — colagem + os tres publicos
+   -------------------------------------------------------------------------- */
+.apresentacao {
+  padding-block: clamp(3rem, 7vw, 6rem);
+  background-color: var(--cor-navy);
+}
+
+.apresentacao__interno {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: center;
+}
+
+/* Colagem: a foto principal cavalga as outras duas, como no frame */
+.colagem {
+  display: grid;
+  grid-template-columns: 0.42fr 1fr;
+  grid-template-rows: repeat(2, 1fr);
+  gap: 0.5rem;
+  aspect-ratio: 1 / 0.82;
+}
+
+.colagem__foto {
+  overflow: hidden;
+  border-radius: var(--raio-sm);
+}
+
+.colagem__foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.colagem__foto--discos { grid-area: 1 / 1; }
+.colagem__foto--silhueta { grid-area: 2 / 1; }
+
+.colagem__foto--principal {
+  position: relative;
+  grid-area: 1 / 2 / 3 / 3;
+  margin: 0;
+  border-radius: var(--raio-md);
+}
+
+.colagem__credito {
+  position: absolute;
+  top: 1rem;
+  left: 1.25rem;
+  color: var(--cor-branco);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.colagem__nome {
+  display: block;
+  font-size: var(--texto-lg);
+  font-weight: 700;
+}
+
+.colagem__arroba {
+  display: block;
+  font-size: var(--texto-sm);
+}
+
+.publicos {
+  text-align: right;
+}
+
+.publicos__intro,
+.publicos__fim {
+  font-family: var(--fonte-lato);
+  font-size: clamp(1.25rem, 2vw, 2.5rem);
+  font-weight: 300;
+  color: var(--cor-branco);
+  letter-spacing: 0.05em;
+}
+
+.publicos__item {
+  font-family: var(--fonte-lato);
+  font-size: clamp(2rem, 5vw, 6rem);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.15;
+  color: var(--cor-magenta);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Os dois de fora ficam apagados: o holofote e o do meio */
+.publicos__item--fraco {
+  color: rgba(156, 0, 136, 0.5);
+}
+
+.publicos__item--forte {
+  color: var(--cor-magenta);
+}
+
+/* --------------------------------------------------------------------------
+   Vagas — busca + card de detalhe
+   -------------------------------------------------------------------------- */
+.vagas {
+  position: relative;
+  padding-block: clamp(3rem, 7vw, 6rem);
+  overflow: hidden;
+  background-color: var(--cor-navy);
+}
+
+.vagas__fundo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.vagas__interno {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: center;
+}
+
+.vagas__titulo {
+  font-size: clamp(2.5rem, 5vw, 5.25rem);
+  font-weight: 400;
+  line-height: 1.02;
+  color: var(--cor-branco);
+  letter-spacing: 0.05em;
+}
+
+.vagas__titulo-forte {
+  color: var(--cor-amarelo);
+}
+
+.vagas__lead {
+  max-width: 42ch;
+  margin-top: var(--gap-md);
+  font-size: var(--texto-base);
+  color: var(--cor-branco);
+}
+
+.vagas__lead strong {
+  font-weight: 700;
+}
+
+/* Campo de busca em pilula com botao amarelo dentro */
+.busca {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  width: min(100%, 500px);
+  margin-top: var(--gap-lg);
+  padding: 0.4rem 0.4rem 0.4rem 1.5rem;
+  background-color: var(--cor-navy);
+  border: 1px solid rgba(255, 249, 255, 0.35);
+  border-radius: var(--raio-pill);
+}
+
+/* O foco visivel vai para a caixa inteira, ja que o input nao tem borda */
+.busca:focus-within {
+  outline: 3px solid var(--cor-amarelo);
+  outline-offset: 2px;
+}
+
+.busca__input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  font-size: var(--texto-sm);
+  color: var(--cor-branco);
+  background-color: transparent;
+  border: none;
+}
+
+.busca__input:focus {
+  outline: none;
+}
+
+.busca__input::placeholder {
+  color: rgba(255, 249, 255, 0.65);
+}
+
+.busca__input:disabled {
+  color: var(--cor-branco);
+  -webkit-text-fill-color: var(--cor-branco);
+  opacity: 1;
+}
+
+.busca__input:disabled::placeholder {
+  color: rgba(255, 249, 255, 0.65);
+  -webkit-text-fill-color: rgba(255, 249, 255, 0.65);
+}
+
+.busca__botao {
+  flex-shrink: 0;
+  min-height: 48px;
+  padding: 0 1.5rem;
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  color: var(--cor-texto);
+  background-color: var(--cor-amarelo);
+  border-radius: var(--raio-pill);
+}
+
+.busca__botao:disabled {
+  color: var(--cor-texto);
+  background-color: var(--cor-amarelo);
+  opacity: 1;
+}
+
+/* Card grande de detalhe da vaga */
+.vaga-detalhe {
+  padding: 1.85rem;
+  background-color: #ffffff;
+  border-radius: 26px;
+  box-shadow: 0 13px 33px rgba(10, 14, 42, 0.28);
+}
+
+.vaga-detalhe__topo {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: var(--gap-md);
+  margin-bottom: var(--gap-md);
+}
+
+.vaga-detalhe__cartaz > img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--raio-sm);
+}
+
+/* Pilha de avatares de quem se candidatou */
+.vaga-detalhe__publico {
+  margin-top: 0.6rem;
+}
+
+.publico-pilha {
+  display: flex;
+}
+
+.publico-pilha img {
+  width: 16px;
+  height: 16px;
+}
+
+.vaga-detalhe__cargo {
+  font-size: var(--texto-xl);
+  font-weight: 700;
+  color: var(--cor-texto);
+}
+
+.vaga-detalhe__meta {
+  margin-top: 0.2rem;
+  font-size: var(--texto-xs);
+  color: var(--cor-texto-suave);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+.chip {
+  padding: 0.25rem 0.85rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--cor-magenta);
+  background-color: var(--cor-branco);
+  border: 1px solid var(--cor-magenta);
+  border-radius: var(--raio-pill);
+}
+
+.chips--claro .chip {
+  color: var(--cor-navy);
+  background-color: var(--cor-branco);
+  border-color: rgba(10, 14, 42, 0.15);
+}
+
+.vaga-detalhe__rotulo {
+  margin-bottom: 0.35rem;
+  font-size: var(--texto-base);
+  font-weight: 700;
+  color: var(--cor-texto);
+}
+
+.vaga-detalhe__texto {
+  font-size: var(--texto-xs);
+  line-height: 1.65;
+  color: var(--cor-texto-suave);
+}
+
+.vaga-detalhe__linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--gap-md);
+  align-items: end;
+  margin-top: var(--gap-md);
+}
+
+.fichas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.ficha {
+  width: 91px;
+  padding: 0.6rem 0.4rem;
+  text-align: center;
+  background-color: var(--cor-lilas);
+  border-radius: var(--raio-sm);
+}
+
+.ficha__icone {
+  width: 22px;
+  height: 22px;
+  margin: 0 auto 0.4rem;
+}
+
+.ficha__valor {
+  font-size: var(--texto-xs);
+  font-weight: 700;
+  color: var(--cor-texto);
+}
+
+.ficha__rotulo {
+  margin-top: 0.15rem;
+  font-size: 0.63rem;
+  color: var(--cor-texto-suave);
+}
+
+.vaga-detalhe__galeria {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-top: var(--gap-md);
+}
+
+.vaga-detalhe__galeria img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--raio-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Portfolios
+   -------------------------------------------------------------------------- */
+.portfolios {
+  position: relative;
+  padding-block: clamp(3rem, 7vw, 5.5rem);
+  overflow: hidden;
+  text-align: center;
+  background-color: var(--cor-navy);
+}
+
+/* Sombra elipsoide sob a fileira de cards, como se fosse a base do palco */
+.portfolios__sombra {
+  position: absolute;
+  bottom: 4rem;
+  left: 50%;
+  width: min(1400px, 96%);
+  max-width: none;
+  height: 380px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.portfolios__luz {
+  position: absolute;
+  z-index: 0;
+  max-width: none;
+  pointer-events: none;
+}
+
+.portfolios__luz--esquerda {
+  top: -8rem;
+  left: -10rem;
+  width: min(48vw, 615px);
+}
+
+.portfolios__luz--direita {
+  top: -6rem;
+  right: -12rem;
+  width: min(54vw, 815px);
+}
+
+.portfolios__interno {
+  position: relative;
+  z-index: 1;
+  width: min(100% - 3rem, 1648px);
+  margin-inline: auto;
+}
+
+.portfolios__titulo {
+  font-size: clamp(2rem, 4vw, 4.75rem);
+  font-weight: 400;
+  line-height: 1.14;
+  color: var(--cor-branco);
+}
+
+.portfolios__titulo-forte {
+  color: var(--cor-magenta);
+}
+
+.portfolios__lead {
+  margin-top: 0.5rem;
+  font-size: var(--texto-base);
+  color: var(--cor-branco);
+}
+
+.filtros-arte {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: var(--gap-lg);
+}
+
+.chip-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 46px;
+  padding: 0 1.25rem;
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  color: var(--cor-branco);
+  background-color: rgba(10, 14, 42, 0.3);
+  border: 1px solid rgba(255, 249, 255, 0.2);
+  border-radius: var(--raio-pill);
+  transition: background-color 0.2s ease;
+}
+
+.chip-filtro:hover {
+  background-color: rgba(255, 249, 255, 0.12);
+}
+
+.chip-filtro img {
+  width: 18px;
+  height: 18px;
+}
+
+.chip-filtro--ativo {
+  color: var(--cor-navy);
+  background-color: var(--cor-amarelo);
+  border-color: transparent;
+}
+
+/* Os pictogramas vieram brancos, para os chips escuros. No chip amarelo
+   precisam inverter para nao sumirem. */
+.chip-filtro--ativo img {
+  filter: brightness(0);
+}
+
+.chip-filtro--ativo:hover {
+  background-color: var(--cor-amarelo);
+}
+
+.chip-filtro:focus-visible {
+  outline: 3px solid var(--cor-amarelo);
+  outline-offset: 3px;
+}
+
+.chip-filtro:disabled {
+  color: var(--cor-branco);
+  opacity: 1;
+}
+
+.chip-filtro--ativo:disabled {
+  color: var(--cor-navy);
+}
+
+.portfolio-cards {
+  flex-wrap: wrap;
+  justify-content: safe center;
+  margin-top: var(--gap-lg);
+  padding-block: 0.5rem;
+  overflow-x: visible;
+  text-align: left;
+}
+
+.portfolio-card {
+  position: relative;
+  width: clamp(215px, 18vw, 304px);
+  aspect-ratio: 304 / 451;
+  overflow: hidden;
+  background-color: var(--cor-branco);
+  border-radius: var(--raio-md);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.portfolio-card[hidden] {
+  display: none;
+}
+
+.portfolio-card__foto {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* O texto senta sobre a foto, num veu navy que sobe do rodape do card */
+.portfolio-card__corpo {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 1.15rem 1rem;
+  background-image: linear-gradient(
+    180deg,
+    rgba(10, 14, 42, 0) 0%,
+    rgba(10, 14, 42, 0.82) 42%,
+    rgba(10, 14, 42, 0.94) 100%
+  );
+}
+
+.portfolio-card__nome {
+  font-size: var(--texto-lg);
+  font-weight: 700;
+  color: var(--cor-branco);
+}
+
+.portfolio-card__area {
+  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  color: var(--cor-branco);
+}
+
+.portfolio-card__area span {
+  color: var(--cor-amarelo);
+}
+
+.portfolio-card__local {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: rgba(255, 249, 255, 0.8);
+}
+
+.portfolio-card__local img {
+  width: 12px;
+  height: 12px;
+}
+
+.portfolios__cta {
+  margin-top: var(--gap-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Comunidades — composição restaurada sobre o asset oficial do Figma
+   -------------------------------------------------------------------------- */
+.comunidades {
+  position: relative;
+  display: grid;
+  min-height: clamp(360px, 34vw, 620px);
+  overflow: hidden;
+  background-color: var(--cor-navy);
+}
+
+.comunidades::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(10, 14, 42, 0.72) 0%, rgba(10, 14, 42, 0.2) 48%, transparent 72%);
+}
+
+.comunidades__fundo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.comunidades__interno {
+  position: relative;
+  z-index: 2;
+  align-self: center;
+  width: min(100% - 3rem, var(--largura-home));
+  margin-inline: auto;
+}
+
+.comunidades__eyebrow {
+  font-size: var(--texto-xs);
+  font-weight: 700;
+  color: var(--cor-branco);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.comunidades__titulo {
+  max-width: 9ch;
+  margin-top: 0.45rem;
+  font-size: clamp(2.75rem, 5.8vw, 6.75rem);
+  font-weight: 400;
+  line-height: 0.86;
+  color: var(--cor-branco);
+  text-shadow: 0 4px 24px rgba(10, 14, 42, 0.5);
+}
+
+.comunidades__cta {
+  margin-top: var(--gap-md);
+}
+
+/* --------------------------------------------------------------------------
+   Top da semana
+   -------------------------------------------------------------------------- */
+.top-semana {
+  position: relative;
+  padding-block: clamp(3rem, 7vw, 5.5rem);
+  overflow: hidden;
+  background-color: var(--cor-navy);
+}
+
+.top-semana__arco,
+.top-semana__glow {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}
+
+.top-semana__arco {
+  top: 0;
+  left: 50%;
+  width: 848px;
+  height: 871px;
+  transform: translateX(-50%);
+}
+
+.top-semana__glow--magenta {
+  top: 8%;
+  left: 34%;
+  width: 942px;
+  height: 650px;
+}
+
+.top-semana__glow--ambar {
+  top: 18%;
+  left: 44%;
+  width: 530px;
+  height: 394px;
+}
+
+.top-semana__interno {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+  gap: clamp(2rem, 4vw, 3.5rem);
+  align-items: center;
+}
+
+.palco-artistas {
+  position: relative;
+}
+
+.palco-artistas__trilha {
+  --carrossel-item-largura: 240px;
+  align-items: center;
+  gap: clamp(2rem, 3.5vw, 3.5rem);
+  min-height: 470px;
+  padding-block: 2.75rem;
+  padding-inline: max(1rem, calc((100% - var(--carrossel-item-largura)) / 2));
+}
+
+.artista-card {
+  position: relative;
+  width: var(--carrossel-item-largura);
+  aspect-ratio: 240 / 300;
+  overflow: hidden;
+  background-color: var(--cor-branco);
+  border-radius: var(--raio-md);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+  transform: scale(1);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* O card central e maior, tem moldura amarela e sai da fileira */
+.artista-card--destaque {
+  position: relative;
+  z-index: 2;
+  aspect-ratio: 240 / 300;
+  background-color: var(--cor-navy);
+  border: 2px solid var(--cor-amarelo);
+  border-radius: 22px;
+  box-shadow: 0 27px 55px rgba(0, 0, 0, 0.5);
+  transform: scale(1.34);
+}
+
+.artista-card__foto {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.artista-card__corpo {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 1rem;
+  background-image: linear-gradient(
+    180deg,
+    rgba(10, 14, 42, 0) 0%,
+    rgba(10, 14, 42, 0.85) 45%,
+    rgba(10, 14, 42, 0.96) 100%
+  );
+}
+
+.artista-card__nome {
+  font-size: var(--texto-xl);
+  font-weight: 700;
+  color: var(--cor-branco);
+}
+
+.artista-card--destaque .artista-card__nome {
+  font-size: 2rem;
+}
+
+.artista-card__meta {
+  font-size: 0.72rem;
+  color: rgba(255, 249, 255, 0.8);
+  text-transform: uppercase;
+}
+
+.artista-card__area {
+  color: var(--cor-amarelo);
+}
+
+.artista-card__interacoes {
+  margin-top: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--cor-amarelo);
+}
+
+/* Selo circular navy com a estrela por cima */
+.artista-card__selo {
+  position: absolute;
+  z-index: 2;
+  top: 1rem;
+  right: 1rem;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+}
+
+.artista-card__selo img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+}
+
+.artista-card__estrela {
+  grid-area: 1 / 1;
+  font-size: 0.9rem;
+  color: var(--cor-amarelo);
+}
+
+.artista-card__ver {
+  position: absolute;
+  z-index: 2;
+  right: -18px;
+  bottom: 12%;
+  width: 60px;
+  height: 60px;
+}
+
+.artista-card__ver img {
+  width: 100%;
+  height: 100%;
+}
+
+.artista-card:not(.artista-card--destaque) .artista-card__selo,
+.artista-card:not(.artista-card--destaque) .chips,
+.artista-card:not(.artista-card--destaque) .artista-card__interacoes,
+.artista-card:not(.artista-card--destaque) .artista-card__ver {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.top-semana__titulo {
+  font-size: clamp(2.5rem, 5vw, 6.25rem);
+  font-weight: 400;
+  line-height: 0.98;
+  color: var(--cor-branco);
+}
+
+.top-semana__titulo-forte {
+  color: var(--cor-amarelo);
+}
+
+.top-semana__lead {
+  max-width: 34ch;
+  margin-top: var(--gap-sm);
+  font-size: var(--texto-sm);
+  color: var(--cor-branco);
+}
+
+.top-semana__texto .btn-palco {
+  margin-top: var(--gap-md);
+}
+
+.top-semana__nota {
+  position: relative;
+  margin-top: var(--gap-md);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  color: var(--cor-branco);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Trajetorias
+   -------------------------------------------------------------------------- */
+.trajetorias {
+  position: relative;
+  padding-top: clamp(3rem, 7vw, 5.5rem);
+  overflow: hidden;
+  background-color: var(--cor-fundo);
+}
+
+.trajetorias__glow {
+  position: absolute;
+  top: 0;
+  max-width: none;
+  pointer-events: none;
+}
+
+.trajetorias__glow--magenta { left: 33%; width: 900px; height: 480px; }
+.trajetorias__glow--ambar   { left: 42%; width: 570px; height: 370px; }
+
+.trajetorias__interno {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.62fr) minmax(0, 1.38fr);
+  gap: clamp(2rem, 4vw, 3.5rem);
+  align-items: start;
+}
+
+.trajetorias__titulo {
+  font-size: clamp(2rem, 3.4vw, 3.875rem);
+  font-weight: 400;
+  line-height: 0.94;
+  color: var(--cor-navy);
+}
+
+.trajetorias__lead {
+  margin-top: var(--gap-md);
+  font-size: var(--texto-sm);
+  color: var(--cor-navy);
+}
+
+.passos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 2.5rem;
+}
+
+.passo {
+  position: relative;
+  display: flex;
+  gap: 0.85rem;
+  padding: 1.5rem;
+  background-color: #ffffff;
+  border: 1px solid rgba(10, 14, 42, 0.08);
+  border-radius: var(--raio-md);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
+}
+
+/* Tracinho pontilhado ligando um passo ao proximo. Fica no gap do grid,
+   entao some sozinho quando a fileira quebra em uma coluna. */
+.passo + .passo::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -2.5rem;
+  width: 2.5rem;
+  height: 1px;
+  background-image: linear-gradient(90deg, var(--cor-magenta) 50%, transparent 50%);
+  background-size: 8px 1px;
+  opacity: 0.5;
+}
+
+.passo__numero {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  color: var(--cor-magenta);
+  background-color: rgba(255, 191, 0, 0.18);
+  border-radius: 50%;
+}
+
+.passo__titulo {
+  font-size: var(--texto-base);
+  font-weight: 700;
+  color: var(--cor-navy);
+}
+
+.passo__texto {
+  margin-top: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--cor-texto-suave);
+}
+
+/* Barra de depoimento */
+.depoimento {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--gap-md);
+  align-items: center;
+  width: min(100% - 3rem, 1160px);
+  margin: var(--gap-lg) auto 0;
+  padding: 1.5rem 1.75rem;
+  background-color: #f6f1f8;
+  border-radius: var(--raio-md);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
+}
+
+.depoimento__avatar {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.depoimento__texto {
+  font-size: var(--texto-base);
+  color: var(--cor-navy);
+}
+
+.depoimento__aspas {
+  margin-right: 0.25rem;
+  font-family: var(--fonte-display);
+  font-size: 1.4rem;
+  color: var(--cor-magenta);
+}
+
+.depoimento__autor {
+  grid-column: 2;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--cor-navy);
+}
+
+.depoimento__autor span {
+  color: var(--cor-magenta);
+}
+
+.depoimento__cta {
+  grid-area: 1 / 3 / 3 / 4;
+  align-self: center;
+  font-size: var(--texto-xs);
+}
+
+/* Painel escuro dos bastidores */
+.bastidores {
+  --bastidores-curva-largura: 100vw;
+  --bastidores-curva-altura: min(27.55vw, 527px);
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap-md);
+  align-items: center;
+  isolation: isolate;
+  width: min(100% - 3rem, 1560px);
+  margin: clamp(2.5rem, 5vw, 4rem) auto 0;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  background-color: transparent;
+}
+
+/* O frame oficial usa o vetor Rectangle 630: a faixa navy nasce estreita
+   no topo e abre em duas curvas ate ocupar toda a largura. O arquivo ja
+   existia nos assets, mas nao era renderizado. A continuacao solida abaixo
+   do SVG permite conservar os cards responsivos sem esticar a geometria. */
+.bastidores::before,
+.bastidores::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  z-index: 0;
+  width: var(--bastidores-curva-largura);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.bastidores::before {
+  top: 0;
+  height: var(--bastidores-curva-altura);
+  background-image: url('../assets/home/trajetoria-fundo.svg');
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: 100% 100%;
+}
+
+.bastidores::after {
+  /* O path termina 10px antes do viewBox; a sobreposicao elimina a faixa
+     transparente do proprio SVG sem criar degrau entre vetor e fundo. */
+  top: calc(var(--bastidores-curva-altura) - 12px);
+  bottom: 0;
+  background-color: var(--cor-navy);
+}
+
+.bastidores > * {
+  position: relative;
+  z-index: 1;
+}
+
+.bastidores__foto {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--raio-sm);
+}
+
+.bastidores__perfil {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--raio-sm);
+}
+
+.bastidores__fundo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* O cartao de texto ocupa a metade esquerda, sobre a foto */
+.bastidores__cartao {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 58%;
+  padding: 1.25rem;
+  color: var(--cor-branco);
+  background-image: linear-gradient(
+    90deg,
+    rgba(10, 14, 42, 0.94) 0%,
+    rgba(10, 14, 42, 0.86) 70%,
+    rgba(10, 14, 42, 0) 100%
+  );
+}
+
+.bastidores__identidade {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.bastidores__identidade img {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.bastidores__nome {
+  display: block;
+  font-size: var(--texto-lg);
+  color: var(--cor-branco);
+}
+
+.bastidores__arroba {
+  display: block;
+  font-size: 0.7rem;
+  color: rgba(255, 249, 255, 0.65);
+}
+
+.bastidores__texto {
+  margin-top: 0.85rem;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  color: rgba(255, 249, 255, 0.8);
+}
+
+.bastidores__rotulo {
+  margin-top: 1rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--cor-branco);
+}
+
+.bastidores__contratacoes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  color: rgba(255, 249, 255, 0.8);
+}
+
+.bastidores__contratacoes li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.bastidores__contratacoes img {
+  width: 26px;
+  height: 26px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* --------------------------------------------------------------------------
+   Sobre nos
+   -------------------------------------------------------------------------- */
+.sobre {
+  padding-top: clamp(2.5rem, 5vw, 4.5rem);
+  text-align: center;
+  background-color: var(--cor-branco);
+}
+
+.sobre__titulo {
+  font-size: clamp(2.25rem, 5vw, 6rem);
+  font-weight: 400;
+  color: var(--cor-magenta);
+  letter-spacing: 0.1em;
+}
+
+.sobre__texto {
+  max-width: 62ch;
+  margin: var(--gap-md) auto 0;
+  font-size: var(--texto-sm);
+  color: var(--cor-texto);
+}
+
+.sobre__texto strong {
+  font-weight: 700;
+}
+
+.equipe {
+  position: relative;
+  margin-top: clamp(2rem, 4vw, 3.5rem);
+  padding-block: clamp(1.5rem, 3vw, 2.5rem);
+  background-color: var(--cor-navy);
+}
+
+.equipe__trilha {
+  justify-content: safe center;
+  gap: var(--gap-md);
+  width: min(100% - 6rem, var(--largura-home));
+  margin-inline: auto;
+}
+
+.equipe__pessoa {
+  width: 190px;
+  text-align: center;
+}
+
+.equipe__pessoa img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border: 4px solid rgba(255, 249, 255, 0.85);
+}
+
+.equipe__nome {
+  margin-top: 0.6rem;
+  font-size: var(--texto-xs);
+  color: rgba(255, 249, 255, 0.8);
+}
+
+.equipe__papel {
+  font-size: var(--texto-sm);
+  font-weight: 700;
+  color: var(--cor-branco);
+}
+
+.equipe .seta--anterior { left: 1.5rem; }
+.equipe .seta--proxima  { right: 1.5rem; }
+
+/* --------------------------------------------------------------------------
+   Voltar ao topo
+   -------------------------------------------------------------------------- */
+.voltar-topo {
+  position: fixed;
+  z-index: 40;
+  right: max(1.5rem, env(safe-area-inset-right));
+  bottom: max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem));
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  visibility: hidden;
+  opacity: 0;
+  background-color: var(--cor-amarelo);
+  border: 1px solid rgba(10, 14, 42, 0.14);
+  border-radius: 50%;
+  box-shadow: 0 12px 30px rgba(10, 14, 42, 0.34);
+  pointer-events: none;
+  cursor: pointer;
+  transform: translateY(12px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+
+.voltar-topo--visivel {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.voltar-topo img {
+  width: 18px;
+  height: 12px;
+  filter: brightness(0);
+  transform: rotate(180deg);
+}
+
+.voltar-topo:hover {
+  background-color: #ffd34f;
+}
+
+.voltar-topo:focus-visible {
+  outline: 3px solid var(--cor-magenta);
+  outline-offset: 3px;
+}
+
+/* --------------------------------------------------------------------------
+   SAQ — perguntas frequentes
+   -------------------------------------------------------------------------- */
+.saq {
+  padding-block: clamp(3rem, 7vw, 5.5rem);
+  background-color: var(--cor-fundo);
+}
+
+.saq__interno {
+  display: grid;
+  grid-template-columns: minmax(0, 0.5fr) minmax(0, 1fr);
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+}
+
+.saq__titulo {
+  font-size: clamp(2.25rem, 4vw, 4.5rem);
+  font-weight: 400;
+  line-height: 0.95;
+  color: rgba(10, 14, 42, 0.98);
+}
+
+.saq__texto .btn-palco {
+  margin-top: var(--gap-sm);
+}
+
+.saq__lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+}
+
+.pergunta {
+  overflow: hidden;
+  background-color: #ffffff;
+  border: 1px solid var(--cor-magenta);
+  border-radius: 22px;
+  transition: background-color 0.2s ease;
+}
+
+/* Aberta, o card inverte para navy — e o estado que o frame mostra */
+.pergunta[open] {
+  color: var(--cor-branco);
+  background-color: var(--cor-navy);
+  border-color: var(--cor-navy);
+}
+
+.pergunta__titulo {
+  display: flex;
+  gap: var(--gap-sm);
+  align-items: center;
+  padding: 1.35rem 1.75rem;
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  color: var(--cor-navy);
+  cursor: pointer;
+  list-style: none;
+}
+
+/* Some o triangulo nativo do <details> nos dois motores */
+.pergunta__titulo::-webkit-details-marker { display: none; }
+.pergunta__titulo::marker { content: ''; }
+
+.pergunta[open] .pergunta__titulo {
+  color: var(--cor-branco);
+}
+
+.pergunta__titulo > span:first-child {
+  flex: 1;
+  text-align: center;
+}
+
+.pergunta[open] .pergunta__titulo > span:first-child {
+  text-align: left;
+}
+
+/* Chevron desenhado com borda: gira ao abrir */
+.pergunta__seta {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  border-right: 2.5px solid var(--cor-magenta);
+  border-bottom: 2.5px solid var(--cor-magenta);
+  transform: translateY(-3px) rotate(45deg);
+  transition: transform 0.2s ease;
+}
+
+.pergunta[open] .pergunta__seta {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+.pergunta__resposta {
+  padding: 0 1.75rem 1.35rem;
+  font-size: var(--texto-xs);
+  line-height: 1.6;
+  color: rgba(255, 249, 255, 0.8);
+}
+
+/* --------------------------------------------------------------------------
+   Rodape
+   -------------------------------------------------------------------------- */
+.rodape {
+  padding-top: clamp(2.5rem, 5vw, 4rem);
+  color: var(--cor-branco);
+  background-color: var(--cor-navy);
+}
+
+.rodape__interno {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) repeat(3, minmax(0, 0.7fr)) minmax(0, 1.2fr);
+  gap: var(--gap-lg);
+  align-items: start;
+}
+
+.rodape__logo {
+  width: 76px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.rodape__marca {
+  display: inline-flex;
+  width: 76px;
+  height: 72px;
+}
+
+.rodape__rotulo {
+  margin-bottom: 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--cor-branco);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.rodape__coluna li + li {
+  margin-top: 0.5rem;
+}
+
+.rodape__coluna a {
+  font-size: 0.72rem;
+  color: rgba(255, 249, 255, 0.72);
+}
+
+.rodape__coluna a:hover {
+  color: var(--cor-amarelo);
+}
+
+.rodape__coluna a.rota-pendente:hover {
+  color: rgba(255, 249, 255, 0.72);
+}
+
+.rodape__manifesto {
+  font-size: var(--texto-sm);
+  line-height: 1.5;
+  color: var(--cor-branco);
+}
+
+.rodape__base {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-md);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: clamp(2.5rem, 6vw, 5rem);
+  padding-bottom: var(--gap-lg);
+}
+
+.rodape__legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-md);
+}
+
+.rodape__legal a {
+  font-size: 0.68rem;
+  color: rgba(255, 249, 255, 0.72);
+}
+
+.rodape__legal a:hover {
+  color: var(--cor-amarelo);
+}
+
+.rodape__legal a.rota-pendente:hover {
+  color: rgba(255, 249, 255, 0.72);
+}
+
+.rodape__sociais {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.rodape__sociais a {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  background-color: rgba(255, 249, 255, 0.1);
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.rodape__sociais a:hover {
+  background-color: rgba(255, 249, 255, 0.22);
+}
+
+.rodape__sociais a.rota-pendente:hover {
+  background-color: rgba(255, 249, 255, 0.1);
+}
+
+/* Os icones vieram pretos; sobre o navy precisam virar claros. */
+.rodape__sociais img {
+  width: 18px;
+  height: 18px;
+  filter: brightness(0) invert(1);
+  opacity: 0.85;
+}
+
+/* --------------------------------------------------------------------------
+   Responsivo
+   -------------------------------------------------------------------------- */
+/* Entre tablet e desktop intermediario, a composicao existente ocupa mais
+   largura que no frame de 1920px. Ampliar o mesmo vetor para fora da viewport
+   mantem os cards dentro da area navy sem redesenhar as curvas. */
+@media (min-width: 500px) and (max-width: 1600px) {
+  .bastidores {
+    --bastidores-curva-largura: 112vw;
+    --bastidores-curva-altura: 30.86vw;
+  }
+}
+
+@media (min-width: 1600px) and (max-width: 1792px) {
+  .bastidores {
+    --bastidores-curva-largura: 1792px;
+    --bastidores-curva-altura: 493.7px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .hero,
+  .apresentacao__interno,
+  .vagas__interno,
+  .top-semana__interno,
+  .trajetorias__interno,
+  .saq__interno {
+    grid-template-columns: 1fr;
+  }
+
+  .publicos {
+    text-align: left;
+  }
+
+  /* Empilhado, o titulo apresenta a secao e vem antes do carrossel */
+  .top-semana__interno {
+    direction: rtl;
+  }
+
+  .top-semana__interno > * {
+    direction: ltr;
+  }
+
+  .rodape__interno {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .rodape__manifesto {
+    grid-column: 1 / -1;
+  }
+
+  .depoimento {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .depoimento__cta {
+    grid-area: auto;
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .navbar--home {
+    position: relative;
+    z-index: 10;
+    gap: var(--gap-sm);
+    border-radius: var(--raio-md);
+  }
+
+  .marca,
+  .navbar--home .navbar__link {
+    min-height: 44px;
+  }
+
+  .navbar--home .navbar__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+  }
+
+  .navbar--home .navbar__menu {
+    margin-left: 0;
+  }
+
+  /* O menu continua flutuante em telas estreitas. Coloca-lo no fluxo fazia
+     a navbar saltar de 211px para 455px em 360px e empurrava o hero inteiro. */
+  .explorar__menu {
+    top: calc(100% + 0.5rem);
+    left: 0;
+    width: min(280px, calc(100vw - 3rem));
+    min-width: 0;
+    margin-top: 0;
+  }
+
+  .explorar__item {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .vaga-detalhe__topo,
+  .vaga-detalhe__linha {
+    grid-template-columns: 1fr;
+  }
+
+  .fichas {
+    justify-content: flex-start;
+  }
+
+  .bastidores {
+    grid-template-columns: 1fr;
+  }
+
+  .bastidores__cartao {
+    width: 78%;
+  }
+
+  .btn-palco--largo {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .hero__acoes .btn-palco--texto {
+    min-height: 44px;
+  }
+
+  .btn-palco--pequeno,
+  .rodape__coluna a,
+  .rodape__legal a {
+    display: inline-flex;
+    align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .rodape__coluna li + li {
+    margin-top: 0;
+  }
+
+  .rodape__sociais a {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Em 768px, o auto-fit criava duas colunas e deixava o terceiro passo
+   sozinho, com um conector horizontal vindo do vazio. Abaixo de 800px a
+   jornada vira uma sequencia vertical e o mesmo pontilhado liga os cards. */
+@media (max-width: 800px) {
+  .passos {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .passo + .passo::before {
+    top: -2rem;
+    left: calc(1.5rem + 21px);
+    width: 1px;
+    height: 2rem;
+    background-image: linear-gradient(180deg, var(--cor-magenta) 50%, transparent 50%);
+    background-size: 1px 8px;
+  }
+}
+
+/* Sem introduzir hamburger: logo, menu e acoes usam tres faixas compactas.
+   O menu principal preserva os mesmos itens e deixa de quebrar "Empresa"
+   numa linha isolada em 360px. */
+@media (max-width: 520px) {
+  .navbar--home {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .navbar--home .marca {
+    justify-self: center;
+  }
+
+  .navbar--home .navbar__menu {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.25rem;
+    width: 100%;
+  }
+
+  .navbar--home .navbar__menu > li {
+    display: flex;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .navbar--home .navbar__acoes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .navbar--home .navbar__menu .navbar__link {
+    padding-inline: 0.2rem;
+    font-size: var(--texto-sm);
+    white-space: nowrap;
+  }
+
+  .navbar--home .navbar__acoes .navbar__link {
+    width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .hero__acoes .btn-palco--amarelo {
+    width: 100%;
+  }
+
+  .colagem {
+    aspect-ratio: 1 / 1;
+  }
+
+  .seta--anterior { left: 0; }
+  .seta--proxima  { right: 0; }
+
+  .equipe .seta--anterior { left: 0.5rem; }
+  .equipe .seta--proxima  { right: 0.5rem; }
+
+  .vitrine__trilha {
+    --carrossel-item-largura: min(290px, 70vw);
+    gap: 1rem;
+    min-height: 550px;
+    padding-block: 2.75rem;
+  }
+
+  .vaga-mini--destaque {
+    transform: scale(1.04);
+  }
+
+  .palco-artistas__trilha {
+    --carrossel-item-largura: min(260px, 70vw);
+    gap: 1rem;
+    min-height: 410px;
+    padding-block: 2rem;
+  }
+
+  .artista-card,
+  .artista-card--destaque {
+    aspect-ratio: 3 / 4;
+  }
+
+  .artista-card--destaque {
+    transform: scale(1.06);
+  }
+
+  .artista-card__ver {
+    right: 8px;
+  }
+
+  .busca {
+    padding-left: 1rem;
+  }
+
+  .pergunta__titulo {
+    padding: 1.1rem 1.25rem;
+  }
+
+  .pergunta__titulo > span:first-child {
+    text-align: left;
+  }
+
+  .pergunta__resposta {
+    padding-inline: 1.25rem;
+  }
+
+  .comunidades {
+    min-height: 430px;
+  }
+
+  .comunidades::after {
+    background: linear-gradient(90deg, rgba(10, 14, 42, 0.78) 0%, rgba(10, 14, 42, 0.26) 76%, transparent 100%);
+  }
+
+  .comunidades__fundo {
+    object-position: 58% center;
+  }
+
+  .comunidades__titulo {
+    font-size: clamp(2.5rem, 13vw, 3.65rem);
+  }
+
+  .voltar-topo {
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.75rem));
+    width: 48px;
+    height: 48px;
+  }
+
+}
+
+/* O glifo largo do display extrapolava a faixa do hero em 360px. Reduzir
+   apenas a palavra de destaque conserva a hierarquia sem cortar a ultima
+   letra nem recorrer a transform: scale(). */
+@media (max-width: 380px) {
+  .hero__titulo-forte {
+    font-size: 1.26em;
+    letter-spacing: 0.035em;
+  }
+}
+
+/* Quem pediu menos movimento nao recebe rolagem animada nem transicoes */
+@media (prefers-reduced-motion: reduce) {
+  .vitrine__trilha,
+  .palco-artistas__trilha,
+  .equipe__trilha,
+  .portfolio-cards {
+    scroll-behavior: auto;
+  }
+
+  .seta,
+  .chip-filtro,
+  .pergunta,
+  .pergunta__seta,
+  .rodape__sociais a,
+  .vaga-mini,
+  .artista-card,
+  .voltar-topo {
+    transition: none;
+  }
+}

@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="145.859" height="15.5583" viewBox="0 0 145.859 15.5583" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Indicadores / carrossel">
+<circle id="Dot 1 / ativo" cx="6.5" cy="6.5" r="6.5" fill="#FFBF00"/>
+<circle id="Dot 2" cx="34.5" cy="6.5" r="6.5" fill="#FFF9FF" fill-opacity="0.65"/>
+<circle id="Dot 3" cx="62.5" cy="6.5" r="6.5" fill="#FFF9FF" fill-opacity="0.65"/>
+<circle id="Dot 4" cx="90.5" cy="6.5" r="6.5" fill="#FFF9FF" fill-opacity="0.65"/>
+<circle id="Dot 5" cx="118.5" cy="6.5" r="6.5" fill="#FFF9FF" fill-opacity="0.65"/>
+</g>
+</svg>

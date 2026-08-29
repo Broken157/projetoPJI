@@ -35,9 +35,7 @@
           </button>
 
           <div class="explorar__menu" id="menu-explorar" data-explorar-menu hidden>
-            <a class="explorar__item explorar__item--ativo rota-pendente" role="link"
-               aria-disabled="true" tabindex="0"
-               title="Busca de vagas: integração frontend do RF03 pendente">Vagas</a>
+            <a class="explorar__item explorar__item--ativo" href="buscar-vagas.html">Vagas</a>
             <a class="explorar__item rota-pendente" role="link" aria-disabled="true" tabindex="0"
                title="Busca de artistas ainda não disponível">Artistas</a>
             <a class="explorar__item rota-pendente" role="link" aria-disabled="true" tabindex="0"
@@ -70,9 +68,7 @@
         <p class="hero__marca">Atividade - Fim</p>
 
         <div class="hero__acoes">
-          <a class="btn-palco btn-palco--amarelo rota-pendente" role="link"
-             aria-disabled="true" tabindex="0"
-             title="Busca de vagas: integração frontend do RF03 pendente">Conheça Vagas</a>
+          <a class="btn-palco btn-palco--amarelo" href="buscar-vagas.html">Conheça Vagas</a>
           <a class="btn-palco btn-palco--texto rota-pendente" role="link"
              aria-disabled="true" tabindex="0"
              title="Busca de artistas ainda não disponível">
@@ -92,7 +88,8 @@
             <span aria-hidden="true">&#8249;</span>
           </button>
 
-          <ul class="vitrine__trilha" data-carrossel-trilha aria-label="Vagas demonstrativas da landing">
+          <ul class="vitrine__trilha" data-carrossel-trilha data-vagas-landing
+              aria-label="Vagas em destaque; conteúdo demonstrativo enquanto a API não estiver disponível">
             <li class="vaga-mini">
               <img class="vaga-mini__foto" src="assets/home/hero-vaga-jardim.png" alt="Jardim preparado para uma apresentação musical">
               <div class="vaga-mini__corpo">
@@ -293,13 +290,11 @@
             <strong>palco</strong> oferece sua melhor oportunidade no mercado artístico.
           </p>
 
-          <!-- O backend RF03 existe, mas ainda nao ha tela publica de listagem/busca. -->
-          <form class="busca busca--pendente" method="get" role="search" aria-disabled="true"
-                title="Busca de vagas: integração frontend do RF03 pendente">
+          <form class="busca" action="buscar-vagas.html" method="get" role="search">
             <label class="sr-only" for="busca-vaga">Buscar vagas</label>
-            <input class="busca__input" type="search" id="busca-vaga" name="q"
-                   placeholder="Busque por área, cidade ou palavra-chave" disabled>
-            <button class="busca__botao" type="submit" disabled>Buscar</button>
+            <input class="busca__input" type="search" id="busca-vaga" name="titulo"
+                   placeholder="Busque por título da vaga">
+            <button class="busca__botao" type="submit">Buscar</button>
           </form>
         </div>
 
@@ -909,6 +904,7 @@
     <img src="assets/seta-select.svg" alt="">
   </button>
 
-  <script src="js/home.js?v=2.6.1"></script>
+  <script src="js/vagas-api.js"></script>
+  <script src="js/home.js?v=3.0.0"></script>
 </body>
 </html>

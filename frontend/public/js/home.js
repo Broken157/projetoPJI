@@ -105,9 +105,11 @@
         return trilha.scrollWidth - trilha.clientWidth > toleranciaOverflow;
       }
 
-      // Pontinhos: um por item, so onde o HTML pediu
       var pontos = [];
-      if (caixaPontos) {
+      function reconstruirPontos() {
+        if (!caixaPontos) return;
+        caixaPontos.replaceChildren();
+        pontos = [];
         itens.forEach(function () {
           var ponto = document.createElement('span');
           ponto.className = 'ponto';
@@ -115,6 +117,7 @@
           pontos.push(ponto);
         });
       }
+      reconstruirPontos();
 
       function pintarEstado() {
         pontos.forEach(function (ponto, i) {
@@ -303,11 +306,14 @@
         observadorTamanho.observe(trilha);
       }
 
-      Array.prototype.forEach.call(trilha.querySelectorAll('img'), function (imagem) {
-        if (!imagem.complete) {
-          imagem.addEventListener('load', agendarRealinhamento, { once: true });
-        }
-      });
+      function observarImagens() {
+        Array.prototype.forEach.call(trilha.querySelectorAll('img'), function (imagem) {
+          if (!imagem.complete) {
+            imagem.addEventListener('load', agendarRealinhamento, { once: true });
+          }
+        });
+      }
+      observarImagens();
 
       if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(agendarRealinhamento);
@@ -322,7 +328,132 @@
       } else if (preferenciaMovimento && preferenciaMovimento.addListener) {
         preferenciaMovimento.addListener(aoMudarPreferencia);
       }
+
+      /* A landing pode substituir os cards demonstrativos por vagas reais.
+         Atualiza a coleção fechada pelo carrossel sem reinstalar listeners. */
+      carrossel.addEventListener('palco:carrossel-atualizar', function () {
+        cancelarAnimacao();
+        itens = Array.prototype.slice.call(trilha.children);
+        if (!itens.length) return;
+        reconstruirPontos();
+        var novoDestaque = trilha.querySelector('.vaga-mini--destaque, .artista-card--destaque');
+        indice = novoDestaque ? itens.indexOf(novoDestaque) : Math.min(indice, itens.length - 1);
+        observarImagens();
+        agendarRealinhamento();
+      });
     });
+  }
+
+  /* ------------------------------------------------------------------------
+     Vagas reais no hero com fallback visual progressivo
+     ------------------------------------------------------------------------ */
+  var imagensFallbackVagas = [
+    'assets/home/hero-vaga-jardim.png',
+    'assets/home/hero-vaga-bar.png',
+    'assets/vaga-foto-1.png',
+    'assets/home/vaga-detalhe-3.png'
+  ];
+
+  function valorOu(valor, fallback) {
+    return valor === null || valor === undefined || String(valor).trim() === ''
+      ? fallback
+      : String(valor).trim();
+  }
+
+  function moedaVaga(valor) {
+    var numero = Number(valor);
+    if (valor === null || valor === undefined || !Number.isFinite(numero)) return '';
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      maximumFractionDigits: 0
+    }).format(numero);
+  }
+
+  function rotuloModelo(valor) {
+    return valorOu(valor, '').toLowerCase().replace(/_/g, ' ').replace(/^./, function (letra) {
+      return letra.toUpperCase();
+    });
+  }
+
+  function criarCardVagaReal(vaga, indice) {
+    var card = document.createElement('li');
+    card.className = 'vaga-mini' + (indice === 1 ? ' vaga-mini--destaque' : '');
+    card.dataset.vagaId = String(vaga.id);
+
+    var fallback = imagensFallbackVagas[indice % imagensFallbackVagas.length];
+    var imagem = document.createElement('img');
+    imagem.className = 'vaga-mini__foto';
+    imagem.alt = '';
+    imagem.src = window.PalcoVagas.primeiraFotoValida(vaga.fotos) || fallback;
+    imagem.addEventListener('error', function () {
+      if (!imagem.src.endsWith(fallback)) imagem.src = fallback;
+    }, { once: true });
+    card.appendChild(imagem);
+
+    var corpo = document.createElement('div');
+    corpo.className = 'vaga-mini__corpo';
+    var titulo = document.createElement('h2');
+    titulo.className = 'vaga-mini__titulo';
+    titulo.textContent = valorOu(vaga.titulo, 'Vaga sem título');
+    corpo.appendChild(titulo);
+
+    var autor = document.createElement('p');
+    autor.className = 'vaga-mini__autor';
+    var prefixo = vaga.propriaDoContratante === true ? 'Sua vaga · ' : '';
+    autor.textContent = prefixo + valorOu(vaga.nomeContratante, 'Contratante')
+      + ' · ' + valorOu(vaga.categoria || vaga.tipoContrato, 'Oportunidade');
+    corpo.appendChild(autor);
+
+    var local = document.createElement('p');
+    local.className = 'vaga-mini__local';
+    var localizacao = [valorOu(vaga.cidade, ''), valorOu(vaga.estado, '')].filter(Boolean).join(', ');
+    var detalhes = [localizacao, rotuloModelo(vaga.modeloTrabalho), moedaVaga(vaga.remuneraValor)]
+      .filter(Boolean);
+    local.textContent = detalhes.length ? detalhes.join(' · ') : 'Detalhes na página da vaga';
+    corpo.appendChild(local);
+
+    var descricao = document.createElement('p');
+    descricao.className = 'vaga-mini__descricao';
+    var rotulo = document.createElement('strong');
+    rotulo.textContent = 'Descrição';
+    descricao.appendChild(rotulo);
+    descricao.appendChild(document.createTextNode(' ' + valorOu(vaga.descricao, 'Consulte os detalhes da oportunidade.')));
+    corpo.appendChild(descricao);
+
+    var link = document.createElement('a');
+    link.className = 'btn-palco btn-palco--amarelo vaga-mini__cta';
+    link.href = window.PalcoVagas.urlDetalhe(vaga.id);
+    link.textContent = 'Ver vaga';
+    corpo.appendChild(link);
+    card.appendChild(corpo);
+    return card;
+  }
+
+  async function carregarVagasReaisLanding() {
+    var trilha = document.querySelector('[data-vagas-landing]');
+    if (!trilha || !window.PalcoVagas) return;
+    try {
+      var resposta = await window.PalcoVagas.requisitar('/vagas?size=8');
+      var vagas = (Array.isArray(resposta.content) ? resposta.content : []).filter(function (vaga) {
+        return vaga && vaga.id !== null && vaga.id !== undefined;
+      }).slice(0, 8);
+      if (!vagas.length) return;
+
+      var fragmento = document.createDocumentFragment();
+      vagas.forEach(function (vaga, indice) {
+        fragmento.appendChild(criarCardVagaReal(vaga, indice));
+      });
+      trilha.replaceChildren(fragmento);
+      trilha.dataset.fonteVagas = 'api';
+      trilha.setAttribute('aria-label', 'Vagas reais em destaque');
+      var carrossel = trilha.closest('[data-carrossel]');
+      if (carrossel) carrossel.dispatchEvent(new Event('palco:carrossel-atualizar'));
+    } catch (erro) {
+      /* Progressive enhancement: indisponibilidade da API mantém os oito
+         cards demonstrativos, sem overlay, alerta ou quebra da landing. */
+      trilha.dataset.fonteVagas = 'fallback';
+    }
   }
 
   /* ------------------------------------------------------------------------
@@ -404,9 +535,15 @@
     });
   }
 
+  window.PalcoHome = Object.freeze({
+    iniciarCarrosseis: iniciarCarrosseis,
+    carregarVagasReaisLanding: carregarVagasReaisLanding
+  });
+
   document.addEventListener('DOMContentLoaded', function () {
     iniciarExplorar();
     iniciarCarrosseis();
+    carregarVagasReaisLanding();
     iniciarFiltrosPortfolio();
     iniciarVoltarTopo();
   });

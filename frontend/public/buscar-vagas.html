@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscar vagas — Palco</title>
+  <meta name="description" content="Busque oportunidades artísticas abertas no Palco por localização, modelo de trabalho, contrato, remuneração e área de atuação.">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/componentes.css">
+  <link rel="stylesheet" href="css/buscar-vagas.css">
+</head>
+<body class="pagina-buscar-vagas">
+  <header class="busca-topo">
+    <nav class="navbar busca-navbar" aria-label="Navegação principal">
+      <a class="busca-marca" href="home.html">
+        <img class="navbar__logo" src="assets/home/logo-palco-branco.png" alt="">
+        <span>Palco</span>
+      </a>
+      <ul class="navbar__menu">
+        <li><a class="navbar__link navbar__link--atual" href="buscar-vagas.html" aria-current="page">Vagas</a></li>
+        <li><a class="navbar__link" href="home.html#sobre">Empresa</a></li>
+      </ul>
+      <div class="navbar__acoes">
+        <a class="navbar__link" href="login.html">Login</a>
+        <a class="navbar__link navbar__link--destaque" href="cadastro-contratante.html">Cadastrar</a>
+      </div>
+    </nav>
+
+    <div class="busca-hero">
+      <p class="busca-hero__sobrelinha">Oportunidades abertas</p>
+      <h1>Encontre seu próximo <span>palco</span></h1>
+      <p>Pesquise vagas reais sem precisar entrar. Use os filtros para chegar à oportunidade certa.</p>
+    </div>
+  </header>
+
+  <main class="busca-layout">
+    <aside class="filtros" aria-labelledby="titulo-filtros">
+      <div class="filtros__cabecalho">
+        <div>
+          <p class="filtros__sobrelinha">Refine a busca</p>
+          <h2 id="titulo-filtros">Filtros</h2>
+        </div>
+        <button class="filtros__limpar" type="button" data-limpar-filtros>Limpar</button>
+      </div>
+
+      <form class="filtros__form" data-form-filtros>
+        <label class="campo">
+          <span class="campo__rotulo">Título</span>
+          <input class="campo__input" type="search" name="titulo" autocomplete="off" placeholder="Ex.: cantora">
+        </label>
+
+        <label class="campo">
+          <span class="campo__rotulo">Empresa ou contratante</span>
+          <input class="campo__input" type="search" name="empresa" autocomplete="organization" placeholder="Nome da empresa">
+        </label>
+
+        <div class="filtros__dupla">
+          <label class="campo">
+            <span class="campo__rotulo">Cidade</span>
+            <input class="campo__input" type="search" name="cidade" autocomplete="address-level2" placeholder="Cidade">
+          </label>
+          <label class="campo">
+            <span class="campo__rotulo">Estado</span>
+            <input class="campo__input" type="text" name="estado" maxlength="2" autocomplete="address-level1" placeholder="UF">
+          </label>
+        </div>
+
+        <label class="campo">
+          <span class="campo__rotulo">Modelo de trabalho</span>
+          <select class="campo__input" name="modeloTrabalho">
+            <option value="">Todos</option>
+            <option value="PRESENCIAL">Presencial</option>
+            <option value="REMOTO">Remoto</option>
+            <option value="HIBRIDO">Híbrido</option>
+          </select>
+        </label>
+
+        <label class="campo">
+          <span class="campo__rotulo">Tipo de contrato</span>
+          <input class="campo__input" type="search" name="tipoContrato" autocomplete="off" placeholder="Informe como publicado">
+        </label>
+
+        <div class="filtros__dupla">
+          <label class="campo">
+            <span class="campo__rotulo">Remuneração mínima</span>
+            <input class="campo__input" type="number" name="faixaSalarialMin" min="0" step="0.01" inputmode="decimal" placeholder="R$ 0">
+          </label>
+          <label class="campo">
+            <span class="campo__rotulo">Remuneração máxima</span>
+            <input class="campo__input" type="number" name="faixaSalarialMax" min="0" step="0.01" inputmode="decimal" placeholder="Sem limite">
+          </label>
+        </div>
+
+        <label class="campo">
+          <span class="campo__rotulo">Área de atuação</span>
+          <input class="campo__input" type="search" name="areaAtuacao" autocomplete="off" placeholder="Ex.: música">
+        </label>
+
+        <button class="btn btn--primario filtros__aplicar" type="submit">Aplicar filtros</button>
+      </form>
+    </aside>
+
+    <section class="resultados" aria-labelledby="titulo-resultados">
+      <div class="resultados__cabecalho">
+        <div>
+          <p class="resultados__sobrelinha">Feed público</p>
+          <h2 id="titulo-resultados">Vagas abertas</h2>
+        </div>
+        <p class="resultados__status" data-status-resultados role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="estado estado--carregando" data-estado-carregando role="status">
+        <span class="estado__spinner" aria-hidden="true"></span>
+        <p>Carregando oportunidades…</p>
+      </div>
+
+      <div class="estado estado--erro" data-estado-erro role="alert" hidden>
+        <h3>Não foi possível carregar as vagas</h3>
+        <p data-erro-texto>Tente novamente em instantes.</p>
+        <button class="btn busca-botao-secundario" type="button" data-tentar-novamente>Tentar novamente</button>
+      </div>
+
+      <div class="estado" data-estado-vazio hidden>
+        <h3>Nenhuma vaga encontrada com esses filtros.</h3>
+        <p>Limpe ou ajuste os campos para ampliar a busca.</p>
+      </div>
+
+      <div class="vagas-lista" data-lista-vagas></div>
+
+      <section class="canceladas" data-secao-canceladas aria-labelledby="titulo-canceladas" hidden>
+        <div class="canceladas__cabecalho">
+          <p>Histórico da sua candidatura</p>
+          <h2 id="titulo-canceladas">Vagas canceladas em que você se candidatou</h2>
+        </div>
+        <div class="vagas-lista vagas-lista--canceladas" data-lista-canceladas></div>
+      </section>
+
+      <div class="estado estado--mais" data-estado-carregando-mais hidden role="status">
+        <span class="estado__spinner" aria-hidden="true"></span>
+        <p>Carregando mais vagas…</p>
+      </div>
+
+      <p class="resultados__fim" data-fim-lista hidden>Você chegou ao fim das vagas disponíveis.</p>
+      <div class="resultados__sentinela" data-sentinela aria-hidden="true"></div>
+    </section>
+  </main>
+
+  <button class="busca-voltar-topo" type="button" data-voltar-topo hidden aria-hidden="true" tabindex="-1">
+    <span aria-hidden="true">↑</span>
+    <span class="sr-only">Voltar ao topo</span>
+  </button>
+
+  <footer class="busca-rodape">
+    <a href="home.html">Palco</a>
+    <p>Artistas encontram oportunidades. Contratantes encontram arte.</p>
+  </footer>
+
+  <script src="js/vagas-api.js"></script>
+  <script src="js/buscar-vagas.js"></script>
+</body>
+</html>

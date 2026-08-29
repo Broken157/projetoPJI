@@ -982,15 +982,16 @@
         botao.hidden = vaga.status === 'CANCELADA';
       });
 
-      var relacionadas = await api('/vagas?size=4').catch(function () { return { content: [] }; });
+      var relacionadas = await api('/vagas/' + encodeURIComponent(vaga.id) + '/similares?size=3')
+        .catch(function () { return { content: [] }; });
       var lateral = document.querySelector('.vagas-relacionadas');
-      if (lateral) lateral.innerHTML = (relacionadas.content || []).filter(function (item) { return item.id !== vaga.id; }).slice(0, 3).map(function (item) {
+      if (lateral) lateral.innerHTML = (relacionadas.content || []).filter(function (item) { return item.status === 'ABERTA'; }).slice(0, 3).map(function (item) {
         return '<article class="vaga-mini"><div class="vaga-mini__cabecalho"><h2 class="vaga-mini__titulo">' + escapar(item.titulo) + '</h2>' +
           '<span class="vaga-mini__categoria">' + escapar(item.categoria || item.tipoContrato) + '</span></div>' +
           '<p class="vaga-mini__local">' + escapar(item.cidade + ', ' + item.estado) + '</p>' +
           '<p class="vaga-mini__prazo">Prazo até ' + escapar(dataBrasileira(item.dataLimiteCandidatura)) + '</p>' +
           '<p class="vaga-mini__resumo">' + escapar(item.descricao).substring(0, 100) + '</p>' +
-          '<a class="vaga-mini__cta" href="detalhe-vaga-proprietario.html?id=' + item.id + '">VER VAGA <span aria-hidden="true">&rarr;</span></a></article>';
+          '<a class="vaga-mini__cta" href="detalhe-vaga.html?id=' + encodeURIComponent(item.id) + '">VER VAGA <span aria-hidden="true">&rarr;</span></a></article>';
       }).join('');
     } catch (erro) {
       alert(erro.message);

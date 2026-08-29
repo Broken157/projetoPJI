@@ -1,8 +1,12 @@
 import { render, screen } from '@testing-library/react';
-import App from './App';
+import App from './app/App';
 
-test('renders learn react link', () => {
+test('monta a fundação React na rota inicial', () => {
+  window.history.pushState({}, '', '/');
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /fundação react do palco/i })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: /abrir home legada/i })).toHaveAttribute(
+    'href',
+    '/home.html'
+  );
 });

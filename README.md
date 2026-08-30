@@ -2,18 +2,15 @@
 
 Projeto unificado para apresentação parcial do PJI:
 
-- `frontend`: React/Create React App usado como servidor das telas HTML originais do Palco;
+- `frontend`: React/Create React App e telas HTML legadas, desenvolvidos separadamente;
 - `backend`: API Spring Boot 4 com autenticação JWT;
 - `database`: schema e migrações PostgreSQL.
 
 ## Pré-requisitos
 
 - Java 21;
-- Docker Desktop;
-- Python 3, disponível pelo comando `py` ou `python`.
-
-Node.js e npm são necessários somente para alterar e reconstruir o frontend.
-O build já incluído pode ser usado na apresentação sem instalar Node.js.
+- Node.js 22.x com npm;
+- Docker Desktop.
 
 ## 1. Banco de dados
 
@@ -25,7 +22,9 @@ docker compose up -d database
 
 O container cria o banco `portifoliodb`, executa `database/sos_artistas.sql` e depois `database/migration_rf03.sql`.
 
-## 2. Backend
+## 2. Desenvolvimento
+
+O desenvolvimento continua separado. Em um terminal, inicie o backend:
 
 ```powershell
 cd backend
@@ -34,7 +33,16 @@ cd backend
 
 A API fica disponível em `http://localhost:8080/api`.
 
-Variáveis aceitas:
+Em outro terminal, inicie o React:
+
+```powershell
+cd frontend
+npm start
+```
+
+O frontend de desenvolvimento fica em `http://localhost:3000`.
+
+Variáveis aceitas pelo backend:
 
 - `DB_URL` — padrão `jdbc:postgresql://localhost:5434/portifoliodb`;
 - `DB_USER` — padrão `postgres`;
@@ -42,25 +50,42 @@ Variáveis aceitas:
 - `FRONTEND_ORIGINS` — padrão `http://localhost:3000,http://127.0.0.1:3000`;
 - `JWT_SECRET` — segredo usado para assinar tokens.
 
-## 3. Frontend
+## 3. Build de produção unificado
 
-Em outro terminal:
+Na raiz do projeto, o orquestrador executa `npm ci`, compila o frontend e
+empacota o JAR Spring:
+
+```powershell
+.\build-production.ps1
+```
+
+O Maven incorpora `frontend/build` em `BOOT-INF/classes/static` durante o
+processamento de recursos. O diretório `frontend/build` continua ignorado pelo
+Git e nenhum arquivo gerado é copiado para `backend/src/main/resources`.
+
+Comandos equivalentes para Windows:
 
 ```powershell
 cd frontend
-py -m http.server 3000 --directory build
+npm ci
+npm run build
+cd ..\backend
+.\mvnw.cmd clean package
 ```
 
-Abra `http://localhost:3000`. A entrada redireciona para `login.html`.
+Em Linux/macOS ou no ambiente de deploy, use os mesmos passos com
+`cd frontend && npm ci && npm run build` e depois
+`cd ../backend && ./mvnw clean package`.
 
-Se o comando `py` não estiver disponível, use:
+O JAR gerado em `backend/target` serve, pela mesma origem:
 
-```powershell
-python -m http.server 3000 --directory build
-```
+- React em `/` e nas rotas autorizadas `/vagas/**`;
+- API em `/api/**`;
+- WebSocket/STOMP em `/ws`;
+- páginas legadas `.html` e seus assets literais.
 
-Para desenvolvimento e reconstrução do frontend, instale primeiro o Node.js
-com npm e então execute `npm install` e `npm start`.
+Não existe fallback SPA global: caminhos desconhecidos e assets ausentes
+continuam retornando erro real.
 
 ## Fluxo de apresentação
 
@@ -79,7 +104,6 @@ cd backend
 .\mvnw.cmd test
 
 cd ..\frontend
-# Os comandos abaixo exigem Node.js e npm instalados:
 npm test -- --watchAll=false
 npm run build
 ```

@@ -60,6 +60,13 @@ async function estabilizar() {
   for (let i = 0; i < 10; i += 1) await Promise.resolve();
 }
 
+test('helper central gera a rota React do detalhe público com ID codificado', () => {
+  window.eval(apiScript);
+
+  expect(window.PalcoVagas.urlDetalhe(7)).toBe('/vagas/7');
+  expect(window.PalcoVagas.urlDetalhe('7/8')).toBe('/vagas/7%2F8');
+});
+
 let observar;
 
 function montarBusca(fetchMock, url = '/buscar-vagas.html') {
@@ -187,7 +194,7 @@ test('card usa ID real, badge Sua vaga e textContent impede markup/XSS', async (
   expect(card.querySelector('.vaga-busca-card__titulo img')).toBeNull();
   expect(card).toHaveTextContent('Sua vaga');
   expect(card.querySelector('.vaga-busca-card__link').getAttribute('href'))
-    .toBe('detalhe-vaga.html?id=77');
+    .toBe('/vagas/77');
   expect(window.rf03Xss).toBeUndefined();
 });
 
@@ -204,7 +211,7 @@ test('canceladas ficam em seção separada, recebem badge e não oferecem candid
   expect(document.querySelector('[data-lista-vagas]')).toBeEmptyDOMElement();
   expect(secao).toHaveTextContent('Vaga Cancelada');
   expect(secao).not.toHaveTextContent(/candidatar/i);
-  expect(secao.querySelector('a').getAttribute('href')).toBe('detalhe-vaga.html?id=30');
+  expect(secao.querySelector('a').getAttribute('href')).toBe('/vagas/30');
 });
 
 function prepararLayoutLanding() {
@@ -267,7 +274,7 @@ test('landing troca por vagas reais e o carrossel navega após refresh sem dupli
   const trilha = document.querySelector('[data-vagas-landing]');
   expect(trilha.children).toHaveLength(3);
   expect(trilha.dataset.fonteVagas).toBe('api');
-  expect(trilha.querySelectorAll('a')[0].getAttribute('href')).toBe('detalhe-vaga.html?id=101');
+  expect(trilha.querySelectorAll('a')[0].getAttribute('href')).toBe('/vagas/101');
 
   Object.defineProperty(trilha, 'clientWidth', { configurable: true, value: 769 });
   Object.defineProperty(trilha, 'scrollWidth', { configurable: true, value: 1300 });
@@ -286,4 +293,13 @@ test('landing troca por vagas reais e o carrossel navega após refresh sem dupli
 test('detalhe existente consulta o endpoint backend de similares por tags', () => {
   expect(mainScript).toMatch(/\/vagas\/['"]?\s*\+\s*encodeURIComponent\(vaga\.id\)\s*\+\s*['"]\/similares\?size=3/);
   expect(mainScript).not.toMatch(/var relacionadas = await api\('\/vagas\?size=4'\)/);
+});
+
+test('fluxos públicos adicionais usam React e os destinos legados deliberados permanecem', () => {
+  expect(mainScript).toContain("link('Ver vaga', '/vagas/' + encodeURIComponent(vaga.id)");
+  expect(mainScript).toContain(`href="/vagas/' + encodeURIComponent(item.id) + '">`);
+  expect(mainScript).toContain("'/detalhe-vaga.html'");
+  expect(mainScript).toContain("paginaAtual !== 'detalhe-vaga.html'");
+  expect(mainScript).toContain("'detalhe-vaga-proprietario.html?id=' + vaga.id");
+  expect(mainScript).toContain("window.location.href = 'detalhe-vaga-proprietario.html?id=' + id");
 });

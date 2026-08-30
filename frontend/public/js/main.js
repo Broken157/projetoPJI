@@ -790,7 +790,7 @@
         ));
         tagsNoCard(dados, vaga.tags, vaga.quantidadeTagsCoincidentes);
         card.appendChild(dados);
-        card.appendChild(link('Ver vaga', 'detalhe-vaga.html?id=' + encodeURIComponent(vaga.id), 'dashboard-card__link'));
+        card.appendChild(link('Ver vaga', '/vagas/' + encodeURIComponent(vaga.id), 'dashboard-card__link'));
         estrutura.lista.appendChild(card);
       });
       return estrutura.bloco;
@@ -991,7 +991,7 @@
           '<p class="vaga-mini__local">' + escapar(item.cidade + ', ' + item.estado) + '</p>' +
           '<p class="vaga-mini__prazo">Prazo até ' + escapar(dataBrasileira(item.dataLimiteCandidatura)) + '</p>' +
           '<p class="vaga-mini__resumo">' + escapar(item.descricao).substring(0, 100) + '</p>' +
-          '<a class="vaga-mini__cta" href="detalhe-vaga.html?id=' + encodeURIComponent(item.id) + '">VER VAGA <span aria-hidden="true">&rarr;</span></a></article>';
+          '<a class="vaga-mini__cta" href="/vagas/' + encodeURIComponent(item.id) + '">VER VAGA <span aria-hidden="true">&rarr;</span></a></article>';
       }).join('');
     } catch (erro) {
       alert(erro.message);

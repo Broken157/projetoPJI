@@ -109,7 +109,7 @@
   }
 
   function urlDetalhe(id) {
-    return 'detalhe-vaga.html?id=' + encodeURIComponent(String(id));
+    return '/vagas/' + encodeURIComponent(String(id));
   }
 
   global.PalcoVagas = Object.freeze({

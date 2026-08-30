@@ -57,6 +57,27 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/perfis/publicos/*/*").permitAll()
                         // O handshake nao carrega JWT. A autenticacao ocorre no frame STOMP CONNECT.
                         .requestMatchers(HttpMethod.GET, "/ws", "/ws/**").permitAll()
+                        // APIs nao listadas acima preservam o requisito de autenticacao.
+                        .requestMatchers("/api/**").authenticated()
+                        // Somente a interface e os recursos estaticos sao publicos.
+                        // A autorizacao das APIs continua nas regras especificas acima.
+                        .requestMatchers(HttpMethod.GET,
+                                "/",
+                                "/*.html",
+                                "/favicon.ico",
+                                "/manifest.json",
+                                "/robots.txt",
+                                "/asset-manifest.json",
+                                "/logo*.png",
+                                "/static/**",
+                                "/assets/**",
+                                "/css/**",
+                                "/js/**",
+                                "/vagas",
+                                "/vagas/**").permitAll()
+                        // Fora de /api e /ws, GETs desconhecidos precisam chegar ao DispatcherServlet
+                        // para resultar em 404 real, sem serem convertidos em 401 pela seguranca.
+                        .requestMatchers(HttpMethod.GET, "/**").permitAll()
                         // Tudo mais exige autenticacao
                         .anyRequest().authenticated()
                 )

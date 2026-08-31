@@ -27,10 +27,10 @@ class SmtpPasswordRecoveryEmailSenderTest {
         assertThat(mensagem.getTo()).containsExactly("artista@palco.test");
         assertThat(mensagem.getSubject()).containsIgnoringCase("recuperação de senha");
         assertThat(mensagem.getText())
-                .contains("https://palco.test/redefinir-senha.html#token=" + token)
+                .contains("https://palco.test/redefinir-senha#token=" + token)
                 .contains("1 hora")
                 .containsIgnoringCase("ignore este e-mail")
-                .doesNotContain("?token=");
+                .doesNotContain("?token=", "redefinir-senha.html");
     }
 
     @Test

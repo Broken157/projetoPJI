@@ -2,6 +2,14 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppRoutes } from './AppRouter';
 
+jest.mock('../../pages/auth/ForgotPasswordPage', () => function ForgotPasswordPageMock() {
+  return <h1>Recuperar senha React</h1>;
+});
+
+jest.mock('../../pages/auth/ResetPasswordPage', () => function ResetPasswordPageMock() {
+  return <h1>Redefinir senha React</h1>;
+});
+
 jest.mock('../../pages/vagas/VagaDetailPage', () => {
   const { useParams } = jest.requireActual('react-router-dom');
 
@@ -48,4 +56,20 @@ test('monta a página de detalhe e entrega o parâmetro da rota', () => {
   );
 
   expect(screen.getByRole('heading', { name: 'Detalhe da vaga 77' })).toBeInTheDocument();
+});
+
+test.each([
+  ['/recuperar-senha', 'Recuperar senha React'],
+  ['/redefinir-senha', 'Redefinir senha React'],
+])('monta a rota pública do RF09 %s', (path, heading) => {
+  render(
+    <MemoryRouter
+      initialEntries={[path]}
+      future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+    >
+      <AppRoutes />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
 });

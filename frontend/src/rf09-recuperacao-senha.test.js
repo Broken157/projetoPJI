@@ -6,6 +6,7 @@ const script = fs.readFileSync(
   path.join(process.cwd(), 'public', 'js', 'recuperacao-senha.js'),
   'utf8'
 );
+const loginHtml = fs.readFileSync(path.join(process.cwd(), 'public', 'login.html'), 'utf8');
 
 function montarRecuperacao() {
   document.body.innerHTML = `
@@ -126,4 +127,9 @@ test('erro de token exibe mensagem simples de inválido ou expirado', async () =
 
 test('script não persiste o token no navegador', () => {
   expect(script).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/);
+});
+
+test('login legado direciona o fluxo padrão para a recuperação React', () => {
+  expect(loginHtml).toContain('href="/recuperar-senha"');
+  expect(loginHtml).not.toContain('href="recuperar-senha.html">Esqueceu a senha?');
 });

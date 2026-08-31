@@ -56,8 +56,24 @@ class FrontendServingIntegrationTest {
     }
 
     @Test
+    void rotasReactDoRf09RecebemOMesmoIndex() throws Exception {
+        String index = get("/").body();
+
+        for (String rota : new String[]{"/recuperar-senha", "/redefinir-senha"}) {
+            Resposta resposta = get(rota);
+            assertThat(resposta.status()).as(rota).isEqualTo(200);
+            assertThat(resposta.body()).as(rota).isEqualTo(index);
+        }
+    }
+
+    @Test
     void paginasLegadasContinuamLiterais() throws Exception {
-        for (String pagina : new String[]{"/home.html", "/login.html", "/detalhe-vaga.html"}) {
+        for (String pagina : new String[]{
+                "/home.html",
+                "/login.html",
+                "/detalhe-vaga.html",
+                "/recuperar-senha.html",
+                "/redefinir-senha.html"}) {
             Resposta resposta = get(pagina);
             assertThat(resposta.status()).as(pagina).isEqualTo(200);
             assertThat(resposta.contentType()).as(pagina).contains("text/html");

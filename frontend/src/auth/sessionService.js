@@ -30,6 +30,32 @@ export function getSession() {
   }
 }
 
+export function saveSession(authResponse) {
+  const { session, local } = storages();
+  const allowedFields = [
+    'token',
+    'id',
+    'nome',
+    'email',
+    'tipoUsuario',
+    'perfilCompleto',
+    'avatarUrl',
+    'refreshToken',
+  ];
+  const safeSession = allowedFields.reduce((result, field) => {
+    if (authResponse?.[field] !== undefined) result[field] = authResponse[field];
+    return result;
+  }, {});
+
+  if (!safeSession.token) {
+    throw new Error('A resposta de autenticação não contém um token válido.');
+  }
+
+  session.setItem(SESSION_STORAGE_KEY, JSON.stringify(safeSession));
+  local.removeItem(SESSION_STORAGE_KEY);
+  return safeSession;
+}
+
 export function getAccessToken() {
   return getSession()?.token || null;
 }
@@ -42,6 +68,7 @@ const sessionService = {
   getSession,
   getAccessToken,
   isAuthenticated,
+  saveSession,
   clearLocalSession,
 };
 

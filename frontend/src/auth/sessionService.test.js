@@ -5,6 +5,7 @@ import {
   getAccessToken,
   getSession,
   isAuthenticated,
+  saveSession,
 } from './sessionService';
 
 beforeEach(() => {
@@ -57,4 +58,34 @@ test('limpa sessão local e rascunho de vaga', () => {
   expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   expect(window.sessionStorage.getItem(VACANCY_DRAFT_STORAGE_KEY)).toBeNull();
+});
+
+test('salva somente os campos permitidos no sessionStorage e nunca persiste senha', () => {
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ token: 'antigo' }));
+
+  const saved = saveSession({
+    token: 'jwt-atual',
+    id: 7,
+    email: 'artista@palco.test',
+    tipoUsuario: 'ARTISTA',
+    perfilCompleto: false,
+    senha: 'nunca-persistir',
+    campoInesperado: 'ignorar',
+  });
+
+  expect(saved).toEqual({
+    token: 'jwt-atual',
+    id: 7,
+    email: 'artista@palco.test',
+    tipoUsuario: 'ARTISTA',
+    perfilCompleto: false,
+  });
+  expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).not.toContain('senha');
+  expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).not.toContain('nunca-persistir');
+  expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+});
+
+test('recusa resposta de autenticação sem JWT', () => {
+  expect(() => saveSession({ email: 'sem-token@palco.test' })).toThrow('token válido');
+  expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
 });

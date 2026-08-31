@@ -18,6 +18,14 @@ jest.mock('../../pages/auth/ResetPasswordPage', () => function ResetPasswordPage
   return <h1>Redefinir senha React</h1>;
 });
 
+jest.mock('../../pages/auth/LoginPage', () => function LoginPageMock() {
+  return <h1>Login React</h1>;
+});
+
+jest.mock('../../pages/auth/RegistrationPage', () => function RegistrationPageMock() {
+  return <h1>Cadastro React</h1>;
+});
+
 jest.mock('../../pages/vagas/VagaDetailPage', () => {
   const { useParams } = jest.requireActual('react-router-dom');
 
@@ -102,6 +110,8 @@ test('monta o perfil público e entrega tipo e ID da rota', () => {
 });
 
 test.each([
+  ['/login', 'Login React'],
+  ['/cadastro', 'Cadastro React'],
   ['/recuperar-senha', 'Recuperar senha React'],
   ['/redefinir-senha', 'Redefinir senha React'],
 ])('monta a rota pública do RF09 %s', (path, heading) => {

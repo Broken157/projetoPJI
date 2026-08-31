@@ -1,6 +1,8 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import NotFound from '../../components/common/NotFound';
 import ForgotPasswordPage from '../../pages/auth/ForgotPasswordPage';
+import LoginPage from '../../pages/auth/LoginPage';
+import RegistrationPage from '../../pages/auth/RegistrationPage';
 import ResetPasswordPage from '../../pages/auth/ResetPasswordPage';
 import HomePage from '../../pages/home/HomePage';
 import PublicProfilePage from '../../pages/perfis/PublicProfilePage';
@@ -11,6 +13,8 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/cadastro" element={<RegistrationPage />} />
       <Route path="/recuperar-senha" element={<ForgotPasswordPage />} />
       <Route path="/redefinir-senha" element={<ResetPasswordPage />} />
       <Route path="/vagas" element={<VacancySearchPage />} />

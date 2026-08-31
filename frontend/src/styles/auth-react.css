@@ -1,0 +1,139 @@
+.auth-page {
+  min-height: 100vh;
+  background-color: var(--cor-magenta);
+  background-image: url('/assets/bg-gradiente.png');
+  background-position: center;
+  background-size: cover;
+}
+
+.auth-feedback {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: var(--raio-sm);
+  font-weight: 600;
+}
+
+.auth-feedback--success {
+  margin-bottom: var(--gap-md);
+  color: var(--cor-navy);
+  background: var(--cor-amarelo);
+}
+
+.auth-feedback--error {
+  color: #7a1230;
+  background: #fff0f5;
+  border: 1px solid var(--cor-magenta-borda);
+}
+
+.auth-password-toggle {
+  display: grid;
+  place-items: center;
+}
+
+.auth-login .btn:disabled,
+.auth-registration .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.auth-registration {
+  display: flex;
+  justify-content: center;
+  padding: clamp(2rem, 5vw, 4rem) 1rem;
+}
+
+.auth-registration__card {
+  width: min(100%, 70rem);
+  padding: clamp(1.5rem, 4vw, 3.5rem);
+}
+
+.auth-registration__header {
+  margin-bottom: 2rem;
+}
+
+.auth-registration__header h1 {
+  margin-bottom: 0.5rem;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+}
+
+.auth-registration__header p {
+  font-size: var(--texto-lg);
+}
+
+.auth-registration__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem 2rem;
+}
+
+.auth-registration__select {
+  width: 100%;
+}
+
+.auth-registration__guardian {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-column: 1 / -1;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--cor-magenta-borda);
+  border-radius: var(--raio-md);
+}
+
+.auth-registration__guardian legend {
+  padding-inline: 0.5rem;
+  font-weight: 700;
+}
+
+.auth-registration__terms,
+.auth-registration__wide,
+.auth-registration__actions {
+  grid-column: 1 / -1;
+}
+
+.auth-registration__terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.auth-registration__terms input {
+  flex: 0 0 auto;
+  width: 1.35rem;
+  height: 1.35rem;
+  accent-color: var(--cor-magenta);
+}
+
+.auth-registration__terms a {
+  text-decoration: underline;
+}
+
+.auth-registration__actions {
+  display: flex;
+  justify-content: center;
+}
+
+.auth-registration__actions .btn {
+  width: min(100%, 20rem);
+}
+
+@media (max-width: 900px) {
+  .auth-registration__form,
+  .auth-registration__guardian {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .auth-page .navbar {
+    padding-inline: 1rem;
+  }
+
+  .auth-registration {
+    padding-inline: 0.75rem;
+  }
+
+  .auth-registration__card {
+    min-width: 0;
+  }
+}

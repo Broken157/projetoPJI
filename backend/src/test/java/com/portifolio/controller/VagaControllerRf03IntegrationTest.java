@@ -776,7 +776,7 @@ class VagaControllerRf03IntegrationTest {
     }
 
     @Test
-    void artistaNaoPodeCriarCandidaturaEmNomeDeOutro() throws Exception {
+    void camposDeIdentidadeNoPayloadNaoSubstituemArtistaDoJwt() throws Exception {
         Usuario contratanteUsuario = criarUsuario("candidatura-identidade-c@teste.com", TipoUsuario.CONTRATANTE);
         PerfilContratante contratante = criarContratante(contratanteUsuario);
         var vaga = criarVaga(contratante, "Vaga aberta", "SP", ModeloTrabalho.REMOTO,
@@ -796,7 +796,12 @@ class VagaControllerRf03IntegrationTest {
                         .header("Authorization", "Bearer " + tokenPara(autenticado))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(corpoCandidatura(vaga.getId(), outro.getId())))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.artistaId").value(autenticado.getId()))
+                .andExpect(jsonPath("$.status").value("PENDENTE"));
+
+        assertThat(candidaturaRepository.findAll().getFirst().getArtista().getUsuarioId())
+                .isEqualTo(autenticado.getId());
     }
 
     @Test

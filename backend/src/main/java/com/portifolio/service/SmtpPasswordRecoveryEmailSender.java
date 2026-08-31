@@ -29,7 +29,7 @@ public class SmtpPasswordRecoveryEmailSender implements PasswordRecoveryEmailSen
 
     @Override
     public void enviarLinkRedefinicao(String email, String token) {
-        String link = frontendBaseUrl + "/redefinir-senha.html#token=" + token;
+        String link = frontendBaseUrl + "/redefinir-senha#token=" + token;
         SimpleMailMessage mensagem = novaMensagem(email, "Recuperação de senha — Palco");
         mensagem.setText("Olá,\n\n"
                 + "Recebemos uma solicitação para redefinir a senha da sua conta Palco.\n"

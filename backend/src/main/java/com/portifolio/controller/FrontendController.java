@@ -10,4 +10,9 @@ public class FrontendController {
     public String encaminharRotasReactDeVagas() {
         return "forward:/index.html";
     }
+
+    @GetMapping({"/recuperar-senha", "/redefinir-senha"})
+    public String encaminharRotasReactDoRf09() {
+        return "forward:/index.html";
+    }
 }

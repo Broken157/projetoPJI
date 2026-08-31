@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import sessionService from '../../auth/sessionService';
+import CandidaturaAction from '../../components/candidaturas/CandidaturaAction';
 import ErrorState from '../../components/common/ErrorState';
 import LoadingState from '../../components/common/LoadingState';
 import NotFound from '../../components/common/NotFound';
@@ -125,7 +126,12 @@ export default function VagaDetailPage() {
       </ErrorState>
     );
   } else {
-    content = <VagaDetails vaga={state.vaga} />;
+    content = (
+      <>
+        <VagaDetails vaga={state.vaga} />
+        <CandidaturaAction vaga={state.vaga} session={sessionService.getSession()} />
+      </>
+    );
   }
 
   return (

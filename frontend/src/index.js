@@ -4,6 +4,7 @@ import App from './app/App';
 import './styles/foundation.css';
 import './styles/password-recovery.css';
 import './styles/rf03-react.css';
+import './styles/candidatura-react.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

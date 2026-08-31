@@ -1,0 +1,115 @@
+.candidatura {
+  width: min(100%, 900px);
+  min-width: 0;
+  margin: 1.25rem auto 0;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  color: var(--cor-navy);
+  background: #fff;
+  border: 1px solid rgba(10, 14, 42, .09);
+  border-radius: 24px;
+  box-shadow: 0 12px 32px rgba(10, 14, 42, .08);
+}
+
+.candidatura h2 {
+  margin-bottom: .45rem;
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+}
+
+.candidatura p {
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.candidatura > .btn-dash {
+  margin-top: 1rem;
+}
+
+.candidatura--sucesso {
+  border-color: rgba(27, 123, 78, .35);
+  background: #f3fbf6;
+}
+
+.candidatura--indisponivel {
+  background: #f7f4f8;
+}
+
+.candidatura__form {
+  display: grid;
+  min-width: 0;
+  gap: .65rem;
+  margin-top: 1.25rem;
+}
+
+.candidatura__form label {
+  margin-top: .45rem;
+  font-weight: 800;
+}
+
+.candidatura__form textarea,
+.candidatura__form input {
+  width: 100%;
+  min-width: 0;
+  padding: .85rem 1rem;
+  color: var(--cor-navy);
+  font: inherit;
+  background: #fff;
+  border: 1px solid #b9b6c2;
+  border-radius: 14px;
+}
+
+.candidatura__form textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.candidatura__form textarea:focus,
+.candidatura__form input:focus {
+  border-color: var(--cor-navy);
+  outline: 3px solid rgba(255, 214, 56, .48);
+  outline-offset: 1px;
+}
+
+.candidatura__contador {
+  color: #5c6074;
+  font-size: .78rem;
+  text-align: right;
+}
+
+.candidatura__erro {
+  padding: .85rem 1rem;
+  color: #7d1d2d;
+  background: #fff0f2;
+  border: 1px solid #e8b5be;
+  border-radius: 14px;
+}
+
+.candidatura__erro a {
+  display: inline-block;
+  margin-top: .35rem;
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.candidatura__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  margin-top: .6rem;
+}
+
+.candidatura__acoes .btn-dash {
+  min-width: min(100%, 190px);
+}
+
+@media (max-width: 480px) {
+  .candidatura {
+    padding: 1.1rem;
+    border-radius: 20px;
+  }
+
+  .candidatura__acoes,
+  .candidatura__acoes .btn-dash {
+    width: 100%;
+  }
+}

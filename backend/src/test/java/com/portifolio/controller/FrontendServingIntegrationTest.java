@@ -67,11 +67,24 @@ class FrontendServingIntegrationTest {
     }
 
     @Test
+    void rotasReactDePerfisRecebemOMesmoIndex() throws Exception {
+        String index = get("/").body();
+
+        for (String rota : new String[]{
+                "/perfis", "/perfis/", "/perfis/ARTISTA/1", "/perfis/CONTRATANTE/1"}) {
+            Resposta resposta = get(rota);
+            assertThat(resposta.status()).as(rota).isEqualTo(200);
+            assertThat(resposta.body()).as(rota).isEqualTo(index);
+        }
+    }
+
+    @Test
     void paginasLegadasContinuamLiterais() throws Exception {
         for (String pagina : new String[]{
                 "/home.html",
                 "/login.html",
                 "/detalhe-vaga.html",
+                "/perfil-publico.html",
                 "/recuperar-senha.html",
                 "/redefinir-senha.html"}) {
             Resposta resposta = get(pagina);

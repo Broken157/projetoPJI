@@ -11,6 +11,11 @@ public class FrontendController {
         return "forward:/index.html";
     }
 
+    @GetMapping({"/perfis", "/perfis/", "/perfis/{*path}"})
+    public String encaminharRotasReactDePerfis() {
+        return "forward:/index.html";
+    }
+
     @GetMapping({"/recuperar-senha", "/redefinir-senha"})
     public String encaminharRotasReactDoRf09() {
         return "forward:/index.html";

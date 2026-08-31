@@ -820,7 +820,7 @@
         card.appendChild(dados);
         card.appendChild(link(
           'Ver perfil',
-          'perfil-publico.html?tipo=ARTISTA&id=' + encodeURIComponent(candidatura.artistaId),
+          '/perfis/ARTISTA/' + encodeURIComponent(candidatura.artistaId),
           'dashboard-card__link'
         ));
         estrutura.lista.appendChild(card);
@@ -849,7 +849,7 @@
         card.appendChild(dados);
         card.appendChild(link(
           'Ver perfil',
-          'perfil-publico.html?tipo=ARTISTA&id=' + encodeURIComponent(talento.artistaId),
+          '/perfis/ARTISTA/' + encodeURIComponent(talento.artistaId),
           'dashboard-card__link'
         ));
         estrutura.lista.appendChild(card);

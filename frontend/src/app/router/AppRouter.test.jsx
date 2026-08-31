@@ -19,6 +19,15 @@ jest.mock('../../pages/vagas/VagaDetailPage', () => {
   };
 });
 
+jest.mock('../../pages/perfis/PublicProfilePage', () => {
+  const { useParams } = jest.requireActual('react-router-dom');
+
+  return function PublicProfilePageMock() {
+    const { tipo, id } = useParams();
+    return <h1>Perfil público {tipo} {id}</h1>;
+  };
+});
+
 test('renderiza a rota técnica inicial', () => {
   render(
     <MemoryRouter
@@ -56,6 +65,19 @@ test('monta a página de detalhe e entrega o parâmetro da rota', () => {
   );
 
   expect(screen.getByRole('heading', { name: 'Detalhe da vaga 77' })).toBeInTheDocument();
+});
+
+test('monta o perfil público e entrega tipo e ID da rota', () => {
+  render(
+    <MemoryRouter
+      initialEntries={['/perfis/ARTISTA/91']}
+      future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+    >
+      <AppRoutes />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByRole('heading', { name: 'Perfil público ARTISTA 91' })).toBeInTheDocument();
 });
 
 test.each([

@@ -1,9 +1,6 @@
 .auth-page {
   min-height: 100vh;
   background-color: var(--cor-magenta);
-  background-image: url('/assets/bg-gradiente.png');
-  background-position: center;
-  background-size: cover;
 }
 
 .auth-feedback {

@@ -2,6 +2,14 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppRoutes } from './AppRouter';
 
+jest.mock('../../pages/home/HomePage', () => function HomePageMock() {
+  return <h1>Home Palco React</h1>;
+});
+
+jest.mock('../../pages/vagas/VacancySearchPage', () => function VacancySearchPageMock() {
+  return <h1>Busca de vagas React</h1>;
+});
+
 jest.mock('../../pages/auth/ForgotPasswordPage', () => function ForgotPasswordPageMock() {
   return <h1>Recuperar senha React</h1>;
 });
@@ -28,7 +36,7 @@ jest.mock('../../pages/perfis/PublicProfilePage', () => {
   };
 });
 
-test('renderiza a rota técnica inicial', () => {
+test('renderiza a Home React na rota inicial', () => {
   render(
     <MemoryRouter
       initialEntries={['/']}
@@ -38,7 +46,20 @@ test('renderiza a rota técnica inicial', () => {
     </MemoryRouter>
   );
 
-  expect(screen.getByRole('heading', { name: /fundação react do palco/i })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Home Palco React' })).toBeInTheDocument();
+});
+
+test('renderiza a busca pública na rota /vagas', () => {
+  render(
+    <MemoryRouter
+      initialEntries={['/vagas?cidade=Recife']}
+      future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+    >
+      <AppRoutes />
+    </MemoryRouter>
+  );
+
+  expect(screen.getByRole('heading', { name: 'Busca de vagas React' })).toBeInTheDocument();
 });
 
 test('renderiza o fallback para uma rota React inexistente', () => {

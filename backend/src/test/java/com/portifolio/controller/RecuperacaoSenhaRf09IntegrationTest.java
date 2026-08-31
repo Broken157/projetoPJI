@@ -160,7 +160,7 @@ class RecuperacaoSenhaRf09IntegrationTest {
         assertThat(persistido.getTokenRecuperacao()).isNull();
         assertThat(persistido.getTokenExpiracao()).isNull();
         redefinir(token, "outra-senha").andExpect(status().isNotFound());
-        login(usuario.getEmail(), SENHA_ANTIGA, false).andExpect(status().isNotFound());
+        login(usuario.getEmail(), SENHA_ANTIGA, false).andExpect(status().isUnauthorized());
         login(usuario.getEmail(), SENHA_NOVA, false).andExpect(status().isOk());
     }
 

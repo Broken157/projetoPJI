@@ -504,7 +504,7 @@ class PerfilEdicaoRf08IntegrationTest {
         assertThat(passwordEncoder.matches("NovaSenha456!", persistido.getSenha())).isTrue();
         assertThat(refreshTokenRepository.findAll()).allMatch(token -> !token.getAtivo());
 
-        login(artista.getUsuario().getEmail(), "SenhaAtual123!").andExpect(status().isNotFound());
+        login(artista.getUsuario().getEmail(), "SenhaAtual123!").andExpect(status().isUnauthorized());
         login(artista.getUsuario().getEmail(), "NovaSenha456!").andExpect(status().isOk());
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -79,7 +79,7 @@ class CandidaturaControllerRf06IntegrationTest {
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoCriacao(vaga.getId(), artista.getUsuarioId(), "APROVADO")))
+                        .content(corpoCriacao(vaga.getId(), "APROVADO")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.artistaId").value(artista.getUsuarioId()))
                 .andExpect(jsonPath("$.status").value("PENDENTE"));
@@ -96,7 +96,7 @@ class CandidaturaControllerRf06IntegrationTest {
 
         mockMvc.perform(post("/api/candidaturas")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoCriacao(vaga.getId(), artista.getUsuarioId(), null)))
+                        .content(corpoCriacao(vaga.getId(), null)))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -109,7 +109,7 @@ class CandidaturaControllerRf06IntegrationTest {
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoCriacao(vaga.getId(), artista.getUsuarioId(), null)))
+                        .content(corpoCriacao(vaga.getId(), null)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.mensagem").value("Complete seu perfil antes de se candidatar."));
     }
@@ -122,7 +122,7 @@ class CandidaturaControllerRf06IntegrationTest {
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(contratante.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoCriacao(vaga.getId(), contratante.getUsuarioId(), null)))
+                        .content(corpoCriacao(vaga.getId(), null)))
                 .andExpect(status().isForbidden());
     }
 
@@ -133,7 +133,7 @@ class CandidaturaControllerRf06IntegrationTest {
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoCriacao(999999L, artista.getUsuarioId(), null)))
+                        .content(corpoCriacao(999999L, null)))
                 .andExpect(status().isNotFound());
     }
 
@@ -147,7 +147,7 @@ class CandidaturaControllerRf06IntegrationTest {
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoCriacao(vaga.getId(), artista.getUsuarioId(), null)))
+                        .content(corpoCriacao(vaga.getId(), null)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.mensagem").value(
                         "A vaga não aceita candidaturas porque está com status " + statusVaga + "."));
@@ -167,12 +167,12 @@ class CandidaturaControllerRf06IntegrationTest {
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoCriacao(vaga.getId(), artista.getUsuarioId(), null)))
+                        .content(corpoCriacao(vaga.getId(), null)))
                 .andExpect(status().isConflict());
     }
 
     @Test
-    void artistaNaoPodeUsarOutroArtistaId() throws Exception {
+    void camposDeIdentidadeAdulteradosNaoRepresentamOutroArtista() throws Exception {
         PerfilContratante contratante = novoContratante("contratante-identidade@teste.com");
         Vaga vaga = novaVaga(contratante, StatusVaga.ABERTA);
         PerfilArtista autenticado = novoArtista("artista-autenticado-rf06@teste.com", true);
@@ -181,10 +181,18 @@ class CandidaturaControllerRf06IntegrationTest {
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(autenticado.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(corpoCriacao(vaga.getId(), outro.getUsuarioId(), null)))
-                .andExpect(status().isForbidden());
+                        .content("""
+                                {"vagaId":%d,"artistaId":%d,"usuarioId":%d,
+                                "mensagemApresentacao":"Tenho interesse nesta oportunidade.",
+                                "linkPortfolioCandidatura":"https://exemplo.com/portfolio"}
+                                """.formatted(
+                                vaga.getId(), outro.getUsuarioId(), outro.getUsuarioId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.artistaId").value(autenticado.getUsuarioId()))
+                .andExpect(jsonPath("$.status").value("PENDENTE"));
 
-        assertThat(candidaturaRepository.count()).isZero();
+        Candidatura salva = candidaturaRepository.findAll().getFirst();
+        assertThat(salva.getArtista().getUsuarioId()).isEqualTo(autenticado.getUsuarioId());
     }
 
     @Test
@@ -193,8 +201,8 @@ class CandidaturaControllerRf06IntegrationTest {
         Vaga vaga = novaVaga(contratante, StatusVaga.ABERTA);
         PerfilArtista artista = novoArtista("artista-limites@teste.com", true);
         String corpo = """
-                {"vagaId":%d,"artistaId":%d,"mensagemApresentacao":"%s","linkPortfolioCandidatura":"%s"}
-                """.formatted(vaga.getId(), artista.getUsuarioId(), "x".repeat(2001), "x".repeat(256));
+                {"vagaId":%d,"mensagemApresentacao":"%s","linkPortfolioCandidatura":"%s"}
+                """.formatted(vaga.getId(), "x".repeat(2001), "x".repeat(256));
 
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
@@ -202,6 +210,24 @@ class CandidaturaControllerRf06IntegrationTest {
                         .content(corpo))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detalhes.length()").value(2));
+    }
+
+    @Test
+    void aceitaLimitesExatosDeMensagemELink() throws Exception {
+        PerfilContratante contratante = novoContratante("contratante-limites-exatos@teste.com");
+        Vaga vaga = novaVaga(contratante, StatusVaga.ABERTA);
+        PerfilArtista artista = novoArtista("artista-limites-exatos@teste.com", true);
+        String corpo = """
+                {"vagaId":%d,"mensagemApresentacao":"%s","linkPortfolioCandidatura":"%s"}
+                """.formatted(vaga.getId(), "x".repeat(2000), "x".repeat(255));
+
+        mockMvc.perform(post("/api/candidaturas")
+                        .header("Authorization", bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.artistaId").value(artista.getUsuarioId()))
+                .andExpect(jsonPath("$.status").value("PENDENTE"));
     }
 
     @Test
@@ -418,12 +444,12 @@ class CandidaturaControllerRf06IntegrationTest {
         return candidaturaRepository.save(candidatura);
     }
 
-    private String corpoCriacao(Long vagaId, Long artistaId, String status) {
+    private String corpoCriacao(Long vagaId, String status) {
         String campoStatus = status == null ? "" : ",\"status\":\"" + status + "\"";
         return """
-                {"vagaId":%d,"artistaId":%d,"mensagemApresentacao":"Tenho interesse nesta oportunidade.",
+                {"vagaId":%d,"mensagemApresentacao":"Tenho interesse nesta oportunidade.",
                 "linkPortfolioCandidatura":"https://exemplo.com/portfolio"%s}
-                """.formatted(vagaId, artistaId, campoStatus);
+                """.formatted(vagaId, campoStatus);
     }
 
     private org.springframework.test.web.servlet.ResultActions atualizarStatus(

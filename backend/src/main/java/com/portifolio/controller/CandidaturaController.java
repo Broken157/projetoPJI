@@ -1,5 +1,6 @@
 package com.portifolio.controller;
 
+import com.portifolio.dto.CandidaturaCriacaoRequest;
 import com.portifolio.dto.CandidaturaRequest;
 import com.portifolio.dto.CandidaturaResponse;
 import com.portifolio.service.CandidaturaService;
@@ -45,7 +46,8 @@ public class CandidaturaController {
     }
 
     @PostMapping
-    public ResponseEntity<CandidaturaResponse> criar(@Valid @RequestBody CandidaturaRequest request) {
+    public ResponseEntity<CandidaturaResponse> criar(
+            @Valid @RequestBody CandidaturaCriacaoRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(candidaturaService.criar(request));
     }
 

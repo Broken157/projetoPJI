@@ -1,5 +1,6 @@
 package com.portifolio.service;
 
+import com.portifolio.dto.CandidaturaCriacaoRequest;
 import com.portifolio.dto.CandidaturaRequest;
 import com.portifolio.dto.CandidaturaResponse;
 import com.portifolio.dto.CandidaturaVagaPaginaResponse;
@@ -153,12 +154,9 @@ public class CandidaturaService {
     }
 
     @Transactional
-    public CandidaturaResponse criar(CandidaturaRequest request) {
+    public CandidaturaResponse criar(CandidaturaCriacaoRequest request) {
         Usuario usuario = exigirUsuarioAtual();
         exigirTipo(usuario, TipoUsuario.ARTISTA, "Somente artistas podem se candidatar.");
-        if (!usuario.getId().equals(request.getArtistaId())) {
-            throw new ForbiddenException("Não é permitido criar candidatura para outro artista.");
-        }
 
         Vaga vaga = vagaRepository.findById(request.getVagaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));

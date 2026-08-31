@@ -82,6 +82,7 @@ class FrontendServingIntegrationTest {
     void paginasLegadasContinuamLiterais() throws Exception {
         for (String pagina : new String[]{
                 "/home.html",
+                "/buscar-vagas.html",
                 "/login.html",
                 "/detalhe-vaga.html",
                 "/perfil-publico.html",

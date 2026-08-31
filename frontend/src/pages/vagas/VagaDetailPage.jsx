@@ -88,7 +88,7 @@ export default function VagaDetailPage() {
         className="dashboard-estado dashboard-estado--erro"
         headingLevel="h1"
       >
-        <a className="btn-dash btn-dash--primario" href="/buscar-vagas.html">
+        <a className="btn-dash btn-dash--primario" href="/vagas">
           Voltar às vagas
         </a>
       </ErrorState>
@@ -119,7 +119,7 @@ export default function VagaDetailPage() {
         className="dashboard-estado dashboard-estado--erro"
         headingLevel="h1"
       >
-        <a className="btn-dash btn-dash--primario" href="/buscar-vagas.html">
+        <a className="btn-dash btn-dash--primario" href="/vagas">
           Voltar às vagas
         </a>
       </ErrorState>

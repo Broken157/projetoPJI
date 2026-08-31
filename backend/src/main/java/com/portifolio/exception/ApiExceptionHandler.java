@@ -33,6 +33,12 @@ public class ApiExceptionHandler {
                 .body(buildError(HttpStatus.FORBIDDEN, ex.getMessage(), List.of()));
     }
 
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErroResposta> handleUnauthorized(UnauthorizedException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(buildError(HttpStatus.UNAUTHORIZED, ex.getMessage(), List.of()));
+    }
+
     @ExceptionHandler(UnprocessableEntityException.class)
     public ResponseEntity<ErroResposta> handleUnprocessableEntity(UnprocessableEntityException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)

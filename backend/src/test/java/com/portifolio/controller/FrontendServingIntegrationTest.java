@@ -67,6 +67,17 @@ class FrontendServingIntegrationTest {
     }
 
     @Test
+    void rotasReactDeAutenticacaoRecebemOMesmoIndex() throws Exception {
+        String index = get("/").body();
+
+        for (String rota : new String[]{"/login", "/cadastro"}) {
+            Resposta resposta = get(rota);
+            assertThat(resposta.status()).as(rota).isEqualTo(200);
+            assertThat(resposta.body()).as(rota).isEqualTo(index);
+        }
+    }
+
+    @Test
     void rotasReactDePerfisRecebemOMesmoIndex() throws Exception {
         String index = get("/").body();
 
@@ -84,6 +95,7 @@ class FrontendServingIntegrationTest {
                 "/home.html",
                 "/buscar-vagas.html",
                 "/login.html",
+                "/cadastro-contratante.html",
                 "/detalhe-vaga.html",
                 "/perfil-publico.html",
                 "/recuperar-senha.html",

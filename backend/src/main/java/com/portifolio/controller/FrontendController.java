@@ -20,4 +20,9 @@ public class FrontendController {
     public String encaminharRotasReactDoRf09() {
         return "forward:/index.html";
     }
+
+    @GetMapping({"/login", "/cadastro"})
+    public String encaminharRotasReactDeAutenticacao() {
+        return "forward:/index.html";
+    }
 }

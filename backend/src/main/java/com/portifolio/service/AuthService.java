@@ -13,7 +13,7 @@ import com.portifolio.dto.LoginResponse;
 import com.portifolio.dto.RefreshRequest;
 import com.portifolio.dto.RefreshResponse;
 import com.portifolio.exception.ConflictException;
-import com.portifolio.exception.ResourceNotFoundException;
+import com.portifolio.exception.UnauthorizedException;
 import com.portifolio.model.Usuario;
 import com.portifolio.model.PerfilArtista;
 import com.portifolio.model.PerfilContratante;
@@ -152,7 +152,7 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
 
         Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Email ou senha incorretos."));
+                .orElseThrow(() -> new UnauthorizedException("Email ou senha incorretos."));
 
         // RF32: guard — usuario Google nao tem senha local
         if (usuario.getSenha() == null) {
@@ -160,7 +160,7 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.getSenha(), usuario.getSenha())) {
-            throw new ResourceNotFoundException("Email ou senha incorretos.");
+            throw new UnauthorizedException("Email ou senha incorretos.");
         }
 
         String token = jwtService.gerarToken(usuario);

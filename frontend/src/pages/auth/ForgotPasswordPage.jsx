@@ -105,7 +105,7 @@ export default function ForgotPasswordPage() {
             ) : null}
 
             <p className="login__cadastro">
-              <a href="/login.html">Voltar ao login</a>
+              <a href="/login">Voltar ao login</a>
             </p>
           </form>
         </div>

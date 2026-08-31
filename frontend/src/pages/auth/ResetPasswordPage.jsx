@@ -169,7 +169,7 @@ export default function ResetPasswordPage() {
             ) : null}
 
             <p className="login__cadastro">
-              <a href="/login.html">Voltar ao login</a> ·{' '}
+              <a href="/login">Voltar ao login</a> ·{' '}
               <a href="/recuperar-senha">Solicitar novo link</a>
             </p>
           </form>

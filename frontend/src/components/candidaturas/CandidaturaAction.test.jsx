@@ -41,7 +41,7 @@ test('visitante anônimo recebe link real para o login legado', () => {
 
   expect(screen.getByRole('link', { name: 'Entrar para candidatar-se' })).toHaveAttribute(
     'href',
-    '/login.html'
+    '/login'
   );
   expect(screen.queryByRole('button', { name: 'Candidatar-se' })).not.toBeInTheDocument();
 });

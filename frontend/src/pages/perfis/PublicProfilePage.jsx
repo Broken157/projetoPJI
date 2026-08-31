@@ -32,8 +32,8 @@ function PublicProfileHeader() {
           <img src="/assets/logo-palco.png" alt="Palco" />
         </a>
         <div className="perfil-publico-nav__acoes">
-          <a href="/login.html">Entrar</a>
-          <a className="perfil-publico-nav__cadastro" href="/cadastro-contratante.html">
+          <a href="/login">Entrar</a>
+          <a className="perfil-publico-nav__cadastro" href="/cadastro">
             Criar conta
           </a>
         </div>

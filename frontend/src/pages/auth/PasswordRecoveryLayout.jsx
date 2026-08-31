@@ -24,12 +24,12 @@ export default function PasswordRecoveryLayout({ children }) {
             </li>
           </ul>
           <div className="navbar__acoes">
-            <a className="navbar__link" href="/login.html">
+            <a className="navbar__link" href="/login">
               Login
             </a>
             <a
               className="navbar__link navbar__link--destaque"
-              href="/cadastro-contratante.html"
+              href="/cadastro"
             >
               Cadastrar
             </a>

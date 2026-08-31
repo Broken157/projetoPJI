@@ -217,8 +217,8 @@ function HomeHeader() {
           <li><a className="navbar__link" href="#sobre">Empresa</a></li>
         </ul>
         <div className="navbar__acoes">
-          <a className="navbar__link" href="/login.html">Login</a>
-          <a className="navbar__link navbar__link--destaque" href="/cadastro-contratante.html">Cadastrar</a>
+          <a className="navbar__link" href="/login">Login</a>
+          <a className="navbar__link navbar__link--destaque" href="/cadastro">Cadastrar</a>
         </div>
       </nav>
       <div className="hero">

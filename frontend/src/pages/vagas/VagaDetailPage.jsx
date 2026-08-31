@@ -25,7 +25,7 @@ function VagaPageHeader() {
     }
 
     sessionService.clearLocalSession();
-    window.location.assign('/login.html');
+    window.location.assign('/login');
   }
 
   return (

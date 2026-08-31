@@ -33,5 +33,5 @@ export function sanitizeResetUrl(runtime = window) {
 }
 
 export function redirectToLegacyLogin(runtime = window) {
-  runtime.location.assign('/login.html');
+  runtime.location.assign('/login');
 }

@@ -275,14 +275,14 @@
 
   async function iniciar() {
     if (!sessao || !sessao.token) {
-      window.location.href = 'login.html';
+      window.location.href = '/login';
       return;
     }
     document.querySelector('[data-chat-avatar]').src = avatarSeguro(sessao.avatarUrl, sessao.id);
     document.querySelector('[data-chat-sair]').addEventListener('click', function () {
       sessionStorage.removeItem(CHAVE_SESSAO);
       localStorage.removeItem(CHAVE_SESSAO);
-      window.location.href = 'login.html';
+      window.location.href = '/login';
     });
     document.querySelector('[data-chat-form]').addEventListener('submit', async function (evento) {
       evento.preventDefault();

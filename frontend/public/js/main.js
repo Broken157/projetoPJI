@@ -88,12 +88,12 @@
   function exigirSessaoContratante() {
     var sessao = lerSessao();
     if (!sessao || !sessao.token) {
-      window.location.href = 'login.html';
+      window.location.href = '/login';
       return null;
     }
     if (sessao.tipoUsuario !== 'CONTRATANTE') {
       alert('Esta área é exclusiva para contratantes.');
-      window.location.href = 'login.html';
+      window.location.href = '/login';
       return null;
     }
     return sessao;
@@ -102,7 +102,7 @@
   function exigirSessao() {
     var sessao = lerSessao();
     if (!sessao || !sessao.token) {
-      window.location.href = 'login.html';
+      window.location.href = '/login';
       return null;
     }
     return sessao;
@@ -199,7 +199,7 @@
     if (!form) return;
     if (new URLSearchParams(window.location.search).get('cadastro') === 'sucesso') {
       alert('Cadastro realizado com sucesso! Faça login.');
-      history.replaceState({}, '', 'login.html');
+      history.replaceState({}, '', '/login');
     }
 
     form.addEventListener('submit', async function (evento) {
@@ -353,7 +353,7 @@
       botao.disabled = true;
       try {
         await api('/auth/cadastro', { method: 'POST', body: payload });
-        window.location.href = 'login.html?cadastro=sucesso';
+        window.location.href = '/login?cadastro=sucesso';
       } catch (erro) {
         alert(erro.message);
       } finally {
@@ -1221,7 +1221,7 @@
     if (!form) return;
     var sessao = lerSessao();
     if (!sessao) {
-      window.location.href = 'login.html';
+      window.location.href = '/login';
       return;
     }
     var usuario;
@@ -1300,7 +1300,7 @@
           : 'Perfil atualizado com sucesso.');
         if (emailAlterado) {
           limparSessao();
-          window.location.href = 'login.html';
+          window.location.href = '/login';
         }
       } catch (erro) {
         alert(erro.message);
@@ -1313,7 +1313,7 @@
       try {
         await api('/usuarios/me', { method: 'DELETE' });
         limparSessao();
-        window.location.href = 'login.html';
+        window.location.href = '/login';
       } catch (erro) {
         excluir.disabled = false;
         alert(erro.message);
@@ -1333,7 +1333,7 @@
           console.warn('Não foi possível invalidar o refresh token.', erro);
         }
         limparSessao();
-        window.location.href = 'login.html';
+        window.location.href = '/login';
       });
     });
   }

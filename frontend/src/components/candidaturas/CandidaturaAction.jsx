@@ -72,7 +72,7 @@ export default function CandidaturaAction({ vaga, session }) {
       <section className="candidatura" aria-labelledby="candidatura-login-titulo">
         <h2 id="candidatura-login-titulo">Quer participar desta oportunidade?</h2>
         <p>Entre como artista para enviar sua candidatura.</p>
-        <a className="btn-dash btn-dash--primario" href="/login.html">
+        <a className="btn-dash btn-dash--primario" href="/login">
           Entrar para candidatar-se
         </a>
       </section>

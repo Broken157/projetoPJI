@@ -26,6 +26,28 @@ jest.mock('../../pages/auth/RegistrationPage', () => function RegistrationPageMo
   return <h1>Cadastro React</h1>;
 });
 
+jest.mock('../../components/vagas/ContractorOnly', () => function ContractorOnlyMock({ children }) {
+  return children;
+});
+
+jest.mock('../../pages/vagas/MyVacanciesPage', () => function MyVacanciesPageMock() {
+  return <h1>Minhas vagas React</h1>;
+});
+
+jest.mock('../../pages/vagas/VacancyCreatePage', () => function VacancyCreatePageMock() {
+  return <h1>Publicar vaga React</h1>;
+});
+
+jest.mock('../../pages/vagas/VacancyManagePage', () => function VacancyManagePageMock() {
+  const { useParams } = jest.requireActual('react-router-dom');
+  return <h1>Gerenciar vaga {useParams().id}</h1>;
+});
+
+jest.mock('../../pages/vagas/VacancyEditPage', () => function VacancyEditPageMock() {
+  const { useParams } = jest.requireActual('react-router-dom');
+  return <h1>Editar vaga {useParams().id}</h1>;
+});
+
 jest.mock('../../pages/vagas/VagaDetailPage', () => {
   const { useParams } = jest.requireActual('react-router-dom');
 
@@ -124,5 +146,15 @@ test.each([
     </MemoryRouter>
   );
 
+  expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
+});
+
+test.each([
+  ['/minhas-vagas', 'Minhas vagas React'],
+  ['/vagas/nova', 'Publicar vaga React'],
+  ['/vagas/31/gerenciar', 'Gerenciar vaga 31'],
+  ['/vagas/31/editar', 'Editar vaga 31'],
+])('monta a rota protegida de gestão %s', (path, heading) => {
+  render(<MemoryRouter initialEntries={[path]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}><AppRoutes /></MemoryRouter>);
   expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
 });

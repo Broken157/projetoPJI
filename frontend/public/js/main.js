@@ -425,7 +425,7 @@
           body: { confirmacao: true, motivo: motivo.value.trim() }
         });
         alert('Vaga cancelada com sucesso.');
-        window.location.href = 'minhas-vagas.html';
+        window.location.href = '/minhas-vagas';
       } catch (erro) {
         alert(erro.message);
         confirmar.disabled = false;
@@ -450,7 +450,7 @@
     var foto = vaga.fotos && vaga.fotos.length ? vaga.fotos[0] : 'assets/vaga-thumb-1.png';
     var total = candidaturas[vaga.id] || 0;
     var acoesMutaveis = vaga.status === 'CANCELADA' ? '' :
-      '<a class="vaga-card__acao" href="editar-vagas.html?id=' + vaga.id + '" title="Editar vaga"><span class="sr-only">Editar vaga</span><img src="assets/botao-acao.svg" alt=""></a>' +
+      '<a class="vaga-card__acao" href="/vagas/' + encodeURIComponent(vaga.id) + '/editar" title="Editar vaga"><span class="sr-only">Editar vaga</span><img src="assets/botao-acao.svg" alt=""></a>' +
       '<button class="vaga-card__acao" type="button" data-excluir-vaga="' + vaga.id + '" data-vaga-id="' + vaga.id + '" title="Excluir vaga"><span class="sr-only">Excluir vaga</span><img src="assets/botao-acao.svg" alt=""></button>';
     return '<article class="vaga-card" data-status="' + escapar(vaga.status) + '" data-candidaturas="' + total + '" data-prazo="' + escapar(vaga.dataLimiteCandidatura || '') + '">' +
       '<img class="vaga-card__imagem" src="' + escapar(foto) + '" alt="">' +
@@ -463,7 +463,7 @@
       '<div class="vaga-card__lateral"><span class="status ' + classeStatus(vaga.status) + '">' + rotuloStatus(vaga.status) + '</span>' +
       '<div class="vaga-card__acoes">' +
       acoesMutaveis +
-      '<a class="vaga-card__acao" href="detalhe-vaga-proprietario.html?id=' + vaga.id + '" title="Ver detalhes"><span class="sr-only">Ver detalhes da vaga</span><img src="assets/botao-acao.svg" alt=""></a>' +
+      '<a class="vaga-card__acao" href="/vagas/' + encodeURIComponent(vaga.id) + '/gerenciar" title="Ver detalhes"><span class="sr-only">Ver detalhes da vaga</span><img src="assets/botao-acao.svg" alt=""></a>' +
       '</div></div></article>';
   }
 
@@ -861,7 +861,7 @@
       var menu = document.querySelector('[data-menu-contextual]');
       limpar(menu);
       var itens = tipo === 'CONTRATANTE'
-        ? [['Minhas vagas', 'minhas-vagas.html'], ['Publicar vaga', 'publicar-vaga.html']]
+        ? [['Minhas vagas', '/minhas-vagas'], ['Publicar vaga', '/vagas/nova']]
         : [['Meu perfil', 'perfil.html']];
       itens.forEach(function (item) {
         var li = elemento('li');
@@ -897,8 +897,8 @@
       if (artista) {
         acoes.appendChild(link('Editar perfil', 'perfil.html', 'btn-dash btn-dash--primario'));
       } else {
-        acoes.appendChild(link('Minhas vagas', 'minhas-vagas.html'));
-        acoes.appendChild(link('Publicar vaga', 'publicar-vaga.html', 'btn-dash btn-dash--primario'));
+        acoes.appendChild(link('Minhas vagas', '/minhas-vagas'));
+        acoes.appendChild(link('Publicar vaga', '/vagas/nova', 'btn-dash btn-dash--primario'));
       }
 
       var secoes = document.querySelector('[data-dashboard-secoes]');
@@ -974,7 +974,7 @@
       preencherRequisitos(vaga);
       var editar = document.querySelector('a[title="Editar vaga"]');
       if (editar) {
-        editar.href = 'editar-vagas.html?id=' + vaga.id;
+        editar.href = '/vagas/' + encodeURIComponent(vaga.id) + '/editar';
         editar.hidden = vaga.status === 'CANCELADA';
       }
       document.querySelectorAll('[data-abrir-modal]').forEach(function (botao) {
@@ -1051,7 +1051,7 @@
     var id = new URLSearchParams(window.location.search).get('id');
     if (!id) {
       alert('Informe a vaga que será editada.');
-      window.location.href = 'minhas-vagas.html';
+      window.location.href = '/minhas-vagas';
       return;
     }
     try {
@@ -1157,7 +1157,7 @@
         await api('/vagas/' + encodeURIComponent(id), { method: 'PUT', body: payload });
         sessionStorage.removeItem(CHAVE_RASCUNHO_VAGA);
         alert('Vaga atualizada com sucesso.');
-        window.location.href = 'detalhe-vaga-proprietario.html?id=' + id;
+        window.location.href = '/vagas/' + encodeURIComponent(id) + '/gerenciar';
       } catch (erro) {
         alert(erro.message);
       }
@@ -1209,7 +1209,7 @@
       try {
         var vaga = await api('/vagas', { method: 'POST', body: payload });
         alert('Vaga publicada com sucesso.');
-        window.location.href = 'detalhe-vaga-proprietario.html?id=' + vaga.id;
+        window.location.href = '/vagas/' + encodeURIComponent(vaga.id) + '/gerenciar';
       } catch (erro) {
         alert(erro.message);
       }

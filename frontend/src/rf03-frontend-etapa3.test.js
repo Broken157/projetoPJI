@@ -300,6 +300,6 @@ test('fluxos públicos adicionais usam React e os destinos legados deliberados p
   expect(mainScript).toContain(`href="/vagas/' + encodeURIComponent(item.id) + '">`);
   expect(mainScript).toContain("'/detalhe-vaga.html'");
   expect(mainScript).toContain("paginaAtual !== 'detalhe-vaga.html'");
-  expect(mainScript).toContain("'detalhe-vaga-proprietario.html?id=' + vaga.id");
-  expect(mainScript).toContain("window.location.href = 'detalhe-vaga-proprietario.html?id=' + id");
+  expect(mainScript).toContain("'/vagas/' + encodeURIComponent(vaga.id) + '/gerenciar'");
+  expect(mainScript).toContain("window.location.href = '/vagas/' + encodeURIComponent(id) + '/gerenciar'");
 });

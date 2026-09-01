@@ -30,4 +30,9 @@ public class FrontendController {
     public String encaminharRotasReactDeAutenticacao() {
         return "forward:/index.html";
     }
+
+    @GetMapping({"/dashboard", "/perfil"})
+    public String encaminharRotasReactDaConta() {
+        return "forward:/index.html";
+    }
 }

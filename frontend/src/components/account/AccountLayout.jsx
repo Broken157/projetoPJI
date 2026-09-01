@@ -1,0 +1,23 @@
+import LogoutButton from './LogoutButton';
+
+export default function AccountLayout({ children }) {
+  return (
+    <div className="pagina-app account-shell">
+      <header>
+        <nav className="app-navbar account-navbar" aria-label="Navegação da conta">
+          <a href="/dashboard" aria-label="Palco — painel principal">
+            <img className="navbar__logo" src="/assets/logo-palco.png" alt="Palco" />
+          </a>
+          <ul className="app-navbar__menu">
+            <li><a className="navbar__link" href="/dashboard">Dashboard</a></li>
+            <li><a className="navbar__link" href="/perfil">Meu perfil</a></li>
+          </ul>
+          <div className="app-navbar__acoes">
+            <LogoutButton />
+          </div>
+        </nav>
+      </header>
+      {children}
+    </div>
+  );
+}

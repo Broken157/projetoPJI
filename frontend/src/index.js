@@ -7,6 +7,7 @@ import './styles/rf03-react.css';
 import './styles/candidatura-react.css';
 import './styles/auth-react.css';
 import './styles/vacancy-management.css';
+import './styles/account-react.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

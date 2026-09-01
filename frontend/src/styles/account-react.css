@@ -1,0 +1,67 @@
+.account-shell { min-height: 100vh; background: #f7f5f8; color: var(--cor-navy); }
+.account-navbar { gap: 1.5rem; }
+.account-logout { padding: .65rem 1.1rem; color: #fff; background: transparent; border: 1px solid rgba(255,255,255,.55); border-radius: var(--raio-pill); cursor: pointer; font: inherit; font-weight: 700; }
+.account-logout:disabled { cursor: wait; opacity: .7; }
+.account-main { width: min(100% - 2rem, 1180px); margin-inline: auto; padding-block: clamp(2rem,5vw,4rem); }
+.account-main--profile { max-width: 960px; }
+.account-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.5rem; margin-bottom: 2rem; }
+.account-heading h1 { margin: .2rem 0 .5rem; font-size: clamp(2.25rem,6vw,4rem); line-height: 1; }
+.account-heading p { max-width: 46rem; }
+.account-eyebrow { margin: 0; color: var(--cor-magenta); font-size: var(--texto-sm); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.account-actions, .account-form__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .8rem; }
+.account-actions a, .account-form__actions a, .account-module a, .account-card > a, .account-more { font-weight: 800; text-underline-offset: 3px; }
+.account-hero { display: flex; align-items: center; gap: 1.25rem; padding: clamp(1.5rem,4vw,2.5rem); color: #fff; background: var(--cor-navy); border-radius: 28px; box-shadow: var(--sombra-card); }
+.account-hero img, .profile-summary img, .account-card img { width: 64px; height: 64px; flex: 0 0 auto; object-fit: cover; border-radius: 50%; }
+.account-hero h2 { font-size: clamp(1.6rem,4vw,2.4rem); }
+.account-hero p { margin-top: .45rem; line-height: 1.5; }
+.account-alert { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.25rem; padding: 1.25rem; background: #fff7d8; border: 2px solid var(--cor-amarelo); border-radius: 20px; }
+.account-alert p { margin-top: .25rem; }
+.account-modules, .account-panels { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.25rem; margin-top: 1.5rem; }
+.account-module, .account-panel, .account-form, .profile-summary, .account-state { min-width: 0; padding: clamp(1.25rem,3vw,2rem); background: #fff; border: 1px solid var(--cor-linha); border-radius: 24px; box-shadow: var(--sombra-card); }
+.account-module__top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.account-module p { margin: .45rem 0 .75rem; line-height: 1.5; }
+.account-count { display: inline-grid; min-width: 2rem; min-height: 2rem; padding: .2rem; color: #fff; background: var(--cor-magenta); border-radius: 50%; place-content: center; font-weight: 800; }
+.account-panel--wide { grid-column: 1 / -1; }
+.account-panel header { margin-bottom: 1rem; }
+.account-panel header p { margin-top: .35rem; color: #555a70; }
+.account-list { display: grid; gap: .8rem; }
+.account-card { display: flex; align-items: center; gap: 1rem; min-width: 0; padding: 1rem; background: #f7f4f8; border-radius: 18px; }
+.account-card > div { min-width: 0; flex: 1; }
+.account-card h3, .account-card p { overflow-wrap: anywhere; }
+.account-card p { margin-top: .25rem; color: #555a70; }
+.account-tags, .profile-tags { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .65rem; }
+.account-tag, .profile-tags label { padding: .4rem .65rem; background: #efe9f1; border-radius: var(--raio-pill); font-size: .85rem; }
+.account-tag--match { color: #fff; background: var(--cor-navy); }
+.account-empty { color: #555a70; }
+.account-more { display: inline-block; margin-top: 1rem; }
+.account-state { text-align: center; }
+.account-state--error, .account-feedback--error { border-color: var(--cor-magenta-borda); }
+.profile-summary { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
+.profile-summary p { margin-top: .25rem; }
+.profile-banner { display: block; width: 100%; max-height: 240px; margin-bottom: 1.25rem; object-fit: cover; border-radius: 22px; }
+.account-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.25rem; }
+.account-form fieldset { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; min-width: 0; padding: 1.25rem; border: 1px solid var(--cor-linha); border-radius: 18px; }
+.account-form legend { padding-inline: .4rem; font-size: 1.15rem; font-weight: 800; }
+.account-form label { display: grid; align-content: start; gap: .4rem; min-width: 0; font-weight: 700; }
+.account-form input, .account-form textarea { width: 100%; min-width: 0; padding: .85rem 1rem; color: var(--cor-navy); background: #fff; border: 1px solid #a8a5b2; border-radius: 12px; font: inherit; }
+.account-form textarea { min-height: 9rem; resize: vertical; }
+.account-form input:focus, .account-form textarea:focus { outline: 3px solid rgba(184,30,94,.2); border-color: var(--cor-magenta); }
+.account-form input[readonly] { background: #efedf1; }
+.account-form__wide, .account-form__actions, .account-feedback { grid-column: 1 / -1; }
+.account-form__hint { margin: 0; color: #555a70; font-size: .9rem; }
+.profile-tags label { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; }
+.profile-tags input { width: auto; accent-color: var(--cor-magenta); }
+.account-feedback { margin: 0; padding: .9rem 1rem; border: 1px solid; border-radius: 12px; font-weight: 700; }
+.account-feedback--error { color: #7a1230; background: #fff0f5; }
+.account-feedback--success { color: var(--cor-navy); background: #fff7d8; border-color: var(--cor-amarelo); }
+@media (max-width: 700px) {
+  .account-navbar .app-navbar__menu { display: none; }
+  .account-heading, .account-alert, .account-card { align-items: stretch; flex-direction: column; }
+  .account-actions { justify-content: flex-start; }
+  .account-modules, .account-panels, .account-form { grid-template-columns: 1fr; }
+  .account-panel--wide, .account-form__wide, .account-form__actions, .account-feedback { grid-column: auto; }
+  .account-form fieldset { grid-template-columns: 1fr; }
+  .account-form__wide { grid-column: 1; }
+  .account-form__actions { justify-content: stretch; }
+  .account-form__actions > * { flex: 1; text-align: center; }
+}

@@ -1,0 +1,493 @@
+.management-shell {
+  min-height: 100vh;
+  background: #f7f5f8;
+}
+
+.management-navbar {
+  gap: 1.5rem;
+}
+
+.management-navbar__actions {
+  gap: 1rem;
+}
+
+.management-logout {
+  padding: 0.65rem 1.1rem;
+  color: var(--cor-branco);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--raio-pill);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.vacancy-management {
+  width: min(100% - 2rem, 1180px);
+  margin-inline: auto;
+  padding-block: clamp(2rem, 5vw, 4rem);
+}
+
+.vacancy-management--center {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.management-page-header {
+  margin-bottom: 2rem;
+}
+
+.management-page-header--actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.management-page-header h1 {
+  margin: 0.2rem 0 0.5rem;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  color: var(--cor-navy);
+}
+
+.management-page-header p {
+  max-width: 48rem;
+}
+
+.management-eyebrow {
+  margin: 0;
+  color: var(--cor-magenta);
+  font-size: var(--texto-sm);
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.management-card,
+.management-state,
+.management-vacancy-card,
+.management-related article {
+  background: var(--cor-branco);
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-md);
+  box-shadow: var(--sombra-card);
+}
+
+.management-card {
+  padding: clamp(1.25rem, 4vw, 2.75rem);
+}
+
+.management-state {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+  padding: 2rem;
+}
+
+.management-state--error {
+  border-color: var(--cor-magenta-borda);
+}
+
+.management-feedback {
+  margin: 0 0 1.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--raio-sm);
+  font-weight: 700;
+}
+
+.management-feedback--error {
+  color: #7a1230;
+  background: #fff0f5;
+  border: 1px solid var(--cor-magenta-borda);
+}
+
+.management-feedback--success {
+  color: var(--cor-navy);
+  background: #fff2b2;
+  border: 1px solid #e4bd26;
+}
+
+.management-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem 2rem;
+}
+
+.management-form__wide,
+.management-tags,
+.management-form__actions {
+  grid-column: 1 / -1;
+}
+
+.management-form__select {
+  width: 100%;
+  min-height: 60px;
+}
+
+.management-form textarea.campo__input {
+  min-height: 9rem;
+  padding-block: 1rem;
+}
+
+.management-form textarea.management-form__photos {
+  min-height: 6rem;
+}
+
+.management-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--cor-magenta-borda);
+  border-radius: var(--raio-md);
+}
+
+.management-tags legend {
+  padding-inline: 0.5rem;
+  font-size: var(--texto-xl);
+  font-weight: 700;
+}
+
+.management-tag-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.8rem;
+  background: #f7edf5;
+  border-radius: var(--raio-pill);
+  cursor: pointer;
+}
+
+.management-tag-option input {
+  accent-color: var(--cor-magenta);
+}
+
+.management-form__actions,
+.management-modal__actions,
+.management-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  justify-content: flex-end;
+}
+
+.management-button-secondary {
+  color: var(--cor-navy);
+  background: transparent;
+  border: 1px solid var(--cor-navy);
+}
+
+.management-button-danger {
+  color: var(--cor-branco);
+  background: #9c173d;
+  border: 1px solid #9c173d;
+}
+
+.management-form button:disabled,
+.management-detail button:disabled,
+.management-modal button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.management-filters {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.35rem;
+  overflow-x: auto;
+}
+
+.management-filters button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.9rem;
+  color: var(--cor-navy);
+  background: var(--cor-branco);
+  border: 1px solid var(--cor-linha);
+  border-radius: var(--raio-pill);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.management-filters button[aria-pressed='true'] {
+  color: var(--cor-branco);
+  background: var(--cor-navy);
+}
+
+.management-filters span {
+  display: grid;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  color: var(--cor-navy);
+  background: var(--cor-amarelo);
+  border-radius: 50%;
+  font-size: 0.8rem;
+}
+
+.management-vacancy-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.management-vacancy-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+.management-vacancy-card__body {
+  min-width: 0;
+}
+
+.management-vacancy-card__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.management-vacancy-card h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--cor-navy);
+}
+
+.management-vacancy-card p {
+  margin: 0.45rem 0 0;
+}
+
+.management-vacancy-card__applications {
+  font-weight: 700;
+}
+
+.management-vacancy-card__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  justify-content: flex-end;
+}
+
+.management-danger-link {
+  padding: 0.4rem;
+  color: #8b1438;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.management-status {
+  display: inline-flex;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--raio-pill);
+  font-size: var(--texto-sm);
+  font-weight: 800;
+}
+
+.management-status--aberta { color: #12492b; background: #d9f6e4; }
+.management-status--pausada { color: #654900; background: #fff0b8; }
+.management-status--encerrada { color: #293260; background: #e0e5ff; }
+.management-status--cancelada { color: #781431; background: #fde0e9; }
+
+.management-loading,
+.management-load-more {
+  display: block;
+  margin: 1.5rem auto 0;
+}
+
+.management-title-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.management-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.management-detail {
+  display: grid;
+  gap: 2rem;
+}
+
+.management-detail__actions {
+  justify-content: flex-start;
+}
+
+.management-final-state {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  background: #f0eff6;
+  border-radius: var(--raio-sm);
+}
+
+.management-detail__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.management-detail__facts div {
+  padding: 1rem;
+  background: #f8f6f9;
+  border-radius: var(--raio-sm);
+}
+
+.management-detail__facts dt {
+  color: var(--cor-texto-suave);
+  font-size: var(--texto-sm);
+  font-weight: 700;
+}
+
+.management-detail__facts dd {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.management-preserve-text {
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+}
+
+.management-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.management-tag-list span {
+  padding: 0.5rem 0.75rem;
+  background: #f7edf5;
+  border-radius: var(--raio-pill);
+}
+
+.management-related {
+  display: grid;
+  gap: 1rem;
+}
+
+.management-related article {
+  padding: 1rem;
+}
+
+.management-related h2,
+.management-related h3 {
+  margin: 0;
+  color: var(--cor-navy);
+}
+
+.management-related p {
+  margin: 0.5rem 0;
+}
+
+.management-modal-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  overflow-y: auto;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(5, 8, 32, 0.72);
+}
+
+.management-modal {
+  width: min(100%, 38rem);
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  background: var(--cor-branco);
+  border-radius: var(--raio-md);
+  box-shadow: var(--sombra-card);
+}
+
+.management-modal h2 {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--cor-navy);
+}
+
+.management-modal form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.management-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-weight: 700;
+}
+
+.management-confirm input {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--cor-magenta);
+}
+
+@media (max-width: 900px) {
+  .management-navbar {
+    flex-wrap: wrap;
+  }
+
+  .management-detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .management-navbar {
+    padding-inline: 1rem;
+  }
+
+  .management-navbar .app-navbar__menu {
+    order: 3;
+    width: 100%;
+  }
+
+  .management-navbar__actions .navbar__link {
+    display: none;
+  }
+
+  .vacancy-management {
+    width: min(100% - 1.25rem, 1180px);
+  }
+
+  .management-page-header--actions,
+  .management-vacancy-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .management-form,
+  .management-detail__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .management-vacancy-card__actions,
+  .management-form__actions,
+  .management-modal__actions {
+    justify-content: stretch;
+  }
+
+  .management-vacancy-card__actions .btn,
+  .management-form__actions .btn,
+  .management-modal__actions .btn {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+}

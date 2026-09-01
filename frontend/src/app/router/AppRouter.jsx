@@ -6,8 +6,13 @@ import RegistrationPage from '../../pages/auth/RegistrationPage';
 import ResetPasswordPage from '../../pages/auth/ResetPasswordPage';
 import HomePage from '../../pages/home/HomePage';
 import PublicProfilePage from '../../pages/perfis/PublicProfilePage';
+import ContractorOnly from '../../components/vagas/ContractorOnly';
+import MyVacanciesPage from '../../pages/vagas/MyVacanciesPage';
 import VagaDetailPage from '../../pages/vagas/VagaDetailPage';
 import VacancySearchPage from '../../pages/vagas/VacancySearchPage';
+import VacancyCreatePage from '../../pages/vagas/VacancyCreatePage';
+import VacancyEditPage from '../../pages/vagas/VacancyEditPage';
+import VacancyManagePage from '../../pages/vagas/VacancyManagePage';
 
 export function AppRoutes() {
   return (
@@ -18,6 +23,10 @@ export function AppRoutes() {
       <Route path="/recuperar-senha" element={<ForgotPasswordPage />} />
       <Route path="/redefinir-senha" element={<ResetPasswordPage />} />
       <Route path="/vagas" element={<VacancySearchPage />} />
+      <Route path="/minhas-vagas" element={<ContractorOnly><MyVacanciesPage /></ContractorOnly>} />
+      <Route path="/vagas/nova" element={<ContractorOnly><VacancyCreatePage /></ContractorOnly>} />
+      <Route path="/vagas/:id/gerenciar" element={<ContractorOnly><VacancyManagePage /></ContractorOnly>} />
+      <Route path="/vagas/:id/editar" element={<ContractorOnly><VacancyEditPage /></ContractorOnly>} />
       <Route path="/vagas/:id" element={<VagaDetailPage />} />
       <Route path="/perfis/:tipo/:id" element={<PublicProfilePage />} />
       <Route path="*" element={<NotFound />} />

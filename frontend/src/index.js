@@ -6,6 +6,7 @@ import './styles/password-recovery.css';
 import './styles/rf03-react.css';
 import './styles/candidatura-react.css';
 import './styles/auth-react.css';
+import './styles/vacancy-management.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

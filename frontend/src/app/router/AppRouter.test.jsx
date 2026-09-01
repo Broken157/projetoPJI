@@ -30,6 +30,18 @@ jest.mock('../../components/vagas/ContractorOnly', () => function ContractorOnly
   return children;
 });
 
+jest.mock('../../components/account/AuthenticatedOnly', () => function AuthenticatedOnlyMock({ children }) {
+  return children;
+});
+
+jest.mock('../../pages/account/DashboardPage', () => function DashboardPageMock() {
+  return <h1>Dashboard React</h1>;
+});
+
+jest.mock('../../pages/account/ProfilePage', () => function ProfilePageMock() {
+  return <h1>Perfil privado React</h1>;
+});
+
 jest.mock('../../pages/vagas/MyVacanciesPage', () => function MyVacanciesPageMock() {
   return <h1>Minhas vagas React</h1>;
 });
@@ -155,6 +167,14 @@ test.each([
   ['/vagas/31/gerenciar', 'Gerenciar vaga 31'],
   ['/vagas/31/editar', 'Editar vaga 31'],
 ])('monta a rota protegida de gestão %s', (path, heading) => {
+  render(<MemoryRouter initialEntries={[path]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}><AppRoutes /></MemoryRouter>);
+  expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
+});
+
+test.each([
+  ['/dashboard', 'Dashboard React'],
+  ['/perfil', 'Perfil privado React'],
+])('monta a rota protegida da conta %s', (path, heading) => {
   render(<MemoryRouter initialEntries={[path]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}><AppRoutes /></MemoryRouter>);
   expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
 });

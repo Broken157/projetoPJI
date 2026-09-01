@@ -31,11 +31,11 @@ function VagaPageHeader() {
   return (
     <header>
       <nav className="app-navbar" aria-label="Navegação principal">
-        <a href="/dashboard-contratante.html">
+        <a href="/dashboard">
           <img className="navbar__logo" src="/assets/logo-palco.png" alt="Palco" />
         </a>
         <div className="app-navbar__acoes">
-          <a className="btn-dash btn-dash--secundario" href="/dashboard-contratante.html">
+          <a className="btn-dash btn-dash--secundario" href="/dashboard">
             Voltar ao painel
           </a>
           <button className="dashboard__sair" type="button" onClick={handleLogout}>
@@ -108,7 +108,7 @@ export default function VagaDetailPage() {
         embedded
         title="Não foi possível abrir esta vaga"
         message={state.error.message}
-        backHref="/dashboard-contratante.html"
+        backHref="/dashboard"
         backLabel="Voltar ao painel"
       />
     );

@@ -146,7 +146,7 @@ test('404 produz o estado NotFound da vaga', async () => {
   expect(screen.getByText('Vaga não encontrada.')).toBeInTheDocument();
   expect(
     within(screen.getByRole('alert')).getByRole('link', { name: 'Voltar ao painel' })
-  ).toHaveAttribute('href', '/dashboard-contratante.html');
+  ).toHaveAttribute('href', '/dashboard');
 });
 
 test('500 produz o ErrorState preservando a mensagem', async () => {

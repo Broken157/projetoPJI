@@ -5,7 +5,7 @@ import authService from '../../services/auth/authService';
 import AuthLayout from './AuthLayout';
 
 export function redirectToLegacyDashboard() {
-  window.location.assign('/dashboard-contratante.html');
+  window.location.assign('/dashboard');
 }
 
 export default function LoginPage({ onAuthenticated = redirectToLegacyDashboard }) {

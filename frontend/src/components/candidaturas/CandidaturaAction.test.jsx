@@ -148,7 +148,7 @@ test('422 de perfil incompleto oferece o destino privado legado', async () => {
   );
   expect(screen.getByRole('link', { name: 'Completar meu perfil' })).toHaveAttribute(
     'href',
-    '/perfil.html'
+    '/perfil'
   );
 });
 

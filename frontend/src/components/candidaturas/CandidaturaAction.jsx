@@ -177,7 +177,7 @@ export default function CandidaturaAction({ vaga, session }) {
           <div className="candidatura__erro" role="alert">
             <p>{submission.message}</p>
             {submission.profileRequired ? (
-              <a href="/perfil.html">Completar meu perfil</a>
+              <a href="/perfil">Completar meu perfil</a>
             ) : null}
           </div>
         )}

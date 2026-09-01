@@ -218,7 +218,7 @@
           body: { email: email, senha: senha, rememberMe: false }
         });
         salvarSessao(resposta);
-        window.location.href = 'dashboard-contratante.html';
+        window.location.href = '/dashboard';
       } catch (erro) {
         alert(erro.message);
       } finally {
@@ -862,7 +862,7 @@
       limpar(menu);
       var itens = tipo === 'CONTRATANTE'
         ? [['Minhas vagas', '/minhas-vagas'], ['Publicar vaga', '/vagas/nova']]
-        : [['Meu perfil', 'perfil.html']];
+        : [['Meu perfil', '/perfil']];
       itens.forEach(function (item) {
         var li = elemento('li');
         li.appendChild(link(item[0], item[1], 'navbar__link'));
@@ -895,7 +895,7 @@
       var acoes = document.querySelector('[data-dashboard-acoes]');
       limpar(acoes);
       if (artista) {
-        acoes.appendChild(link('Editar perfil', 'perfil.html', 'btn-dash btn-dash--primario'));
+        acoes.appendChild(link('Editar perfil', '/perfil', 'btn-dash btn-dash--primario'));
       } else {
         acoes.appendChild(link('Minhas vagas', '/minhas-vagas'));
         acoes.appendChild(link('Publicar vaga', '/vagas/nova', 'btn-dash btn-dash--primario'));

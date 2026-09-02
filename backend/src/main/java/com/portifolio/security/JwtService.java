@@ -45,6 +45,11 @@ public class JwtService {
         return extrairClaims(token).getSubject();
     }
 
+    public Long extrairUsuarioId(String token) {
+        Object id = extrairClaims(token).get("id");
+        return id instanceof Number numero ? numero.longValue() : null;
+    }
+
     public boolean tokenValido(String token) {
         try {
             return extrairClaims(token).getExpiration().after(new Date());

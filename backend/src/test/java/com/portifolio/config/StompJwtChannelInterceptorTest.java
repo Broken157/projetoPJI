@@ -28,9 +28,10 @@ class StompJwtChannelInterceptorTest {
     void connectValidoVinculaPrincipalAoEmailDoJwt() {
         when(jwtService.tokenValido("jwt-valido")).thenReturn(true);
         when(jwtService.extrairEmail("jwt-valido")).thenReturn("pessoa@rf23.test");
+        when(jwtService.extrairUsuarioId("jwt-valido")).thenReturn(23L);
         UserDetails user = User.withUsername("pessoa@rf23.test")
                 .password("x").authorities("ROLE_ARTISTA").build();
-        when(userDetailsService.loadUserByUsername("pessoa@rf23.test")).thenReturn(user);
+        when(userDetailsService.loadUserByUsername("pessoa@rf23.test", 23L)).thenReturn(user);
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
         accessor.setNativeHeader("Authorization", "Bearer jwt-valido");
         accessor.setLeaveMutable(true);
@@ -40,6 +41,18 @@ class StompJwtChannelInterceptorTest {
 
         assertThat(accessor.getUser()).isNotNull();
         assertThat(accessor.getUser().getName()).isEqualTo("pessoa@rf23.test");
+    }
+
+    @Test
+    void connectRejeitaJwtSemIdMesmoComEmailValido() {
+        when(jwtService.tokenValido("jwt-sem-id")).thenReturn(true);
+        when(jwtService.extrairEmail("jwt-sem-id")).thenReturn("pessoa@rf23.test");
+
+        assertThatThrownBy(() -> interceptor.preSend(
+                mensagem(StompCommand.CONNECT, "Bearer jwt-sem-id"),
+                mock(org.springframework.messaging.MessageChannel.class)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("identidade valida");
     }
 
     @Test

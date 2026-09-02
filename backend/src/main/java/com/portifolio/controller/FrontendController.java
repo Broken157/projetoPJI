@@ -35,4 +35,9 @@ public class FrontendController {
     public String encaminharRotasReactDaConta() {
         return "forward:/index.html";
     }
+
+    @GetMapping("/mensagens")
+    public String encaminharMensagensReact() {
+        return "forward:/index.html";
+    }
 }

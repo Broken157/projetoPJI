@@ -65,7 +65,11 @@ public class StompJwtChannelInterceptor implements ChannelInterceptor {
             throw new IllegalArgumentException("JWT invalido ou expirado no STOMP CONNECT.");
         }
         String email = jwtService.extrairEmail(token);
-        UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+        Long usuarioId = jwtService.extrairUsuarioId(token);
+        if (email == null || usuarioId == null || usuarioId < 1) {
+            throw new IllegalArgumentException("JWT sem identidade valida no STOMP CONNECT.");
+        }
+        UserDetails userDetails = userDetailsService.loadUserByUsername(email, usuarioId);
         accessor.setUser(new UsernamePasswordAuthenticationToken(
                 userDetails, null, userDetails.getAuthorities()));
     }

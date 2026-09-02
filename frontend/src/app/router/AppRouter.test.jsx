@@ -42,6 +42,10 @@ jest.mock('../../pages/account/ProfilePage', () => function ProfilePageMock() {
   return <h1>Perfil privado React</h1>;
 });
 
+jest.mock('../../pages/chat/MessagesPage', () => function MessagesPageMock() {
+  return <h1>Mensagens React</h1>;
+});
+
 jest.mock('../../pages/vagas/MyVacanciesPage', () => function MyVacanciesPageMock() {
   return <h1>Minhas vagas React</h1>;
 });
@@ -174,6 +178,7 @@ test.each([
 test.each([
   ['/dashboard', 'Dashboard React'],
   ['/perfil', 'Perfil privado React'],
+  ['/mensagens', 'Mensagens React'],
 ])('monta a rota protegida da conta %s', (path, heading) => {
   render(<MemoryRouter initialEntries={[path]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}><AppRoutes /></MemoryRouter>);
   expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();

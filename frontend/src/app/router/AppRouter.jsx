@@ -16,6 +16,7 @@ import VacancyManagePage from '../../pages/vagas/VacancyManagePage';
 import AuthenticatedOnly from '../../components/account/AuthenticatedOnly';
 import DashboardPage from '../../pages/account/DashboardPage';
 import ProfilePage from '../../pages/account/ProfilePage';
+import MessagesPage from '../../pages/chat/MessagesPage';
 
 export function AppRoutes() {
   return (
@@ -27,6 +28,7 @@ export function AppRoutes() {
       <Route path="/redefinir-senha" element={<ResetPasswordPage />} />
       <Route path="/dashboard" element={<AuthenticatedOnly><DashboardPage /></AuthenticatedOnly>} />
       <Route path="/perfil" element={<AuthenticatedOnly><ProfilePage /></AuthenticatedOnly>} />
+      <Route path="/mensagens" element={<AuthenticatedOnly><MessagesPage /></AuthenticatedOnly>} />
       <Route path="/vagas" element={<VacancySearchPage />} />
       <Route path="/minhas-vagas" element={<ContractorOnly><MyVacanciesPage /></ContractorOnly>} />
       <Route path="/vagas/nova" element={<ContractorOnly><VacancyCreatePage /></ContractorOnly>} />

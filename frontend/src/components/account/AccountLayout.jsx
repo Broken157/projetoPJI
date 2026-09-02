@@ -11,6 +11,7 @@ export default function AccountLayout({ children }) {
           <ul className="app-navbar__menu">
             <li><a className="navbar__link" href="/dashboard">Dashboard</a></li>
             <li><a className="navbar__link" href="/perfil">Meu perfil</a></li>
+            <li><a className="navbar__link" href="/mensagens">Mensagens</a></li>
           </ul>
           <div className="app-navbar__acoes">
             <LogoutButton />

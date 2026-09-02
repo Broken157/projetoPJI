@@ -197,7 +197,7 @@ test('visitante anônimo visualiza o perfil sem receber ação de chat', async (
   expect(screen.queryByRole('button', { name: 'Enviar mensagem' })).not.toBeInTheDocument();
 });
 
-test('sessão de tipo oposto inicia a conversa e mantém o destino legado', async () => {
+test('sessão de tipo oposto inicia a conversa e abre o destino React', async () => {
   window.sessionStorage.setItem(
     'palco.sessao',
     JSON.stringify({ token: 'jwt-valido', tipoUsuario: 'CONTRATANTE' })
@@ -211,8 +211,29 @@ test('sessão de tipo oposto inicia a conversa e mantém o destino legado', asyn
 
   await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/chat/salas', { usuarioDestinoId: 12 }));
   expect(navigation).toHaveBeenCalledWith(77);
-  expect(publicProfileService.messagesUrl(77)).toBe('/mensagens.html?sala=77');
+  expect(publicProfileService.messagesUrl(77)).toBe('/mensagens?sala=77');
   navigation.mockRestore();
+});
+
+test('preserva a regra contextual de menor retornada pelo backend', async () => {
+  window.sessionStorage.setItem(
+    'palco.sessao',
+    JSON.stringify({ token: 'jwt-valido', tipoUsuario: 'CONTRATANTE' })
+  );
+  apiClient.get.mockResolvedValue(artist);
+  apiClient.post.mockRejectedValue(new ApiError({
+    status: 422,
+    message: 'Chat com menor exige interacao profissional valida entre os participantes.',
+  }));
+  renderPage();
+
+  const button = await screen.findByRole('button', { name: 'Enviar mensagem' });
+  fireEvent.click(button);
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Chat com menor exige interacao profissional valida entre os participantes.'
+  );
+  expect(button).toBeEnabled();
 });
 
 test('sessão do mesmo tipo não pode iniciar conversa consigo mesma', async () => {

@@ -560,7 +560,7 @@
           '/detalhe-vaga.html',
           '/detalhe-vaga-proprietario.html',
           '/perfil-publico.html',
-          '/mensagens.html'
+          '/mensagens'
         ];
         return url.origin === window.location.origin && permitidos.indexOf(url.pathname) >= 0
           ? url.pathname.substring(1) + url.search
@@ -642,7 +642,7 @@
       topo.appendChild(elemento('span', 'notificacao-badge', String(estado.quantidadeNaoLidas || 0)));
       modulo.appendChild(topo);
       modulo.appendChild(elemento('p', '', estado.mensagem));
-      modulo.appendChild(link('Abrir mensagens', 'mensagens.html', 'notificacao-item__link'));
+      modulo.appendChild(link('Abrir mensagens', '/mensagens', 'notificacao-item__link'));
     }
 
     async function atualizarMensagens() {

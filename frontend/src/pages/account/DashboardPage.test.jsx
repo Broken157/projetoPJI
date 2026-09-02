@@ -50,6 +50,7 @@ test('renderiza módulos exclusivos do CONTRATANTE e dados reais da resposta', a
   expect(screen.getByRole('heading', { name: 'Talentos sugeridos' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Talento' })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Vagas recomendadas' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Abrir mensagens' })).toHaveAttribute('href', '/mensagens');
 });
 
 test('renderiza estados vazios sem criar contadores falsos', async () => {

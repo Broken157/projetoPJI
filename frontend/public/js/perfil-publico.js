@@ -30,7 +30,7 @@
         });
         var corpo = await resposta.json();
         if (!resposta.ok) throw new Error(corpo.mensagem || 'Não foi possível iniciar a conversa.');
-        window.location.href = 'mensagens.html?sala=' + encodeURIComponent(corpo.salaId);
+        window.location.href = '/mensagens?sala=' + encodeURIComponent(corpo.salaId);
       } catch (erro) {
         selecionar('[data-mensagem-erro]').textContent = erro.message;
         selecionar('[data-mensagem-erro]').hidden = false;

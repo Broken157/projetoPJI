@@ -25,7 +25,7 @@ export function createConversation(usuarioDestinoId) {
 }
 
 export function messagesUrl(salaId) {
-  return `/mensagens.html?sala=${encodeURIComponent(salaId)}`;
+  return `/mensagens?sala=${encodeURIComponent(salaId)}`;
 }
 
 export function navigateToMessages(salaId, location = window.location) {

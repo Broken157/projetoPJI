@@ -13,6 +13,7 @@ test('links produtivos de conta apontam para dashboard e perfil React', () => {
   expect(mainScript).toContain("window.location.href = '/dashboard'");
   expect(mainScript).toContain("['Meu perfil', '/perfil']");
   expect(mainScript).toContain("link('Editar perfil', '/perfil'");
+  expect(mainScript).toContain("link('Abrir mensagens', '/mensagens'");
 
   [
     'confirmar-exclusao-vaga.html',
@@ -40,4 +41,5 @@ test('links produtivos de conta apontam para dashboard e perfil React', () => {
 test('arquivos legados de dashboard e perfil continuam disponíveis para rollback', () => {
   expect(fs.existsSync(path.join(publicDir, 'dashboard-contratante.html'))).toBe(true);
   expect(fs.existsSync(path.join(publicDir, 'perfil.html'))).toBe(true);
+  expect(fs.existsSync(path.join(publicDir, 'mensagens.html'))).toBe(true);
 });

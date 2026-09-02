@@ -125,7 +125,7 @@ export default function DashboardPage() {
         </section>
         <section className="account-modules" aria-label="Recursos da conta">
           <Availability title="Notificações" data={data.notificacoes} />
-          <Availability title="Mensagens" data={data.mensagens} href="/mensagens.html" action="Abrir mensagens" />
+          <Availability title="Mensagens" data={data.mensagens} href="/mensagens" action="Abrir mensagens" />
         </section>
         <div className="account-panels">
           {artist ? <ArtistDashboard data={data} /> : <ContractorDashboard data={data} />}

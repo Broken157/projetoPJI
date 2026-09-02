@@ -214,7 +214,7 @@ class ChatRf24IntegrationTest {
             assertThat(n.getUsuarioDestino().getId()).isEqualTo(contratante.getId());
             assertThat(n.getTipo()).isEqualTo(TipoNotificacao.MENSAGEM);
             assertThat(n.getMensagem()).doesNotContain("Olá profissional");
-            assertThat(n.getLink()).isEqualTo("mensagens.html?sala=" + sala.getId());
+            assertThat(n.getLink()).isEqualTo("/mensagens?sala=" + sala.getId());
         });
     }
 

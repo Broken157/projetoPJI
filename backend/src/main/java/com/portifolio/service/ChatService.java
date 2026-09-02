@@ -126,7 +126,7 @@ public class ChatService {
                 Set.of(destinatarioId),
                 TipoNotificacao.MENSAGEM,
                 "Você recebeu uma nova mensagem.",
-                "mensagens.html?sala=" + salaId));
+                "/mensagens?sala=" + salaId));
         return resposta;
     }
 

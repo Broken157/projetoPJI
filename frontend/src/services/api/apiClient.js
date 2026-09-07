@@ -27,7 +27,7 @@ function errorMessage(body, status) {
 }
 
 async function request(path, options = {}) {
-  const { body, headers: customHeaders, token, ...fetchOptions } = options;
+  const { body, headers: customHeaders, token, responseType, ...fetchOptions } = options;
   const headers = new Headers({ Accept: 'application/json', ...customHeaders });
   const accessToken = token === undefined ? sessionService.getAccessToken() : token;
   let requestBody = body;
@@ -46,6 +46,7 @@ async function request(path, options = {}) {
     headers,
     body: requestBody,
   });
+  if (response.ok && responseType === 'stream') return response;
   const responseBody = await parseResponse(response);
 
   if (!response.ok) {
@@ -60,6 +61,14 @@ async function request(path, options = {}) {
 }
 
 const apiClient = {
+  getStream(path, options = {}) {
+    return request(path, {
+      ...options,
+      method: 'GET',
+      responseType: 'stream',
+      headers: { ...options.headers, Accept: 'text/event-stream' },
+    });
+  },
   get(path, options = {}) {
     return request(path, { ...options, method: 'GET' });
   },

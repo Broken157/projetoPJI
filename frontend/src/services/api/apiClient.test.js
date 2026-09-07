@@ -96,3 +96,23 @@ test('mantém erro 401 identificável como ApiError', async () => {
   await expect(apiClient.get('/dashboard')).rejects.toBeInstanceOf(ApiError);
   await expect(apiClient.get('/dashboard')).rejects.toMatchObject({ status: 401 });
 });
+
+test('abre streaming autenticado sem consumir o corpo e preserva AbortSignal', async () => {
+  const reply = { ...response({ contentType: 'text/event-stream' }), body: {} };
+  global.fetch.mockResolvedValue(reply);
+  const controller = new AbortController();
+  expect(await apiClient.getStream('/notificacoes/stream', { token: 'stream-jwt', signal: controller.signal })).toBe(reply);
+  const [url, options] = global.fetch.mock.calls[0];
+  expect(url).toBe(`${DEFAULT_API_BASE_URL}/notificacoes/stream`);
+  expect(options.headers.get('Authorization')).toBe('Bearer stream-jwt');
+  expect(options.headers.get('Accept')).toBe('text/event-stream');
+  expect(options.signal).toBe(controller.signal);
+  expect(options.responseType).toBeUndefined();
+  expect(reply.text).not.toHaveBeenCalled();
+});
+
+test('erro de autenticação no streaming mantém 401 sem retry ou refresh', async () => {
+  global.fetch.mockResolvedValue(response({ status: 401, body: { mensagem: 'Não autenticado.' } }));
+  await expect(apiClient.getStream('/notificacoes/stream')).rejects.toMatchObject({ status: 401 });
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+});

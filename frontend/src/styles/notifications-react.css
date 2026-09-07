@@ -1,0 +1,21 @@
+.notifications-panel { min-width: 0; }
+.notifications-panel button { min-height: 44px; padding: .55rem .8rem; border: 1px solid #674bc9; border-radius: 8px; background: #fff; color: #452887; font: inherit; font-size: .875rem; cursor: pointer; }
+.notifications-panel button:disabled { opacity: .55; cursor: default; }
+.notifications-panel button:focus-visible, .notifications-panel a:focus-visible { outline: 3px solid #7053cd; outline-offset: 3px; }
+.notifications-transport { font-size: .85rem; color: #585367; }
+.notifications-actions, .notifications-pagination, .notifications-item-footer, .notifications-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.notifications-actions { margin: .8rem 0; }
+.notifications-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .65rem; }
+.notifications-item { min-width: 0; padding: .9rem; border: 1px solid #dfdbe7; border-radius: 10px; background: #fff; }
+.notifications-item--unread { border-left: 4px solid #7751c9; background: #f8f5ff; }
+.notifications-meta { font-size: .75rem; color: #585367; justify-content: space-between; }
+.notifications-type { padding: .2rem .55rem; border-radius: 20px; font-weight: 700; }
+.notifications-type--candidatura { background: #ede2fb; color: #513080; }
+.notifications-type--mensagem { background: #e1f0fc; color: #164b70; }
+.notifications-type--sistema { background: #e6eee8; color: #285238; }
+.notifications-panel .notifications-context { display: block; margin: .7rem 0; color: #39245b; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.5; }
+.notifications-item-footer { justify-content: space-between; font-size: .75rem; color: #585367; }
+.notifications-pagination { margin-top: 1rem; justify-content: space-between; }
+.notifications-popup { position: fixed; right: 1rem; bottom: 1rem; z-index: 1000; width: min(360px, calc(100vw - 2rem)); box-sizing: border-box; max-height: calc(100dvh - 2rem); overflow: auto; padding: 1rem; border: 1px solid #7651b6; border-radius: 12px; background: #fff; color: #39245b; box-shadow: 0 4px 24px #24113b33; }
+.notifications-popup p { overflow-wrap: anywhere; white-space: pre-wrap; max-height: 35dvh; overflow: auto; }
+@media (max-width: 480px) { .notifications-actions > button { flex: 1 1 100%; } .notifications-item-footer { align-items: flex-start; } }

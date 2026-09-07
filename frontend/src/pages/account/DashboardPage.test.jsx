@@ -4,6 +4,7 @@ import DashboardPage from './DashboardPage';
 
 jest.mock('../../components/account/AccountLayout', () => function Layout({ children }) { return children; });
 jest.mock('../../services/account/accountService', () => ({ getDashboard: jest.fn() }));
+jest.mock('../../components/notifications/NotificationPanel', () => function Panel() { return <section aria-label="Notificações RF36" />; });
 
 const availability = { disponivel: true, mensagem: 'Recurso real disponível.' };
 
@@ -32,6 +33,7 @@ test('renderiza dashboard do ARTISTA e aviso de perfil incompleto sem módulos d
   expect(screen.getByRole('heading', { name: 'Show de jazz' })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Candidaturas recentes' })).not.toBeInTheDocument();
   expect(getDashboard).toHaveBeenCalledWith();
+  expect(screen.getByRole('region', { name: 'Notificações RF36' })).toBeInTheDocument();
 });
 
 test('artista completo não recebe aviso incorreto', async () => {

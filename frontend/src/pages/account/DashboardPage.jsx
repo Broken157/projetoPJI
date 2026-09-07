@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AccountLayout from '../../components/account/AccountLayout';
+import NotificationPanel from '../../components/notifications/NotificationPanel';
 import { getDashboard } from '../../services/account/accountService';
 
 function money(value) {
@@ -124,7 +125,7 @@ export default function DashboardPage() {
           <div><h2>Olá, {data.nomeExibicao}</h2><p>{artist ? 'As recomendações usam somente as áreas do seu perfil.' : 'Candidaturas e sugestões respeitam suas vagas e sua identidade autenticada.'}</p></div>
         </section>
         <section className="account-modules" aria-label="Recursos da conta">
-          <Availability title="Notificações" data={data.notificacoes} />
+          <NotificationPanel />
           <Availability title="Mensagens" data={data.mensagens} href="/mensagens" action="Abrir mensagens" />
         </section>
         <div className="account-panels">

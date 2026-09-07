@@ -55,7 +55,17 @@
 .account-feedback--error { color: #7a1230; background: #fff0f5; }
 .account-feedback--success { color: var(--cor-navy); background: #fff7d8; border-color: var(--cor-amarelo); }
 @media (max-width: 700px) {
-  .account-navbar .app-navbar__menu { display: none; }
+  .account-navbar { display: grid; grid-template-columns: minmax(0,1fr) auto; }
+  .account-navbar .app-navbar__menu {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .75rem;
+    margin-left: 0;
+  }
+  .account-navbar .app-navbar__acoes { margin-left: 0; }
   .account-heading, .account-alert, .account-card { align-items: stretch; flex-direction: column; }
   .account-actions { justify-content: flex-start; }
   .account-modules, .account-panels, .account-form { grid-template-columns: 1fr; }

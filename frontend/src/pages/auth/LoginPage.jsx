@@ -70,7 +70,7 @@ export default function LoginPage({ onAuthenticated = redirectToLegacyDashboard 
             {error ? <p className="auth-feedback auth-feedback--error" role="alert">{error}</p> : null}
             <button className="btn btn--primario login__entrar" type="submit" disabled={loading}>{loading ? 'Entrando…' : 'Entrar'}</button>
             <p className="login__cadastro">Ainda não está no <span className="destaque-magenta">Palco</span>? <a href="/cadastro">Crie uma conta.</a></p>
-            <p className="texto-legal login__legal">Ao continuar, você concorda com os <a href="/termos.html">Termos de Serviço do Palco</a> e confirma que leu nossa <a href="/privacidade.html">Política de Privacidade</a>.</p>
+            <p className="texto-legal login__legal">Ao continuar, você concorda com os <span className="auth-pending-link" role="link" aria-disabled="true">Termos de Serviço do Palco</span> e confirma que leu nossa <span className="auth-pending-link" role="link" aria-disabled="true">Política de Privacidade</span>.</p>
           </form>
         </div>
       </main>

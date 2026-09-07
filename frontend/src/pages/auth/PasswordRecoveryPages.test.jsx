@@ -43,6 +43,12 @@ test('página de solicitação monta formulário acessível de e-mail', () => {
   expect(screen.getByRole('heading', { name: 'Recuperar senha' })).toBeInTheDocument();
   expect(screen.getByLabelText('E-mail')).toHaveAttribute('type', 'email');
   expect(screen.getByRole('button', { name: 'Enviar instruções' })).toBeEnabled();
+  expect(screen.getByRole('link', { name: 'Palco' })).toHaveAttribute('href', '/');
+  expect(screen.getByRole('link', { name: 'Explorar' })).toHaveAttribute('href', '/vagas');
+  expect(screen.getByRole('link', { name: 'Comunidade' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('link', { name: 'Comunidade' })).not.toHaveAttribute('href');
+  expect(screen.getByRole('link', { name: 'Empresa' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('link', { name: 'Empresa' })).not.toHaveAttribute('href');
 });
 
 test('solicitação envia somente o e-mail no body e usa a API pública', async () => {

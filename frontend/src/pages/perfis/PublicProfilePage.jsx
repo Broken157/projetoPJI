@@ -28,7 +28,7 @@ function PublicProfileHeader() {
   return (
     <header className="perfil-publico-topo">
       <nav className="perfil-publico-nav" aria-label="Navegação principal">
-        <a className="perfil-publico-nav__marca" href="/login.html" aria-label="Palco — início">
+        <a className="perfil-publico-nav__marca" href="/login" aria-label="Palco — início">
           <img src="/assets/logo-palco.png" alt="Palco" />
         </a>
         <div className="perfil-publico-nav__acoes">
@@ -50,7 +50,7 @@ function ProfileError({ title, message }) {
       className="perfil-publico__estado perfil-publico__estado--erro"
       headingLevel="h1"
     >
-      <a className="perfil-publico__voltar" href="/login.html">
+      <a className="perfil-publico__voltar" href="/login">
         Voltar para a Palco
       </a>
     </ErrorState>

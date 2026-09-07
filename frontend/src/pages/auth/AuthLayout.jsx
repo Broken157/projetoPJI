@@ -8,8 +8,8 @@ export default function AuthLayout({ children, currentPage }) {
           </a>
           <ul className="navbar__menu">
             <li><a className="navbar__link navbar__link--destaque" href="/vagas">Explorar</a></li>
-            <li><a className="navbar__link" href="/comunidade.html">Comunidade</a></li>
-            <li><a className="navbar__link" href="/empresa.html">Empresa</a></li>
+            <li><span className="navbar__link" role="link" aria-disabled="true">Comunidade</span></li>
+            <li><span className="navbar__link" role="link" aria-disabled="true">Empresa</span></li>
           </ul>
           <div className="navbar__acoes">
             <a className="navbar__link" href="/login" aria-current={currentPage === 'login' ? 'page' : undefined}>Login</a>

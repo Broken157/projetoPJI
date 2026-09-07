@@ -116,6 +116,9 @@ test('a partir de 18 anos não solicita responsável legal', () => {
 
 test('campos obrigatórios e aceite de termos são validados', () => {
   renderRegistration();
+  expect(screen.getByRole('link', { name: 'Termos de Uso' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('link', { name: 'Termos de Uso' })).not.toHaveAttribute('href');
+  expect(screen.getByRole('link', { name: 'Política de Privacidade' })).not.toHaveAttribute('href');
   fireEvent.click(screen.getByRole('button', { name: 'Registrar' }));
   expect(screen.getByRole('alert')).toHaveTextContent('campos obrigatórios');
   expect(authService.cadastrar).not.toHaveBeenCalled();

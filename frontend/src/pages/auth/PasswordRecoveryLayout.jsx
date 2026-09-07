@@ -3,24 +3,24 @@ export default function PasswordRecoveryLayout({ children }) {
     <div className="pagina-login auth-recovery">
       <header>
         <nav className="navbar" aria-label="Navegação principal">
-          <a href="/index.html">
+          <a href="/">
             <img className="navbar__logo" src="/assets/logo-palco.png" alt="Palco" />
           </a>
           <ul className="navbar__menu">
             <li>
-              <a className="navbar__link navbar__link--destaque" href="/explorar.html">
+              <a className="navbar__link navbar__link--destaque" href="/vagas">
                 Explorar
               </a>
             </li>
             <li>
-              <a className="navbar__link" href="/comunidade.html">
+              <span className="navbar__link" role="link" aria-disabled="true">
                 Comunidade
-              </a>
+              </span>
             </li>
             <li>
-              <a className="navbar__link" href="/empresa.html">
+              <span className="navbar__link" role="link" aria-disabled="true">
                 Empresa
-              </a>
+              </span>
             </li>
           </ul>
           <div className="navbar__acoes">

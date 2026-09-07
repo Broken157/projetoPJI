@@ -101,8 +101,13 @@
   accent-color: var(--cor-magenta);
 }
 
-.auth-registration__terms a {
+.auth-pending-link {
   text-decoration: underline;
+  cursor: default;
+}
+
+.navbar__link[aria-disabled="true"] {
+  cursor: default;
 }
 
 .auth-registration__actions {

@@ -34,6 +34,10 @@ test('renderiza somente o login convencional com e-mail e senha', () => {
   expect(screen.getByLabelText('E-mail')).toHaveAttribute('type', 'email');
   expect(screen.getByLabelText('Senha')).toHaveAttribute('type', 'password');
   expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Comunidade' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('link', { name: 'Empresa' })).toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByRole('link', { name: 'Termos de Serviço do Palco' })).not.toHaveAttribute('href');
+  expect(screen.getByRole('link', { name: 'Política de Privacidade' })).not.toHaveAttribute('href');
 });
 
 test('envia payload, salva sessão JWT sem senha e segue ao painel legado atual', async () => {

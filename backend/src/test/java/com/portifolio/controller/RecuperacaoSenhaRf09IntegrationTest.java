@@ -169,9 +169,8 @@ class RecuperacaoSenhaRf09IntegrationTest {
     void senhaInvalidaNaoAlteraHashConsomeTokenOuRevogaSessaoEPermiteNovaTentativa()
             throws Exception {
         Usuario usuario = novoUsuarioLocal("politica@rf09.test");
-        JsonNode login = corpo(login(usuario.getEmail(), SENHA_ANTIGA, true)
-                .andExpect(status().isOk()).andReturn());
-        String refreshToken = login.get("refreshToken").asText();
+        MvcResult loginResult = login(usuario.getEmail(), SENHA_ANTIGA, true).andExpect(status().isOk()).andReturn();
+        String refreshToken = loginResult.getResponse().getHeader("Set-Cookie").split(";", 2)[0].substring("palco_refresh=".length());
         solicitar(usuario.getEmail());
         String token = emailSender.ultimoToken;
         Usuario antes = usuarioRepository.findById(usuario.getId()).orElseThrow();
@@ -187,9 +186,7 @@ class RecuperacaoSenhaRf09IntegrationTest {
         assertThat(aposFalha.getSenha()).isEqualTo(hashAnterior);
         assertThat(aposFalha.getTokenRecuperacao()).isEqualTo(tokenHash);
         assertThat(aposFalha.getTokenExpiracao()).isEqualTo(expiracao);
-        mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("refreshToken", refreshToken))))
+        mockMvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("palco_refresh", refreshToken)))
                 .andExpect(status().isOk());
 
         redefinir(token, SENHA_NOVA).andExpect(status().isOk());
@@ -202,9 +199,8 @@ class RecuperacaoSenhaRf09IntegrationTest {
     void limiteTecnicoDoBCryptPreservaHashTokenESessaoEPermiteReusarMesmoToken()
             throws Exception {
         Usuario usuario = novoUsuarioLocal("bcrypt@rf09.test");
-        JsonNode login = corpo(login(usuario.getEmail(), SENHA_ANTIGA, true)
-                .andExpect(status().isOk()).andReturn());
-        String refreshToken = login.get("refreshToken").asText();
+        MvcResult loginResult = login(usuario.getEmail(), SENHA_ANTIGA, true).andExpect(status().isOk()).andReturn();
+        String refreshToken = loginResult.getResponse().getHeader("Set-Cookie").split(";", 2)[0].substring("palco_refresh=".length());
         solicitar(usuario.getEmail());
         String token = emailSender.ultimoToken;
         Usuario antes = usuarioRepository.findById(usuario.getId()).orElseThrow();
@@ -222,9 +218,7 @@ class RecuperacaoSenhaRf09IntegrationTest {
         assertThat(aposFalha.getSenha()).isEqualTo(hashAnterior);
         assertThat(aposFalha.getTokenRecuperacao()).isEqualTo(tokenHash);
         assertThat(aposFalha.getTokenExpiracao()).isEqualTo(expiracao);
-        mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("refreshToken", refreshToken))))
+        mockMvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("palco_refresh", refreshToken)))
                 .andExpect(status().isOk());
 
         redefinir(token, SENHA_NOVA).andExpect(status().isOk());
@@ -267,17 +261,14 @@ class RecuperacaoSenhaRf09IntegrationTest {
     @Test
     void redefinicaoDeveRevogarRefreshTokensAnteriores() throws Exception {
         Usuario usuario = novoUsuarioLocal("refresh@rf09.test");
-        JsonNode login = corpo(login(usuario.getEmail(), SENHA_ANTIGA, true)
-                .andExpect(status().isOk()).andReturn());
-        String refreshToken = login.get("refreshToken").asText();
+        MvcResult loginResult = login(usuario.getEmail(), SENHA_ANTIGA, true).andExpect(status().isOk()).andReturn();
+        String refreshToken = loginResult.getResponse().getHeader("Set-Cookie").split(";", 2)[0].substring("palco_refresh=".length());
         solicitar(usuario.getEmail());
 
         redefinir(emailSender.ultimoToken, SENHA_NOVA).andExpect(status().isOk());
 
-        mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("refreshToken", refreshToken))))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("palco_refresh", refreshToken)))
+                .andExpect(status().isUnauthorized());
         assertThat(jdbcTemplate.queryForObject(
                 "select count(*) from refresh_tokens where usuario_id = ? and ativo = true",
                 Integer.class, usuario.getId())).isZero();

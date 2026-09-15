@@ -19,6 +19,7 @@ public class PerfilArtistaRequest {
     private Long usuarioId;
 
     private String biografia;
+    private Boolean disponivelOportunidades;
 
     @Size(max = 150, message = "Localização deve ter no máximo 150 caracteres")
     private String localizacao;

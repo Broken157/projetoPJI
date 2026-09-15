@@ -42,6 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
+    private boolean legacySchema;
 
     private final UsuarioRepository usuarioRepository;
     private final PerfilArtistaRepository perfilArtistaRepository;
@@ -123,6 +125,9 @@ public class AuthService {
     }
 
     private void criarPerfilInicial(Usuario usuario, String tipoPerfilContratante, com.portifolio.model.enums.TipoPerfilArtistico tipoArtistico, AreaArtistica areaPrincipal) {
+        if (legacySchema && usuario.getTipoUsuario() == TipoUsuario.ARTISTA) {
+            PerfilArtista perfil = new PerfilArtista(); perfil.setUsuario(usuario); perfilArtistaRepository.save(perfil); return;
+        }
         if (usuario.getTipoUsuario() == TipoUsuario.CONTRATANTE) {
             PerfilContratante perfil = new PerfilContratante();
             perfil.setUsuario(usuario);
@@ -165,7 +170,7 @@ public class AuthService {
         }
 
         exigirAcessoNormalGoogle(usuario);
-        String token = jwtService.gerarToken(usuario);
+
 
         // RF33: gera refresh token apenas se rememberMe = true
         String refreshToken = null;
@@ -173,6 +178,7 @@ public class AuthService {
             refreshToken = refreshTokenService.gerarRefreshToken(usuario);
         }
 
+        String token = jwtService.gerarToken(usuario, refreshToken);
         // RF34: resolve avatar a partir da foto do usuario (perfil ainda pode nao existir)
         String avatarUrl = avatarService.resolverUrl(usuario.getId(), usuario.getFotoPerfil(), null);
 
@@ -195,6 +201,7 @@ public class AuthService {
     @Transactional
     public GoogleAuthResponse loginComGoogle(GoogleAuthRequest request) {
 
+        if (legacySchema) throw new com.portifolio.exception.UnprocessableEntityException("Login Google bloqueado: o schema não contém o estado e consentimento da conta.");
         // 1. Valida o ID Token com a chave publica do Google
         GoogleTokenClaims claims = googleTokenVerifier.verificar(request.getIdToken());
 
@@ -297,8 +304,10 @@ public class AuthService {
     public RefreshResponse refreshToken(RefreshRequest request) {
         Usuario usuario = refreshTokenService.validarRefreshToken(request.getRefreshToken());
         exigirAcessoNormalGoogle(usuario);
-        String novoToken = jwtService.gerarToken(usuario);
-        return RefreshResponse.builder().token(novoToken).build();
+
+        String novoRefresh = refreshTokenService.rotacionar(request.getRefreshToken());
+        String novoToken = jwtService.gerarToken(usuario, novoRefresh);
+        return RefreshResponse.builder().token(novoToken).refreshToken(novoRefresh).build();
     }
 
     // ──────────────────────────────────────────────────────────
@@ -330,13 +339,14 @@ public class AuthService {
                     .perfilCompleto(usuario.getPerfilCompleto())
                     .build();
         }
-        String token = jwtService.gerarToken(usuario);
+
 
         String refreshToken = null;
         if (Boolean.TRUE.equals(rememberMe)) {
             refreshToken = refreshTokenService.gerarRefreshToken(usuario);
         }
 
+        String token = jwtService.gerarToken(usuario, refreshToken);
         String avatarUrl = avatarService.resolverUrl(usuario.getId(), usuario.getFotoPerfil(), null);
 
         return GoogleAuthResponse.builder()
@@ -385,7 +395,7 @@ public class AuthService {
 
     private AreaArtistica validarPerfilInicial(TipoUsuario tipo,
             com.portifolio.model.enums.TipoPerfilArtistico perfil, Short areaPrincipalId) {
-        if (tipo != TipoUsuario.ARTISTA) return null;
+        if (legacySchema || tipo != TipoUsuario.ARTISTA) return null;
         if (perfil == null || areaPrincipalId == null) {
             throw new IllegalArgumentException("Informe tipoPerfilArtistico e areaPrincipalId para o artista.");
         }

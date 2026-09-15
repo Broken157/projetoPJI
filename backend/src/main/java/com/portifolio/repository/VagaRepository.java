@@ -58,12 +58,10 @@ public interface VagaRepository extends JpaRepository<Vaga, Long>, JpaSpecificat
     // RNF05: carrega funcoes (ManyToMany) e contratante junto, evitando N+1.
     // Usado APÓS a paginação (conjunto de IDs já delimitado) — nunca combine
     // fetch join de coleção com LIMIT/OFFSET na mesma query.
-    @EntityGraph(attributePaths = {"area", "funcoes", "contratante", "contratante.usuario.responsavelLegal", "fotos"})
     List<Vaga> findByIdIn(List<Long> ids);
 
     // RF05: uma única vaga detalhada pode carregar funcoes e dados públicos do
     // contratante juntos; fotos permanecem em consulta própria dentro da transação.
-    @EntityGraph(attributePaths = {"area", "funcoes", "contratante", "contratante.usuario.responsavelLegal"})
     @Query("select v from Vaga v where v.id = :id")
     Optional<Vaga> findDetalhesById(@Param("id") Long id);
 
@@ -89,13 +87,7 @@ public interface VagaRepository extends JpaRepository<Vaga, Long>, JpaSpecificat
             @Param("funcaoIds") Set<Long> funcaoIds,
             Pageable pageable);
 
-    @Query("""
-            select distinct funcao.id
-            from Vaga vaga
-            join vaga.funcoes funcao
-            where vaga.contratante.usuarioId = :contratanteId
-              and vaga.status in :statusAtivos
-            """)
+    @Query(value = "select distinct vf.funcao_id from vaga_funcao vf join vagas v on v.id=vf.vaga_id where v.contratante_id=:contratanteId and v.status in (:statusAtivos)", nativeQuery=true)
     Set<Long> findFuncaoIdsDasVagasAtivasDoContratante(
             @Param("contratanteId") Long contratanteId,
             @Param("statusAtivos") Set<StatusVaga> statusAtivos);

@@ -15,6 +15,10 @@ public class VideoPortfolioValidator {
             if (!"https".equalsIgnoreCase(u.getScheme()) || u.getHost() == null || u.getUserInfo() != null
                     || u.getPort() != -1 || u.getFragment() != null || valor.contains("%")) throw new IllegalArgumentException();
             String host = u.getHost().toLowerCase(Locale.ROOT), path = u.getPath(), id = null;
+            if (host.equals("open.spotify.com") && path.matches("/(?:intl-[a-z]{2}/)?(?:track|album|playlist|artist|episode|show)/[A-Za-z0-9]{22}")) {
+                String canonicalPath = path.replaceFirst("^/intl-[a-z]{2}", "");
+                return new Video("https://open.spotify.com" + canonicalPath, "https://open.spotify.com/embed" + canonicalPath, "SPOTIFY");
+            }
             if (Set.of("youtube.com", "www.youtube.com", "m.youtube.com").contains(host)) {
                 if (path.equals("/watch")) {
                     Map<String, String> params = new HashMap<>();
@@ -31,6 +35,6 @@ public class VideoPortfolioValidator {
             }
             if (id == null || !id.matches("[A-Za-z0-9_-]{11}")) throw new IllegalArgumentException();
             return new Video("https://www.youtube.com/watch?v=" + id, "https://www.youtube-nocookie.com/embed/" + id, "YOUTUBE");
-        } catch (Exception ex) { throw new UnprocessableEntityException("Link inválido. Informe um vídeo HTTPS do YouTube ou Vimeo."); }
+        } catch (Exception ex) { throw new UnprocessableEntityException("Link inválido. Informe um link HTTPS do YouTube, Vimeo ou Spotify."); }
     }
 }

@@ -15,6 +15,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> {
     List<Candidatura> findByVagaId(Long vagaId);
+    @Query("select c.id from Candidatura c where c.vaga.id=:vagaId order by c.dataCandidatura desc,c.id desc")
+    Page<Long> findIdsPorVagaSemTaxonomia(@Param("vagaId") Long vagaId,Pageable pageable);
     List<Candidatura> findByArtistaUsuarioId(Long usuarioId);
     List<Candidatura> findByVagaContratanteUsuarioId(Long usuarioId);
     boolean existsByVagaIdAndArtistaUsuarioId(Long vagaId, Long usuarioId);
@@ -40,28 +42,12 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
     @EntityGraph(attributePaths = {"vaga", "artista"})
     Page<Candidatura> findByVagaContratanteUsuarioId(Long usuarioId, Pageable pageable);
 
-    @Query(value = """
-            select c.id
-            from Candidatura c
-            left join c.artista.areas areaArtista
-            left join areaArtista.funcoes funcao
-            where c.vaga.id = :vagaId
-            group by c.id, c.artista.ultimaAtualizacao
-            order by sum(case when funcao.id in :funcaoIds then 1 else 0 end) desc,
-                     case when c.artista.ultimaAtualizacao is null then 1 else 0 end asc,
-                     c.artista.ultimaAtualizacao desc,
-                     c.id asc
-            """, countQuery = """
-            select count(c.id)
-            from Candidatura c
-            where c.vaga.id = :vagaId
-            """)
+    @Query(value = "select c.id from candidaturas c join perfis_artistas a on a.usuario_id=c.artista_id left join perfil_artista_funcao f on f.perfil_artista_id=a.usuario_id where c.vaga_id=:vagaId group by c.id,a.ultima_atualizacao order by sum(case when f.funcao_id in (:funcaoIds) then 1 else 0 end) desc, a.ultima_atualizacao desc nulls last, c.id asc", countQuery="select count(*) from candidaturas where vaga_id=:vagaId", nativeQuery=true)
     Page<Long> findIdsPorVagaOrdenadosPorCompatibilidade(
             @Param("vagaId") Long vagaId,
             @Param("funcaoIds") Set<Long> funcaoIds,
             Pageable pageable);
 
-    @EntityGraph(attributePaths = {"artista", "artista.usuario.responsavelLegal", "artista.areas.funcoes"})
     @Query("select distinct c from Candidatura c where c.id in :ids")
     List<Candidatura> findDetalhadasByIdIn(@Param("ids") List<Long> ids);
 

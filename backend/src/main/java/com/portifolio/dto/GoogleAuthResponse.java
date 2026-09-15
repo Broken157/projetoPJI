@@ -16,6 +16,7 @@ public class GoogleAuthResponse {
 
     // Preenchidos quando status = AUTENTICADO
     private String token;
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String refreshToken;
     private Long id;
     private String nome;

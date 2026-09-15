@@ -10,7 +10,10 @@ import org.springframework.data.repository.query.Param;
 // RF33 — Sessao persistente
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<RefreshToken> findByTokenHashAndAtivoTrue(String tokenHash);
+    Optional<RefreshToken> findByTokenHash(String tokenHash);
+    boolean existsByIdAndAtivoTrueAndExpiracaoAfter(Long id, java.time.LocalDateTime instante);
 
     // Invalida todos os tokens ativos de um usuario (usado no logout total / exclusao de conta)
     @Modifying

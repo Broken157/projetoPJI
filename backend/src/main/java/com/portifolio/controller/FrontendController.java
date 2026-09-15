@@ -36,7 +36,9 @@ public class FrontendController {
         return "forward:/index.html";
     }
 
-    @GetMapping("/mensagens")
+    @GetMapping({"/mensagens", "/agenda", "/comunidades", "/comunidade2", "/conta/excluir",
+            "/galeria", "/portfolio/{*path}", "/contratante/perfil", "/perfil/editar",
+            "/notificacoes", "/candidaturas", "/termos", "/privacidade"})
     public String encaminharMensagensReact() {
         return "forward:/index.html";
     }

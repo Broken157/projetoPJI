@@ -8,4 +8,6 @@ import lombok.Getter;
 @Builder
 public class RefreshResponse {
     private String token;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String refreshToken;
 }

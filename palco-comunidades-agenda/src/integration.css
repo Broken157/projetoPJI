@@ -1,0 +1,19 @@
+.integration-pagination{display:flex;align-items:center;justify-content:center;gap:1rem;margin:1.25rem 0;flex-wrap:wrap}
+.integration-pagination button,.integration-actions button{padding:.6rem 1rem;border:1px solid #ccc;border-radius:8px;background:white;color:#222;cursor:pointer}
+.integration-actions{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem}
+button:disabled{opacity:.55;cursor:not-allowed}
+.community-form select,.community-form input:not([type=checkbox]),.community-form textarea{width:100%;box-sizing:border-box}
+.community-form label{display:block;margin:.6rem 0}
+.community-form input[type=checkbox]{width:auto;margin-right:.5rem}
+.community-form fieldset{border:1px solid #ddd;border-radius:8px;padding:1rem}
+.integration-file{display:block;padding:1rem;border-radius:12px;margin:1rem}
+.integration-file input{display:block;max-width:100%;margin-top:.75rem}
+.vacancy-detail p{white-space:pre-wrap;overflow-wrap:anywhere}
+.job-card .job-info{min-width:0}
+.job-card .job-info p,.notice-row p{overflow-wrap:anywhere}
+.agenda-grid article{position:relative;min-height:160px}
+.agenda-grid article>div{padding-top:2.5rem}
+.talent-filter-panel{flex-wrap:wrap}
+.talent-filter-panel label{max-width:100%}
+.portfolio-panel audio{width:100%}
+@media(max-width:600px){.integration-actions button{flex:1}.community-form{max-width:100%}.job-card{flex-wrap:wrap}.integration-pagination{gap:.5rem}}

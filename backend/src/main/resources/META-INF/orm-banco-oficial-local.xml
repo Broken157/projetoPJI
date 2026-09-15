@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entity-mappings xmlns="https://jakarta.ee/xml/ns/persistence/orm" version="3.1">
+  <entity class="com.portifolio.model.Usuario"><attributes>
+      <basic name="fotoPerfil"><column name="foto_perfil"/></basic>
+      <basic name="tipoUsuario"><column name="tipo_usuario"/><convert converter="com.portifolio.model.converter.OfficialLocalConverters$UsuarioTipo"/></basic>
+      <basic name="nomeResponsavel" access="PROPERTY"><column name="nome_responsavel"/></basic>
+      <basic name="telefoneResponsavel" access="PROPERTY"><column name="telefone_responsavel"/></basic>
+      <basic name="emailResponsavel" access="PROPERTY"><column name="email_responsavel"/></basic>
+      <transient name="responsavelLegal"/>
+      <transient name="statusConta"/>
+      <transient name="cpf"/>
+      <transient name="cnpj"/>
+      <transient name="versaoTermo"/>
+      <transient name="emailVerificado"/>
+      <transient name="tokenVerificacao"/>
+      <transient name="tentativasVerificacaoEmail"/>
+      <transient name="ultimoReenvioVerificacao"/>
+  </attributes></entity>
+  <entity class="com.portifolio.model.PerfilArtista"><attributes>
+      <transient name="tipoPerfilArtistico"/>
+      <transient name="raioAtuacao"/>
+      <transient name="disponivelOportunidades"/>
+      <transient name="nomeIntegrantes"/>
+      <transient name="areas"/>
+  </attributes></entity>
+  <entity class="com.portifolio.model.Vaga"><attributes>
+      <basic name="valorMinimo"><column name="remunera_valor"/></basic>
+      <basic name="status"><column name="status"/><convert converter="com.portifolio.model.converter.OfficialLocalConverters$VagaStatus"/></basic>
+      <basic name="modeloTrabalho"><column name="modelo_trabalho"/><convert converter="com.portifolio.model.converter.OfficialLocalConverters$Trabalho"/></basic>
+      <transient name="area"/>
+      <transient name="formaRemuneracao"/>
+      <transient name="valorMaximo"/>
+      <transient name="abrangencia"/>
+      <transient name="funcoes"/>
+      <transient name="especializacoes"/>
+      <transient name="categoriasAfirmativas"/>
+  </attributes></entity>
+  <entity class="com.portifolio.model.Candidatura"><attributes>      <basic name="status"><column name="status"/><convert converter="com.portifolio.model.converter.OfficialLocalConverters$CandidaturaStatus"/></basic></attributes></entity>
+  <entity class="com.portifolio.model.ItemSalvo"><attributes>      <basic name="tipoAlvo"><column name="tipo_alvo"/><convert converter="com.portifolio.model.converter.OfficialLocalConverters$SalvoTipo"/></basic></attributes></entity>
+  <entity class="com.portifolio.model.Notificacao"><attributes>      <basic name="tipo"><column name="tipo_notificacao"/><convert converter="com.portifolio.model.converter.OfficialLocalConverters$NotificacaoTipo"/></basic></attributes></entity>
+  <entity class="com.portifolio.model.PerfilContratante"><attributes><transient name="cpf"/><transient name="cnpj"/></attributes></entity>
+  <entity class="com.portifolio.model.MensagemChat"><attributes><transient name="editada"/><transient name="dataEdicao"/><transient name="textoOriginal"/><transient name="excluida"/><transient name="dataExclusao"/></attributes></entity>
+  <entity class="com.portifolio.model.RefreshToken"><attributes><transient name="dispositivoInfo"/><transient name="ipCriacao"/><transient name="ultimoUso"/></attributes></entity>
+</entity-mappings>

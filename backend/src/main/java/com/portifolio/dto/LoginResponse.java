@@ -19,5 +19,6 @@ public class LoginResponse {
     private String avatarUrl;
 
     // RF33: presente apenas quando rememberMe = true; null caso contrario
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String refreshToken;
 }

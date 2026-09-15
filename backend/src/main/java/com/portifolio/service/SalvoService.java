@@ -17,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service @RequiredArgsConstructor @Transactional(readOnly = true)
 public class SalvoService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
+    private boolean legacySchema;
+    @org.springframework.beans.factory.annotation.Autowired private org.springframework.jdbc.core.JdbcTemplate legacyJdbc;
     private final ItemSalvoRepository salvos;
     private final SalvoAlvoRepository alvos;
     private final PerfilPublicoService perfis;
@@ -32,6 +35,7 @@ public class SalvoService {
         Usuario usuario = usuario();
         TipoAlvoSalvo tipo = validar(request.tipoAlvo(),request.alvoId());
         Long alvoId = request.alvoId();
+        if (legacySchema) legacyJdbc.query("select pg_advisory_xact_lock(19001,hashtext(?))", rs -> {}, usuario.getId()+":"+tipo+":"+alvoId);
         if (salvos.existsByUsuarioIdAndTipoAlvoAndAlvoId(usuario.getId(),tipo,alvoId))
             return new Salvamento(false,estado(usuario.getId(),tipo,alvoId));
         Long dono;
@@ -41,7 +45,7 @@ public class SalvoService {
         } else {
             dono = vagas.buscarPorId(alvoId).getContratanteId(); // RF05: inclui proteção de descoberta por ID.
         }
-        boolean criado = salvos.inserirSeAusente(usuario.getId(),tipo.name(),alvoId) == 1;
+        boolean criado = legacySchema ? legacyJdbc.update("insert into itens_salvos(usuario_id,tipo_alvo,alvo_id,data_salvamento) values (?,cast(? as tipo_alvo_salvo_enum),?,current_timestamp)",usuario.getId(),tipo==TipoAlvoSalvo.PERFIL_ARTISTA?"artista":"vaga",alvoId)==1 : salvos.inserirSeAusente(usuario.getId(),tipo.name(),alvoId) == 1;
         if (criado && !usuario.getId().equals(dono)) {
             eventos.publishEvent(new NotificacaoEvento(Set.of(dono),TipoNotificacao.SALVO,
                     tipo == TipoAlvoSalvo.PERFIL_ARTISTA ? "Seu perfil foi salvo." : "Sua vaga foi salva.",
@@ -100,7 +104,7 @@ public class SalvoService {
 
     private Usuario usuario() {
         Usuario usuario = autenticado.usuarioAtual().orElseThrow(() -> new UnauthorizedException("Autenticação necessária."));
-        if (usuario.getStatusConta()!=StatusConta.ATIVA) throw new ForbiddenException("Ative sua conta para usar salvos.");
+        if (!legacySchema && usuario.getStatusConta()!=StatusConta.ATIVA) throw new ForbiddenException("Ative sua conta para usar salvos.");
         return usuario;
     }
 

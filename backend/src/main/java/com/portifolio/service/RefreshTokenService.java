@@ -54,20 +54,32 @@ public class RefreshTokenService {
 
         RefreshToken rt = refreshTokenRepository
                 .findByTokenHashAndAtivoTrue(hash)
-                .orElseThrow(() -> new ResourceNotFoundException("Refresh token invalido ou ja utilizado."));
+                .orElseThrow(() -> new com.portifolio.exception.UnauthorizedException("Refresh token invalido ou ja utilizado."));
 
         if (rt.getExpiracao().isBefore(LocalDateTime.now())) {
             rt.setAtivo(false);
             refreshTokenRepository.save(rt);
-            throw new ResourceNotFoundException("Refresh token expirado. Faca login novamente.");
+            throw new com.portifolio.exception.UnauthorizedException("Refresh token expirado. Faca login novamente.");
         }
 
         return rt.getUsuario();
     }
 
-    /**
-     * Invalida um token especifico (logout de um dispositivo).
-     */
+    /** Mantém a identidade da sessão e troca atomicamente o segredo sob bloqueio da linha. */
+    @Transactional
+    public String rotacionar(String rawToken) {
+        RefreshToken rt = refreshTokenRepository.findByTokenHashAndAtivoTrue(hashToken(rawToken))
+                .orElseThrow(() -> new com.portifolio.exception.UnauthorizedException("Refresh token já utilizado."));
+        if (!rt.getExpiracao().isAfter(LocalDateTime.now()))
+            throw new com.portifolio.exception.UnauthorizedException("Refresh token expirado.");
+        String next = UUID.randomUUID().toString();
+        rt.setTokenHash(hashToken(next));
+        rt.setExpiracao(LocalDateTime.now().plusDays(expiracaoDias));
+        refreshTokenRepository.saveAndFlush(rt);
+        return next;
+    }
+
+    /** Invalida um token especifico (logout de um dispositivo). */
     @Transactional
     public void invalidarRefreshToken(String rawToken) {
         String hash = hashToken(rawToken);

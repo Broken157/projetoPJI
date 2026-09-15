@@ -112,6 +112,18 @@ class StompJwtChannelInterceptorTest {
                 .hasMessageContaining("nao permitido");
     }
 
+    @Test
+    void sessaoRevogadaNaoPodeEnviarEmConexaoExistente() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SEND);
+        accessor.setDestination("/app/chat/salas/42/mensagens");
+        accessor.setUser(new UsernamePasswordAuthenticationToken("pessoa@rf24.test", null, List.of()));
+        accessor.setSessionAttributes(new java.util.HashMap<>(java.util.Map.of("palco.jwt", "revogado")));
+        accessor.setLeaveMutable(true);
+        Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
+        assertThatThrownBy(() -> interceptor.preSend(message, mock(org.springframework.messaging.MessageChannel.class)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("revogada");
+    }
+
     private Message<byte[]> mensagem(StompCommand comando, String authorization) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(comando);
         if (authorization != null) {

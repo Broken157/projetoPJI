@@ -132,7 +132,7 @@
                             <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
                             <resources>
                                 <resource>
-                                    <directory>../frontend/build</directory>
+                                    <directory>../palco-comunidades-agenda/dist</directory>
                                 </resource>
                             </resources>
                         </configuration>

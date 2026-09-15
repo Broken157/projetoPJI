@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ChatService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}") private boolean legacySchema;
 
     public static final String MENSAGEM_EXCLUIDA = "Mensagem excluída pelo autor";
     private static final int TAMANHO_PADRAO = 20;
@@ -133,6 +134,7 @@ public class ChatService {
     @Transactional
     public ChatMensagemResponse editarMensagem(
             String emailAutenticado, Long mensagemId, String texto) {
+        if (legacySchema) throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: edição sem trilha persistida indisponível.");
         Usuario atual = usuarioPorEmail(emailAutenticado);
         MensagemChat mensagem = mensagemDetalhada(mensagemId);
         exigirAutor(mensagem, atual.getId());
@@ -157,6 +159,7 @@ public class ChatService {
 
     @Transactional
     public void excluirMensagem(String emailAutenticado, Long mensagemId) {
+        if (legacySchema) throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: exclusão sem preservação do histórico indisponível.");
         Usuario atual = usuarioPorEmail(emailAutenticado);
         MensagemChat mensagem = mensagemDetalhada(mensagemId);
         exigirAutor(mensagem, atual.getId());

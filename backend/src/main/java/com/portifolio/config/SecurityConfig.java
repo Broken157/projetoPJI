@@ -51,7 +51,7 @@ public class SecurityConfig {
                         // RF03: listagem/busca de vagas e publica (feed tipo LinkedIn).
                         // Candidatura (RF06) e criacao/edicao continuam exigindo autenticacao.
                         .requestMatchers(HttpMethod.GET, "/api/vagas").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/areas").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/areas", "/api/capacidades").permitAll()
                         .requestMatchers("/api/areas", "/api/areas/**").denyAll()
                         .requestMatchers(HttpMethod.GET, "/api/talentos", "/api/talentos/**").hasRole("CONTRATANTE")
                         .requestMatchers("/api/talentos", "/api/talentos/**").denyAll()
@@ -124,6 +124,8 @@ public class SecurityConfig {
             @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(allowedOrigins);
+        config.setAllowCredentials(true);
+        config.setExposedHeaders(List.of("X-Page-Number", "X-Page-Size", "X-Page-Has-Next"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

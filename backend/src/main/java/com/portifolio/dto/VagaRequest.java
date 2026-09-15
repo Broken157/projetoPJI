@@ -10,4 +10,5 @@ public class VagaRequest extends VagaAtualizacaoRequest {
     // Campo legado mantido apenas para compatibilidade com o frontend atual.
     // A propriedade da vaga é sempre derivada do usuário autenticado pelo JWT.
     private Long contratanteId;
+    private com.portifolio.model.enums.StatusVaga status;
 }

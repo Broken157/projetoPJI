@@ -38,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}") private boolean legacySchema;
 
     private static final int TAMANHO_PADRAO = 5;
     private static final int TAMANHO_MAXIMO = 50;
@@ -86,6 +87,7 @@ public class DashboardService {
                 .notificacoes(NOTIFICACOES_DISPONIVEIS)
                 .mensagens(mensagensDisponiveis(usuario.getId()))
                 .vagasRecomendadas(buscarVagasRecomendadas(funcaoIds, tamanho))
+                .candidaturasRecentes(candidaturasDoArtista(usuario.getId(), tamanho))
                 .build();
     }
 
@@ -106,7 +108,7 @@ public class DashboardService {
                 .notificacoes(NOTIFICACOES_DISPONIVEIS)
                 .mensagens(mensagensDisponiveis(usuario.getId()))
                 .candidaturasRecentes(buscarCandidaturasRecentes(usuario.getId(), tamanho))
-                .talentosSugeridos(usuario.getStatusConta() == com.portifolio.model.enums.StatusConta.ATIVA
+                .talentosSugeridos(!legacySchema && usuario.getStatusConta() == com.portifolio.model.enums.StatusConta.ATIVA
                         ? buscarTalentosSugeridos(usuario.getId(), tamanho) : secaoVazia())
                 .build();
     }
@@ -228,5 +230,9 @@ public class DashboardService {
 
     private <T> DashboardSecaoResponse<T> secaoVazia() {
         return secao(List.of(), 0, false);
+    }
+    private DashboardSecaoResponse<DashboardCandidaturaResponse> candidaturasDoArtista(Long id,int size) {
+        var page=candidaturaRepository.findByArtistaUsuarioId(id,PageRequest.of(0,size,org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC,"id")));
+        return secao(page.stream().map(c->DashboardCandidaturaResponse.builder().id(c.getId()).vagaId(c.getVaga().getId()).tituloVaga(c.getVaga().getTitulo()).status(c.getStatus()).dataCandidatura(c.getDataCandidatura()).build()).toList(),page.getTotalElements(),page.hasNext());
     }
 }

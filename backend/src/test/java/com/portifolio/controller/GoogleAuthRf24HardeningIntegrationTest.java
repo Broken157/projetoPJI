@@ -111,8 +111,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
             mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(Map.of("email", usuario.getEmail(), "senha", "Senha@2026"))))
                     .andExpect(status().isForbidden());
-            mockMvc.perform(post("/api/auth/refresh").contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(Map.of("refreshToken", refreshAnterior))))
+            mockMvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("palco_refresh", refreshAnterior)))
                     .andExpect(status().isForbidden());
             var frame = org.springframework.messaging.simp.stomp.StompHeaderAccessor.create(
                     org.springframework.messaging.simp.stomp.StompCommand.CONNECT);
@@ -157,7 +156,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
                 .andExpect(jsonPath("$.status").value("AUTENTICADO"))
                 .andExpect(jsonPath("$.statusConta").value("ATIVA"))
                 .andExpect(jsonPath("$.token").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty()).andReturn();
+                .andExpect(jsonPath("$.refreshToken").doesNotExist()).andReturn();
         JsonNode resposta = objectMapper.readTree(resultado.getResponse().getContentAsString());
         mockMvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + resposta.get("token").asText()))
                 .andExpect(status().isOk());
@@ -362,7 +361,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AUTENTICADO"))
                 .andExpect(jsonPath("$.token").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty());
+                .andExpect(jsonPath("$.refreshToken").doesNotExist());
 
         assertThat(refreshTokenRepository.count()).isOne();
     }

@@ -1,0 +1,4 @@
+import React,{useState} from 'react';
+import Modal from './Modal';
+import {canDelete} from '../lib/portfolio';
+export default function DeletePortfolioDialog({onClose,onConfirm,saving}){const [value,setValue]=useState('');return <Modal className="delete-portfolio-modal" dark title={<>Tem certeza que deseja <em>excluir o seu portfólio?</em></>} onClose={onClose}><form onSubmit={e=>{e.preventDefault();if(canDelete(value))onConfirm()}}><label htmlFor="delete-confirmation">Digite <b>“EXCLUIR”</b> para a exclusão.</label><input id="delete-confirmation" autoComplete="off" value={value} onChange={e=>setValue(e.target.value)}/><div><small>⚠ Esta ação não poderá ser desfeita.</small><button className="yellow" disabled={!canDelete(value)||saving}>{saving?'Excluindo…':'Confirmar'}</button></div></form></Modal>}

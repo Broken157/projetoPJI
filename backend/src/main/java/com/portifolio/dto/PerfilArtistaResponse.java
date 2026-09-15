@@ -14,6 +14,7 @@ public class PerfilArtistaResponse {
     private com.portifolio.model.enums.Abrangencia raioAtuacao;
     private Short areaPrincipalId;
     private String biografia;
+    private Boolean disponivelOportunidades;
     private String localizacao;
     private String urlPortfolio;
     private Integer nivelMedalha;

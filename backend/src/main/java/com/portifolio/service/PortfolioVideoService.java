@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service @RequiredArgsConstructor
 public class PortfolioVideoService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
+    private boolean legacySchema;
     private final EmbedExternoRepository videos;
     private final PortfolioAccessService acesso;
     private final VideoPortfolioValidator validator;
@@ -24,7 +26,7 @@ public class PortfolioVideoService {
         if (request == null || request.size() != 1 || !request.containsKey("url"))
             throw new UnprocessableEntityException("Envie somente o link do vídeo, sem HTML ou identificadores de proprietário.");
         var video = validator.validar(request.get("url"));
-        var item = new EmbedExterno(); item.setArtista(dono); item.setUrlOriginal(video.urlOriginal());
+        var item = new EmbedExterno(); item.setTipoMidia(legacySchema ? (video.provedor().equalsIgnoreCase("SPOTIFY") ? "audio" : "video") : (video.provedor().equalsIgnoreCase("SPOTIFY") ? "AUDIO" : "VIDEO")); item.setArtista(dono); item.setUrlOriginal(video.urlOriginal());
         item.setCodigoIframe("<iframe src=\"" + video.embedUrl() + "\" title=\"Vídeo do portfólio\" loading=\"lazy\" allowfullscreen></iframe>");
         dono.setUltimaAtualizacao(LocalDateTime.now());
         return dto(videos.saveAndFlush(item));

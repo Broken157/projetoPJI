@@ -68,6 +68,9 @@ public class Vaga {
     private BigDecimal valorMinimo;
     @Column(name = "valor_maximo", precision = 10, scale = 2)
     private BigDecimal valorMaximo;
+    @jakarta.persistence.Transient private String legacyFormaPagamento;
+    @jakarta.persistence.Transient private String legacyCategoria;
+    @jakarta.persistence.Transient private String legacyAbrangencia;
 
     @Column(nullable = false, length = 100)
     private String cidade;

@@ -32,6 +32,7 @@ public class StompJwtChannelInterceptor implements ChannelInterceptor {
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             autenticar(accessor);
         } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+            exigirSessaoValida(accessor);
             if (accessor.getUser() == null) {
                 throw new IllegalArgumentException("Conexao STOMP nao autenticada.");
             }
@@ -40,6 +41,7 @@ public class StompJwtChannelInterceptor implements ChannelInterceptor {
                 throw new IllegalArgumentException("Destino STOMP nao permitido.");
             }
         } else if (StompCommand.SEND.equals(accessor.getCommand())) {
+            exigirSessaoValida(accessor);
             if (accessor.getUser() == null) {
                 throw new IllegalArgumentException("Conexao STOMP nao autenticada.");
             }
@@ -70,7 +72,15 @@ public class StompJwtChannelInterceptor implements ChannelInterceptor {
             throw new IllegalArgumentException("JWT sem identidade valida no STOMP CONNECT.");
         }
         UserDetails userDetails = userDetailsService.loadUserByUsername(email, usuarioId);
+        if (accessor.getSessionAttributes() == null) accessor.setSessionAttributes(new java.util.HashMap<>());
+        accessor.getSessionAttributes().put("palco.jwt", token);
         accessor.setUser(new UsernamePasswordAuthenticationToken(
                 userDetails, null, userDetails.getAuthorities()));
+    }
+
+    private void exigirSessaoValida(StompHeaderAccessor accessor) {
+        var attributes = accessor.getSessionAttributes();
+        if (attributes != null && attributes.get("palco.jwt") instanceof String token && !jwtService.tokenValido(token))
+            throw new IllegalArgumentException("Sessão STOMP expirada ou revogada.");
     }
 }

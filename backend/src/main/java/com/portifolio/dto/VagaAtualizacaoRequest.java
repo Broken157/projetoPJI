@@ -34,14 +34,15 @@ public class VagaAtualizacaoRequest {
     @DecimalMin(value = "0.00", message = "Remuneração não pode ser negativa")
     @Digits(integer = 8, fraction = 2, message = "Remuneração deve respeitar numeric(10,2)")
     private BigDecimal valorMinimo;
+    @Size(max=100) private String formaPagamento;
+    @Size(max=100) private String categoria;
 
     @DecimalMin("0.00") @Digits(integer = 8, fraction = 2)
     private BigDecimal valorMaximo;
 
-    @NotNull @Positive
+    @Positive
     private Short areaId;
 
-    @NotNull
     private com.portifolio.model.enums.FormaRemuneracao formaRemuneracao;
 
     @NotBlank(message = "Cidade é obrigatória")
@@ -77,7 +78,6 @@ public class VagaAtualizacaoRequest {
 
     private LocalDate dataLimiteCandidatura;
 
-    @NotNull
     private com.portifolio.model.enums.Abrangencia abrangencia;
 
     private List<@Size(max = 500, message = "URL da foto deve ter no máximo 500 caracteres") String> fotos;

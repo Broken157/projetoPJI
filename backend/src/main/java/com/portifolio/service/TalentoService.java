@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class TalentoService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
+    private boolean legacySchema;
     private final TalentoRepository talentos;
     private final AreaArtisticaRepository areas;
     private final FuncaoRepository funcoes;
@@ -27,6 +29,7 @@ public class TalentoService {
     private final AvatarService avatars;
 
     private Usuario contratante() {
+        if (legacySchema) throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: não há taxonomia nem estado ativo verificável para RF13/RF17.");
         Usuario u = autenticado.usuarioAtual().orElseThrow(() -> new UnauthorizedException("Autenticação necessária."));
         if (u.getTipoUsuario() != TipoUsuario.CONTRATANTE || u.getStatusConta() != StatusConta.ATIVA)
             throw new ForbiddenException("Banco de Talentos exclusivo para contratantes com conta ativa.");

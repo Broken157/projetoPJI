@@ -9,7 +9,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface PerfilContratanteRepository extends JpaRepository<PerfilContratante, Long> {
 
-    @EntityGraph(attributePaths = "usuario.responsavelLegal")
     @Query("select perfil from PerfilContratante perfil where perfil.usuarioId = :usuarioId")
     Optional<PerfilContratante> buscarPublicoPorUsuarioId(@Param("usuarioId") Long usuarioId);
 }

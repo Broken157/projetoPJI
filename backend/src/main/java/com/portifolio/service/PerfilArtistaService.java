@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PerfilArtistaService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
+    private boolean legacySchema;
 
     private final PerfilArtistaRepository perfilArtistaRepository;
     private final FuncaoRepository funcaoRepository;
@@ -106,12 +108,18 @@ public class PerfilArtistaService {
         perfil.setBiografia(request.getBiografia());
         perfil.setLocalizacao(request.getLocalizacao());
         perfil.setUrlPortfolio(request.getUrlPortfolio());
+        if (legacySchema) {
+            if (request.getAreaPrincipalId()!=null || (request.getFuncaoIds()!=null && !request.getFuncaoIds().isEmpty()) || request.getTipoPerfilArtistico()!=null || request.getRaioAtuacao()!=null)
+                throw new com.portifolio.exception.UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: campos profissionais avançados indisponíveis.");
+            perfil.setBannerUrl(request.getBannerUrl()); return;
+        }
         if (request.getTipoPerfilArtistico() != null) perfil.setTipoPerfilArtistico(request.getTipoPerfilArtistico());
         if (request.getRaioAtuacao() != null) perfil.setRaioAtuacao(request.getRaioAtuacao());
         if (perfil.getTipoPerfilArtistico() == null) {
             throw new IllegalArgumentException("Informe tipoPerfilArtistico.");
         }
         perfil.setBannerUrl(request.getBannerUrl());
+        if (request.getDisponivelOportunidades()!=null) perfil.setDisponivelOportunidades(request.getDisponivelOportunidades());
         if (request.getFuncaoIds() != null) {
             if (request.getAreaPrincipalId() == null) {
                 throw new IllegalArgumentException("Informe areaPrincipalId para editar funções.");
@@ -167,6 +175,7 @@ public class PerfilArtistaService {
                 .raioAtuacao(perfil.getRaioAtuacao())
                 .areaPrincipalId(perfil.getAreas().stream().filter(com.portifolio.model.PerfilArtistaArea::isPrincipal)
                         .map(area -> area.getArea().getId()).findFirst().orElse(null))
+                .disponivelOportunidades(perfil.getDisponivelOportunidades())
                 .biografia(perfil.getBiografia())
                 .localizacao(perfil.getLocalizacao())
                 .urlPortfolio(perfil.getUrlPortfolio())

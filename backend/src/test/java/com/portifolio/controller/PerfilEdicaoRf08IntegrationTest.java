@@ -514,10 +514,8 @@ class PerfilEdicaoRf08IntegrationTest {
 
         login(artista.getUsuario().getEmail(), "SenhaAtual123!").andExpect(status().isUnauthorized());
         login(artista.getUsuario().getEmail(), "NovaSenha456!").andExpect(status().isOk());
-        mockMvc.perform(post("/api/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("refreshToken", refreshToken))))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("palco_refresh", refreshToken)))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

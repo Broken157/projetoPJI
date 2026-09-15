@@ -1,12 +1,12 @@
 [CmdletBinding()]
-param()
+param([switch]$SkipInstall)
 
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = $PSScriptRoot
-$frontendDirectory = Join-Path $projectRoot 'frontend'
+$frontendDirectory = Join-Path $projectRoot 'palco-comunidades-agenda'
 $backendDirectory = Join-Path $projectRoot 'backend'
-$frontendIndex = Join-Path $frontendDirectory 'build\index.html'
+$frontendIndex = Join-Path $frontendDirectory 'dist\index.html'
 
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
@@ -32,9 +32,11 @@ if ($LASTEXITCODE -ne 0 -or $javaVersionLine -notmatch 'version "21[\.]') {
 
 Push-Location $frontendDirectory
 try {
-    & $npmCommand.Source ci
-    if ($LASTEXITCODE -ne 0) {
-        throw 'npm ci falhou.'
+    if (-not $SkipInstall) {
+        & $npmCommand.Source ci
+        if ($LASTEXITCODE -ne 0) {
+            throw 'npm ci falhou.'
+        }
     }
 
     & $npmCommand.Source run build
@@ -46,12 +48,17 @@ try {
 }
 
 if (-not (Test-Path -LiteralPath $frontendIndex -PathType Leaf)) {
-    throw 'O build React terminou sem gerar frontend/build/index.html.'
+    throw 'O build React terminou sem gerar palco-comunidades-agenda/dist/index.html.'
 }
 
 Push-Location $backendDirectory
 try {
-    & '.\mvnw.cmd' clean package
+    $taskTests = @(Get-ChildItem -LiteralPath 'src\test\java' -Filter '*Test.java' -Recurse | ForEach-Object {
+        $taskContent = Get-Content -Raw -LiteralPath $_.FullName
+        if ($taskContent -notmatch '@Testcontainers') { $_.BaseName }
+    })
+    $taskSelector = '-Dtest=' + ($taskTests -join ',')
+    & '.\mvnw.cmd' clean $taskSelector '-Dpalco.official-db-tests=true' package
     if ($LASTEXITCODE -ne 0) {
         throw 'mvn package falhou.'
     }

@@ -51,6 +51,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class VagaService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
+    private boolean legacySchema;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.portifolio.repository.OfficialLocalVagaRepository officialLocalVagas;
 
     private static final int TAMANHO_PADRAO = 20;
     private static final int TAMANHO_MAXIMO = 50;
@@ -226,6 +230,7 @@ public class VagaService {
     }
 
     private void validarFiltros(VagaBuscaFiltro filtro) {
+        if (legacySchema && ((filtro.getAreaAtuacao()!=null && !filtro.getAreaAtuacao().isBlank()) || (filtro.getFuncaoIds()!=null && !filtro.getFuncaoIds().isEmpty()))) throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: filtros de taxonomia indisponíveis.");
         validarCursor(filtro.getCursor(), "Cursor");
         validarCursor(filtro.getCursorCanceladas(), "Cursor de vagas canceladas");
         if (filtro.getFaixaSalarialMin() != null
@@ -297,6 +302,10 @@ public class VagaService {
     @Transactional
     public VagaResponse criar(VagaRequest request) {
         Usuario usuario = exigirContratanteAtual();
+        if (request.getStatus() == StatusVaga.RASCUNHO)
+            throw new UnprocessableEntityException(legacySchema
+                ? "BLOQUEADA POR SCHEMA DO BANCO: o enum instalado não suporta RASCUNHO."
+                : "Rascunhos de vagas ainda não estão habilitados.");
         PerfilContratante contratante = perfilContratanteRepository.findById(usuario.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Contratante não encontrado."));
         Vaga vaga = new Vaga();
@@ -305,6 +314,12 @@ public class VagaService {
         normalizarPublicacao(vaga);
         vaga.setStatus(StatusVaga.ABERTA);
         vaga.setDataPublicacao(LocalDateTime.now());
+        if (legacySchema) {
+            Long id = officialLocalVagas.inserir(vaga);
+            Vaga persistida = vagaRepository.findById(id).orElseThrow();
+            persistida.setFotos(vaga.getFotos());
+            return toResponse(vagaRepository.saveAndFlush(persistida));
+        }
         return toResponse(vagaRepository.save(vaga));
     }
 
@@ -314,8 +329,10 @@ public class VagaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
         exigirProprietario(vaga);
         StatusVaga statusAtual = vaga.getStatus();
+        if (statusAtual==StatusVaga.ENCERRADA || statusAtual==StatusVaga.CANCELADA) throw new UnprocessableEntityException("Vagas finalizadas não podem ser editadas.");
         preencherVaga(vaga, request);
         vaga.setStatus(statusAtual);
+        if (legacySchema) officialLocalVagas.atualizarCampos(vaga);
         return toResponse(vagaRepository.save(vaga));
     }
 
@@ -457,6 +474,7 @@ public class VagaService {
     }
 
     private void preencherVaga(Vaga vaga, VagaAtualizacaoRequest request) {
+        if (legacySchema) { preencherVagaLocal(vaga,request); return; }
         vaga.setTitulo(request.getTitulo());
         vaga.setDescricao(request.getDescricao());
         vaga.setRequisitos(request.getRequisitos());
@@ -598,6 +616,7 @@ public class VagaService {
 
     private VagaResponse toResponse(
             Vaga vaga, boolean cancelada, Long contratanteAtualId) {
+        if (legacySchema) officialLocalVagas.carregarCampos(vaga);
         Set<Long> funcaoIds = vaga.getFuncoes().stream()
                 .map(Funcao::getId)
                 .collect(Collectors.toSet());
@@ -614,12 +633,12 @@ public class VagaService {
                 .remuneraValor(valorUnico(vaga))
                 .valorMinimo(vaga.getValorMinimo())
                 .valorMaximo(vaga.getValorMaximo())
-                .formaRemuneracao(vaga.getFormaRemuneracao())
-                .areaId(vaga.getArea().getId())
-                .formaPagamento(null)
+                .formaRemuneracao(legacySchema ? null : vaga.getFormaRemuneracao())
+                .areaId(vaga.getArea()==null?null:vaga.getArea().getId())
+                .formaPagamento(legacySchema?vaga.getLegacyFormaPagamento():null)
                 .cidade(vaga.getCidade())
                 .estado(vaga.getEstado())
-                .enderecoCompleto(vaga.getEnderecoCompleto())
+                .enderecoCompleto(contratanteAtualId!=null && contratanteAtualId.equals(vaga.getContratante().getUsuarioId()) ? vaga.getEnderecoCompleto() : null)
                 .beneficios(vaga.getBeneficios())
                 .modeloTrabalho(vaga.getModeloTrabalho())
                 .tipoContrato(vaga.getTipoContrato())
@@ -630,10 +649,10 @@ public class VagaService {
                         .map(com.portifolio.model.Especializacao::getId).collect(Collectors.toSet()))
                 .categoriaAfirmativaIds(vaga.getCategoriasAfirmativas().stream()
                         .map(com.portifolio.model.CategoriaAfirmativa::getId).collect(Collectors.toSet()))
-                .categoria(vaga.getArea().getNome())
+                .categoria(legacySchema?vaga.getLegacyCategoria():vaga.getArea().getNome())
                 .experiencia(vaga.getExperiencia())
                 .dataLimiteCandidatura(vaga.getDataLimiteCandidatura())
-                .abrangencia(vaga.getAbrangencia() == null ? null : vaga.getAbrangencia().name())
+                .abrangencia(legacySchema?vaga.getLegacyAbrangencia():vaga.getAbrangencia() == null ? null : vaga.getAbrangencia().name())
                 .fotos(List.copyOf(vaga.getFotos()))
                 .propriaDoContratante(contratanteAtualId != null
                         && contratanteAtualId.equals(vaga.getContratante().getUsuarioId()))
@@ -642,6 +661,7 @@ public class VagaService {
     }
 
     private java.math.BigDecimal valorUnico(Vaga vaga) {
+        if (legacySchema) return vaga.getValorMinimo();
         return vaga.getValorMinimo() != null && vaga.getValorMaximo() != null
                 && vaga.getValorMinimo().compareTo(vaga.getValorMaximo()) == 0 ? vaga.getValorMinimo() : null;
     }
@@ -678,5 +698,17 @@ public class VagaService {
             throw new ForbiddenException("Somente o proprietário pode alterar esta vaga.");
         }
         return usuario;
+    }
+    private void preencherVagaLocal(Vaga vaga, VagaAtualizacaoRequest r) {
+        if (r.getAreaId()!=null || (r.getFuncaoIds()!=null&&!r.getFuncaoIds().isEmpty()) || (r.getEspecializacaoIds()!=null&&!r.getEspecializacaoIds().isEmpty()) || (r.getCategoriaAfirmativaIds()!=null&&!r.getCategoriaAfirmativaIds().isEmpty())) throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: taxonomia ausente.");
+        if (r.getValorMinimo()==null || r.getFormaPagamento()==null || r.getFormaPagamento().isBlank()) throw new IllegalArgumentException("Valor e forma de pagamento são obrigatórios.");
+        if (r.getValorMaximo()!=null && r.getValorMinimo().compareTo(r.getValorMaximo())!=0) throw new UnprocessableEntityException("O banco suporta remuneração única, sem faixa.");
+        vaga.setTitulo(r.getTitulo()); vaga.setDescricao(r.getDescricao()); vaga.setRequisitos(r.getRequisitos());
+        vaga.setValorMinimo(r.getValorMinimo()); vaga.setLegacyFormaPagamento(r.getFormaPagamento()); vaga.setLegacyCategoria(r.getCategoria());
+        vaga.setCidade(r.getCidade()); vaga.setEstado(r.getEstado().toUpperCase(java.util.Locale.ROOT)); vaga.setEnderecoCompleto(r.getEnderecoCompleto());
+        vaga.setBeneficios(r.getBeneficios()); vaga.setModeloTrabalho(r.getModeloTrabalho()); vaga.setTipoContrato(r.getTipoContrato());
+        vaga.setExperiencia(r.getExperiencia()); vaga.setDataLimiteCandidatura(r.getDataLimiteCandidatura());
+        if(r.getAbrangencia()!=null) vaga.setLegacyAbrangencia(r.getAbrangencia().name());
+        if(r.getFotos()!=null) vaga.setFotos(new java.util.ArrayList<>(r.getFotos()));
     }
 }

@@ -226,8 +226,7 @@ class GenericEndpointsSecurityIntegrationTest {
     @Test
     void logoutRevogaRefreshSemExcluirContaOuHistorico() throws Exception {
         List<String> usuariosAntes = snapshot().get("usuarios");
-        mvc.perform(post("/api/auth/logout").contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("refreshToken", artista.refreshToken()))))
+        mvc.perform(post("/api/auth/logout").cookie(new jakarta.servlet.http.Cookie("palco_refresh", artista.refreshToken())))
                 .andExpect(status().isNoContent());
         assertThat(snapshot().get("usuarios")).isEqualTo(usuariosAntes);
         assertThat(jdbc.queryForObject("select count(*) from mensagens_chat", Integer.class)).isEqualTo(1);
@@ -254,10 +253,11 @@ class GenericEndpointsSecurityIntegrationTest {
         JsonNode criada = mapper.readTree(mvc.perform(post("/api/auth/cadastro").contentType(MediaType.APPLICATION_JSON)
                         .content(json(dados))).andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString());
-        JsonNode sessao = mapper.readTree(mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+        org.springframework.test.web.servlet.MvcResult loginResult = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("email", dados.get("email"), "senha", SENHA, "rememberMe", true))))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-        return new Conta(criada.get("id").asLong(), "Bearer " + sessao.get("token").asText(), sessao.get("refreshToken").asText());
+                .andExpect(status().isOk()).andReturn();
+        JsonNode sessao = mapper.readTree(loginResult.getResponse().getContentAsString());
+        return new Conta(criada.get("id").asLong(), "Bearer " + sessao.get("token").asText(), loginResult.getResponse().getHeader("Set-Cookie").split(";", 2)[0].substring("palco_refresh=".length()));
     }
 
     private Map<String, Object> dadosCadastro(String nome, String tipo, boolean ehMenor) {

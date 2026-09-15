@@ -10,11 +10,13 @@ import org.springframework.stereotype.Repository;
 @Repository @RequiredArgsConstructor
 public class SalvoAlvoRepository {
     private final NamedParameterJdbcTemplate jdbc;
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}") private boolean legacySchema;
     public record Alvo(Long id, String nome, String foto, String localizacao, String contratante,
                        String status, boolean disponivel, String funcoes) {}
 
     public Map<Long, Alvo> perfis(Set<Long> ids) {
         if (ids.isEmpty()) return Map.of();
+        if (legacySchema) return mapear(jdbc.query("select u.id,u.nome,u.foto_perfil,p.localizacao from perfis_artistas p join usuarios u on u.id=p.usuario_id where u.id in (:ids) and u.tipo_usuario='artista' and u.data_nascimento+interval '18 years'<=cast(:hoje as date)",Map.of("ids",ids,"hoje",LocalDate.now()),(r,n)->new Alvo(r.getLong("id"),r.getString("nome"),r.getString("foto_perfil"),r.getString("localizacao"),null,null,true,null)));
         // Mesma política pública do RF10: tipo ARTISTA e maioridade; sem dados privados no DTO.
         var rows = jdbc.query("""
             select u.id,u.nome,u.foto_perfil_url,p.localizacao,
@@ -35,7 +37,7 @@ public class SalvoAlvoRepository {
         var rows = jdbc.query("""
             select v.id,v.titulo,v.cidade,v.estado,v.status,
                    coalesce(nullif(p.nome_empresa,''),u.nome) as contratante,
-                   (v.status='ABERTA' or v.contratante_id=:usuarioId
+                   (upper(v.status::text)='ABERTA' or v.contratante_id=:usuarioId
                     or exists(select 1 from candidaturas c where c.vaga_id=v.id and c.artista_id=:usuarioId)) as disponivel
             from vagas v join perfis_contratantes p on p.usuario_id=v.contratante_id
             join usuarios u on u.id=p.usuario_id where v.id in (:ids)

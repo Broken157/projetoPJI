@@ -42,6 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class CandidaturaService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
+    private boolean legacySchema;
 
     private static final int TAMANHO_PADRAO = 20;
     private static final int TAMANHO_MAXIMO = 50;
@@ -115,7 +117,7 @@ public class CandidaturaService {
                 .map(Funcao::getId)
                 .collect(Collectors.toSet());
         Set<Long> tagsParaConsulta = tagsDaVaga.isEmpty() ? Set.of(-1L) : tagsDaVaga;
-        Page<Long> paginaIds = candidaturaRepository
+        Page<Long> paginaIds = legacySchema ? candidaturaRepository.findIdsPorVagaSemTaxonomia(vagaId,pageable) : candidaturaRepository
                 .findIdsPorVagaOrdenadosPorCompatibilidade(
                         vagaId, tagsParaConsulta, pageable);
 

@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PerfilCompletoService {
+    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
+    private boolean legacySchema;
 
     private final UsuarioRepository usuarioRepository;
     private final PerfilArtistaRepository perfilArtistaRepository;
@@ -24,6 +26,7 @@ public class PerfilCompletoService {
 
     @Transactional
     public boolean recalcular(Usuario usuario) {
+        if (legacySchema) return Boolean.TRUE.equals(usuario.getPerfilCompleto());
         boolean completo;
         PerfilArtista perfilArtista = null;
 

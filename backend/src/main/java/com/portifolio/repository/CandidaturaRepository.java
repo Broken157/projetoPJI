@@ -2,6 +2,7 @@ package com.portifolio.repository;
 
 import com.portifolio.model.Candidatura;
 import com.portifolio.model.enums.StatusVaga;
+import com.portifolio.model.enums.StatusCandidatura;
 import com.portifolio.repository.projection.CandidaturaDashboardProjection;
 import java.util.List;
 import java.util.Optional;
@@ -15,8 +16,20 @@ import org.springframework.data.repository.query.Param;
 
 public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> {
     List<Candidatura> findByVagaId(Long vagaId);
-    @Query("select c.id from Candidatura c where c.vaga.id=:vagaId order by c.dataCandidatura desc,c.id desc")
-    Page<Long> findIdsPorVagaSemTaxonomia(@Param("vagaId") Long vagaId,Pageable pageable);
+    @Query("""
+            select c.id from Candidatura c
+            where c.vaga.id = :vagaId and c.status in :statusAtivos
+              and not exists (
+                  select posterior.id from Candidatura posterior
+                  where posterior.vaga.id = c.vaga.id
+                    and posterior.artista.usuarioId = c.artista.usuarioId
+                    and posterior.id > c.id
+              )
+            order by c.dataCandidatura desc, c.id desc
+            """)
+    Page<Long> findIdsPorVagaSemTaxonomia(
+            @Param("vagaId") Long vagaId,
+            @Param("statusAtivos") Set<StatusCandidatura> statusAtivos, Pageable pageable);
     List<Candidatura> findByArtistaUsuarioId(Long usuarioId);
     List<Candidatura> findByVagaContratanteUsuarioId(Long usuarioId);
     boolean existsByVagaIdAndArtistaUsuarioId(Long vagaId, Long usuarioId);
@@ -42,7 +55,29 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
     @EntityGraph(attributePaths = {"vaga", "artista"})
     Page<Candidatura> findByVagaContratanteUsuarioId(Long usuarioId, Pageable pageable);
 
-    @Query(value = "select c.id from candidaturas c join perfis_artistas a on a.usuario_id=c.artista_id left join perfil_artista_funcao f on f.perfil_artista_id=a.usuario_id where c.vaga_id=:vagaId group by c.id,a.ultima_atualizacao order by sum(case when f.funcao_id in (:funcaoIds) then 1 else 0 end) desc, a.ultima_atualizacao desc nulls last, c.id asc", countQuery="select count(*) from candidaturas where vaga_id=:vagaId", nativeQuery=true)
+    // RF45: filtrar antes de paginar/contar; maior ID é a última tentativa RF06.
+    @Query(value = """
+            select c.id from candidaturas c
+            join perfis_artistas a on a.usuario_id = c.artista_id
+            left join perfil_artista_funcao f on f.perfil_artista_id = a.usuario_id
+            where c.vaga_id = :vagaId and c.status in ('PENDENTE', 'EM_ANALISE')
+              and not exists (
+                  select 1 from candidaturas posterior
+                  where posterior.vaga_id = c.vaga_id and posterior.artista_id = c.artista_id
+                    and posterior.id > c.id
+              )
+            group by c.id, a.ultima_atualizacao
+            order by sum(case when f.funcao_id in (:funcaoIds) then 1 else 0 end) desc,
+                     a.ultima_atualizacao desc nulls last, c.id asc
+            """, countQuery = """
+            select count(*) from candidaturas c
+            where c.vaga_id = :vagaId and c.status in ('PENDENTE', 'EM_ANALISE')
+              and not exists (
+                  select 1 from candidaturas posterior
+                  where posterior.vaga_id = c.vaga_id and posterior.artista_id = c.artista_id
+                    and posterior.id > c.id
+              )
+            """, nativeQuery = true)
     Page<Long> findIdsPorVagaOrdenadosPorCompatibilidade(
             @Param("vagaId") Long vagaId,
             @Param("funcaoIds") Set<Long> funcaoIds,

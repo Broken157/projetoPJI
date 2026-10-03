@@ -11,6 +11,7 @@ import lombok.Getter;
 public class CandidaturaVagaResponse {
     private Long candidaturaId;
     private Long artistaId;
+    private String username;
     private String nomeArtista;
     private String biografia;
     private String localizacao;

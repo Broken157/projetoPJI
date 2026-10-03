@@ -11,7 +11,7 @@ import com.portifolio.model.Usuario;
 import com.portifolio.model.enums.TipoUsuario;
 import com.portifolio.repository.PerfilArtistaRepository;
 import com.portifolio.repository.PerfilContratanteRepository;
-import java.time.LocalDate;
+import com.portifolio.security.MenorAutorizadoPolicy;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -24,11 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PerfilPublicoService {
 
-    private static final int IDADE_ADULTA = 18;
-
     private final PerfilArtistaRepository perfilArtistaRepository;
     private final PerfilContratanteRepository perfilContratanteRepository;
     private final AvatarService avatarService;
+    private final MenorAutorizadoPolicy menorAutorizadoPolicy;
     private final com.portifolio.repository.ItemSalvoRepository itemSalvoRepository;
 
     @Transactional(readOnly = true)
@@ -88,15 +87,12 @@ public class PerfilPublicoService {
     }
 
     private Usuario exigirPublicavel(Usuario usuario, TipoUsuario tipoEsperado) {
-        if (usuario == null || usuario.getTipoUsuario() != tipoEsperado || ehMenor(usuario)) {
+        if (usuario == null || usuario.getTipoUsuario() != tipoEsperado
+                || (menorAutorizadoPolicy.exigeProtecao(usuario)
+                    && !menorAutorizadoPolicy.autorizado(usuario))) {
             throw perfilNaoEncontrado();
         }
         return usuario;
-    }
-
-    private boolean ehMenor(Usuario usuario) {
-        LocalDate nascimento = usuario.getDataNascimento();
-        return nascimento == null || nascimento.plusYears(IDADE_ADULTA).isAfter(LocalDate.now());
     }
 
     private ResourceNotFoundException perfilNaoEncontrado() {

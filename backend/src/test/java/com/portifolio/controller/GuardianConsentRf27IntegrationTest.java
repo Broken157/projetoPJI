@@ -69,7 +69,7 @@ class GuardianConsentRf27IntegrationTest {
     @AfterEach void limpar() { emailSender.limpar(); guardianSender.limpar(); googleVerifier.tokens.clear(); }
 
     @Test
-    void convencionalSoAtivaDepoisDaDecisaoRealEContinuaPrivado() throws Exception {
+    void convencionalSoAtivaDepoisDaDecisaoRealEPublicaSomenteDadosPermitidos() throws Exception {
         Conta conta = cadastrar(16);
         Usuario antes = usuarios.findByEmail(conta.email()).orElseThrow();
         assertThat(antes.getStatusConta()).isEqualTo(StatusConta.PENDENTE_VERIFICACAO_EMAIL);
@@ -88,6 +88,8 @@ class GuardianConsentRf27IntegrationTest {
                 .andExpect(jsonPath("$.emailResponsavel").doesNotExist());
         mvc.perform(get("/consentimento-responsavel")).andExpect(status().isOk());
         login(conta.email()).andExpect(status().isForbidden()).andExpect(jsonPath("$.token").doesNotExist());
+        mvc.perform(get("/api/perfis/publicos/ARTISTA/{id}", pendente.getId()))
+                .andExpect(status().isNotFound());
         String jwtAntigo = jwtService.gerarToken(pendente);
         String refreshAntigo = refreshTokens.gerarRefreshToken(pendente);
         mvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + jwtAntigo))
@@ -104,7 +106,12 @@ class GuardianConsentRf27IntegrationTest {
         decidir(token, "RECUSAR").andExpect(status().isNotFound());
         login(conta.email()).andExpect(status().isOk()).andExpect(jsonPath("$.token").isNotEmpty());
         mvc.perform(get("/api/perfis/publicos/ARTISTA/{id}", ativo.getId()))
-                .andExpect(status().isNotFound())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuarioId").value(ativo.getId()))
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.telefone").doesNotExist())
+                .andExpect(jsonPath("$.dataNascimento").doesNotExist())
+                .andExpect(jsonPath("$.consentimento").doesNotExist())
                 .andExpect(jsonPath("$.emailResponsavel").doesNotExist())
                 .andExpect(jsonPath("$.experiencia").doesNotExist());
     }

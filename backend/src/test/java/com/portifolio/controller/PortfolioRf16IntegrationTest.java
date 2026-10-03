@@ -102,15 +102,70 @@ class PortfolioRf16IntegrationTest {
                 .andExpect(content().bytes(Arrays.copyOf(mp3(),4)));
         mvc.perform(get("/api/portfolio/publico/arquivos/"+audio+"/conteudo").header("Range","bytes=900-1000")).andExpect(status().isRequestedRangeNotSatisfiable());
     }
-    @Test void menorAtivoComConsentimentoSomentePrivado() throws Exception {
-        db.update("update usuarios set data_nascimento=? where id=?",LocalDate.now().minusYears(17),dono);
-        db.update("insert into responsaveis_legais(usuario_id,nome_responsavel,telefone_responsavel,email_responsavel,versao_termo,data_consentimento,consentimento_revogado) values (?,'Responsável','11999999999','privado@test','v1',current_timestamp,false)",dono);
+    // O MVP expõe mídias diretamente; projetos e RASCUNHO/PUBLICADO ainda não estão modelados.
+    @ParameterizedTest @ValueSource(ints={14,17})
+    void menorAutorizadoPodeExibirMidiasDoPortfolioMvpSemNovaAprovacao(int idade) throws Exception {
+        autorizarMenor(idade);
+        db.update("insert into perfil_artista_area(perfil_artista_id,area_id,principal,nivel_experiencia) values (?,1,true,'INICIANTE')",dono);
+        var consentimento=db.queryForObject("select data_consentimento from responsaveis_legais where usuario_id=?",java.sql.Timestamp.class,dono);
         long id=enviar("a.pdf","application/pdf",pdf());
-        mvc.perform(get("/api/portfolio/arquivos/"+id+"/conteudo").header("Authorization",token)).andExpect(status().isOk());
-        mvc.perform(get("/api/portfolio/publico/artistas/"+dono+"/arquivos")).andExpect(status().isNotFound());
-        mvc.perform(get("/api/portfolio/publico/artistas/"+dono+"/videos")).andExpect(status().isNotFound());
-        mvc.perform(get("/api/portfolio/publico/arquivos/"+id+"/conteudo")).andExpect(status().isNotFound());
-        mvc.perform(get("/api/portfolio/publico/arquivos/"+id+"/conteudo").header("Range","bytes=0-3")).andExpect(status().isNotFound());
+        long video=enviarVideo();
+        var perfil=mvc.perform(get("/api/perfis/publicos/ARTISTA/"+dono)).andExpect(status().isOk()).andReturn();
+        verificarPrivacidade(perfil.getResponse().getContentAsString());
+        var lista=mvc.perform(get("/api/portfolio/publico/artistas/"+dono+"/arquivos"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(id))
+                .andExpect(jsonPath("$.content[0].contentUrl").value("/api/portfolio/publico/arquivos/"+id+"/conteudo")).andReturn();
+        verificarPrivacidade(lista.getResponse().getContentAsString());
+        var listaVideos=mvc.perform(get("/api/portfolio/publico/artistas/"+dono+"/videos"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(video))
+                .andExpect(jsonPath("$.content[0].embedUrl").value("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ")).andReturn();
+        verificarPrivacidade(listaVideos.getResponse().getContentAsString());
+        mvc.perform(get("/api/portfolio/publico/arquivos/"+id+"/conteudo"))
+                .andExpect(status().isOk()).andExpect(content().bytes(pdf()))
+                .andExpect(header().string("X-Content-Type-Options","nosniff"));
+        mvc.perform(get("/api/portfolio/publico/arquivos/"+id+"/conteudo").header("Range","bytes=0-3"))
+                .andExpect(status().isPartialContent()).andExpect(content().bytes(Arrays.copyOf(pdf(),4)));
+        mvc.perform(get("/api/portfolio/arquivos/"+id+"/conteudo").header("Authorization",token))
+                .andExpect(status().isOk()).andExpect(content().bytes(pdf()));
+        mvc.perform(get("/api/portfolio/me/arquivos").header("Authorization",token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(id));
+        mvc.perform(get("/api/portfolio/me/videos").header("Authorization",token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(video));
+        mvc.perform(get("/api/portfolio/arquivos/"+id+"/conteudo").header("Authorization",bearer(outro))).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/portfolio/arquivos/"+id).header("Authorization",bearer(outro))).andExpect(status().isNotFound());
+        mvc.perform(put("/api/portfolio/videos/"+video).header("Authorization",bearer(outro)).contentType("application/json")
+                .content("{\"url\":\"https://vimeo.com/123\"}")).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/portfolio/videos/"+video).header("Authorization",bearer(outro))).andExpect(status().isNotFound());
+        assertThat(db.queryForObject("select data_consentimento from responsaveis_legais where usuario_id=?",java.sql.Timestamp.class,dono)).isEqualTo(consentimento);
+        assertThat(db.queryForObject("select status_conta::text from usuarios where id=?",String.class,dono)).isEqualTo("ATIVA");
+        assertThat(db.queryForObject("select count(*) from responsaveis_legais where usuario_id=?",Long.class,dono)).isEqualTo(1L);
+    }
+    @ParameterizedTest @ValueSource(strings={"sem","pendente","revogado","inativa","abaixo14"})
+    void menorSemAutorizacaoOuContaAptaNaoExpoeMidiasMesmoPorIdDireto(String situacao) throws Exception {
+        long id=enviar("a.pdf","application/pdf",pdf());
+        enviarVideo();
+        if (situacao.equals("sem")) db.update("update usuarios set data_nascimento=? where id=?",LocalDate.now().minusYears(16),dono);
+        else autorizarMenor(situacao.equals("abaixo14") ? 13 : 16);
+        if (situacao.equals("pendente")) db.update("update responsaveis_legais set data_consentimento=null where usuario_id=?",dono);
+        if (situacao.equals("revogado")) db.update("update responsaveis_legais set consentimento_revogado=true where usuario_id=?",dono);
+        if (situacao.equals("inativa")) db.update("update usuarios set status_conta='BLOQUEADA' where id=?",dono);
+        exigirBloqueioPublico(id);
+        assertThat(arquivos.existsById(id)).isTrue();
+        assertThat(numeroArquivos()).isEqualTo(1);
+    }
+    @Test void revogacaoVoltaBloquearMidiasAntesPublicasSemApagarHistorico() throws Exception {
+        autorizarMenor(17);
+        long id=enviar("a.pdf","application/pdf",pdf());
+        enviarVideo();
+        mvc.perform(get("/api/portfolio/publico/arquivos/"+id+"/conteudo")).andExpect(status().isOk());
+        mvc.perform(get("/api/portfolio/publico/artistas/"+dono+"/videos")).andExpect(status().isOk());
+        db.update("update responsaveis_legais set consentimento_revogado=true where usuario_id=?",dono);
+        exigirBloqueioPublico(id);
+        assertThat(arquivos.existsById(id)).isTrue();
+        assertThat(db.queryForObject("select count(*) from embeds_externos where artista_id=?",Long.class,dono)).isEqualTo(1L);
+        assertThat(numeroArquivos()).isEqualTo(1);
     }
     @Test void paginacaoEstavel20Max50() throws Exception {
         long max=0;
@@ -210,6 +265,26 @@ class PortfolioRf16IntegrationTest {
         mvc.perform(put(base+"/"+id).header("Authorization",token).contentType("application/json")
                 .content("{\"url\":\"https://evil.example/123\",\"legenda\":\"inválida\"}")).andExpect(status().isUnprocessableEntity());
         assertThat(db.queryForObject("select legenda from embeds_externos where id=?",String.class,id)).isEqualTo("Legenda atualizada");
+    }
+    void autorizarMenor(int idade) {
+        db.update("update usuarios set data_nascimento=? where id=?",LocalDate.now().minusYears(idade),dono);
+        db.update("insert into responsaveis_legais(usuario_id,nome_responsavel,telefone_responsavel,email_responsavel,versao_termo,data_consentimento,consentimento_revogado) values (?,'Responsável','11999999999','privado@test','v1',current_timestamp,false)",dono);
+    }
+    long enviarVideo() throws Exception {
+        var result=mvc.perform(post("/api/portfolio/videos").header("Authorization",token).contentType("application/json")
+                .content("{\"url\":\"https://youtu.be/dQw4w9WgXcQ\"}")).andExpect(status().isCreated()).andReturn();
+        return ((Number)com.jayway.jsonpath.JsonPath.read(result.getResponse().getContentAsString(),"$.id")).longValue();
+    }
+    void exigirBloqueioPublico(long id) throws Exception {
+        mvc.perform(get("/api/perfis/publicos/ARTISTA/"+dono)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/portfolio/publico/artistas/"+dono+"/arquivos")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/portfolio/publico/artistas/"+dono+"/videos")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/portfolio/publico/arquivos/"+id+"/conteudo")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/portfolio/publico/arquivos/"+id+"/conteudo").header("Range","bytes=0-3")).andExpect(status().isNotFound());
+    }
+    void verificarPrivacidade(String json) {
+        assertThat(json).doesNotContain("email","telefone","dataNascimento","senha","token","cpf","cnpj",
+                "responsavel","consentimento","experiencia","Experiencia","afirmativa","enderecoCompleto","privado@test","codigoIframe","urlArquivo");
     }
     long enviar(String name,String mime,byte[] bytes) throws Exception {
         var r=mvc.perform(multipart("/api/portfolio/arquivos").file(new MockMultipartFile("arquivo",name,mime,bytes))

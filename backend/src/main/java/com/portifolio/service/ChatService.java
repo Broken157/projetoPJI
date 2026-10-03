@@ -24,10 +24,9 @@ import com.portifolio.repository.SalaChatRepository;
 import com.portifolio.repository.UsuarioRepository;
 import com.portifolio.repository.projection.ChatMensagemProjection;
 import com.portifolio.repository.projection.ChatSalaResumoProjection;
+import com.portifolio.security.MenorAutorizadoPolicy;
 import jakarta.persistence.EntityManager;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Period;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +52,7 @@ public class ChatService {
     private final CandidaturaRepository candidaturaRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
+    private final MenorAutorizadoPolicy menorAutorizadoPolicy;
 
     @Transactional
     public ChatSalaResponse criarOuReutilizarSala(String emailAutenticado, Long usuarioDestinoId) {
@@ -221,7 +221,10 @@ public class ChatService {
             throw new UnprocessableEntityException(
                     "O chat privado exige um ARTISTA e um CONTRATANTE.");
         }
-        if (menorDeIdade(atual) || menorDeIdade(destino)) {
+        validarAutorizacaoDoMenor(atual);
+        validarAutorizacaoDoMenor(destino);
+        if (menorAutorizadoPolicy.exigeProtecao(atual)
+                || menorAutorizadoPolicy.exigeProtecao(destino)) {
             Long artistaId = atual.getTipoUsuario() == TipoUsuario.ARTISTA
                     ? atual.getId() : destino.getId();
             Long contratanteId = atual.getTipoUsuario() == TipoUsuario.CONTRATANTE
@@ -234,9 +237,12 @@ public class ChatService {
         }
     }
 
-    private boolean menorDeIdade(Usuario usuario) {
-        return usuario.getDataNascimento() != null
-                && Period.between(usuario.getDataNascimento(), LocalDate.now()).getYears() < 18;
+    private void validarAutorizacaoDoMenor(Usuario usuario) {
+        if (menorAutorizadoPolicy.exigeProtecao(usuario)
+                && !menorAutorizadoPolicy.autorizado(usuario)) {
+            throw new UnprocessableEntityException(
+                    "Chat com menor exige conta ativa e consentimento vigente do responsável.");
+        }
     }
 
     private void bloquearDupla(Long usuarioA, Long usuarioB) {

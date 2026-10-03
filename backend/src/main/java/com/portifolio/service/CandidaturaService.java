@@ -108,10 +108,10 @@ public class CandidaturaService {
     public CandidaturaVagaPaginaResponse listarPorVaga(
             Long vagaId, Integer page, Integer size) {
         Usuario usuario = exigirUsuarioAtual();
-        Vaga vaga = vagaRepository.findDetalhesById(vagaId)
-                .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
         exigirTipo(usuario, TipoUsuario.CONTRATANTE,
                 "Somente contratantes podem consultar candidatos da vaga.");
+        Vaga vaga = vagaRepository.findDetalhesById(vagaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
         if (!vaga.getContratante().getUsuarioId().equals(usuario.getId())) {
             throw new ForbiddenException(
                     "Somente o proprietário da vaga pode consultar seus candidatos.");
@@ -122,7 +122,7 @@ public class CandidaturaService {
                 .map(Funcao::getId)
                 .collect(Collectors.toSet());
         Set<Long> tagsParaConsulta = tagsDaVaga.isEmpty() ? Set.of(-1L) : tagsDaVaga;
-        Page<Long> paginaIds = legacySchema ? candidaturaRepository.findIdsPorVagaSemTaxonomia(vagaId,pageable) : candidaturaRepository
+        Page<Long> paginaIds = legacySchema ? candidaturaRepository.findIdsPorVagaSemTaxonomia(vagaId, STATUS_ATIVOS, pageable) : candidaturaRepository
                 .findIdsPorVagaOrdenadosPorCompatibilidade(
                         vagaId, tagsParaConsulta, pageable);
 
@@ -392,6 +392,7 @@ public class CandidaturaService {
         return CandidaturaVagaResponse.builder()
                 .candidaturaId(candidatura.getId())
                 .artistaId(artista.getUsuarioId())
+                .username(artista.getUsuario().getUsername())
                 .nomeArtista(artista.getUsuario().getNome())
                 .biografia(artista.getBiografia())
                 .localizacao(artista.getLocalizacao())

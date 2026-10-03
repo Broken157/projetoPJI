@@ -37,6 +37,7 @@ class TalentoRf13IntegrationTest {
     String token;
 
     @BeforeEach void dados() {
+        limpar();
         dono = usuario("CONTRATANTE", "ATIVA", true);
         outro = usuario("CONTRATANTE", "ATIVA", true);
         db.update("insert into perfis_contratantes(usuario_id,tipo_contratante) values (?,'PESSOA_FISICA'),(?,'PESSOA_FISICA')", dono, outro);
@@ -82,7 +83,7 @@ class TalentoRf13IntegrationTest {
         db.update("update usuarios set status_conta='BLOQUEADA' where id=?",dono);
         mvc.perform(req()).andExpect(status().isUnauthorized());
     }
-    @Test void menoresMesmoAtivosComConsentimentoNaoTemAutorizacaoDeExposicao() throws Exception {
+    @Test void menorAutorizadoPermaneceForaDosTalentosMasTemPerfilPublicoRestritoRf10() throws Exception {
         long id=artista(1,true,f1);
         db.update("update usuarios set data_nascimento=? where id=?",LocalDate.now().minusYears(17),id);
         db.update("""
@@ -90,7 +91,10 @@ class TalentoRf13IntegrationTest {
                    versao_termo,consentimento_revogado,data_consentimento) values (?,'Privado','11999999999','privado@test','v1',false,current_timestamp)
                 """,id);
         mvc.perform(req()).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
-        mvc.perform(get("/api/perfis/publicos/ARTISTA/"+id)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/perfis/publicos/ARTISTA/"+id)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.experiencia").doesNotExist())
+                .andExpect(jsonPath("$.dataNascimento").doesNotExist())
+                .andExpect(jsonPath("$.emailResponsavel").doesNotExist());
     }
     @Test void adultoNoAniversarioDeDezoitoElegivel() throws Exception {
         long id=artista(1,true,f1);

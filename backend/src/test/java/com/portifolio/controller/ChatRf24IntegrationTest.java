@@ -149,8 +149,16 @@ class ChatRf24IntegrationTest {
     }
 
     @Test
-    void menorExigeCandidaturaPersistidaEntreADupla() throws Exception {
+    void menorAutorizadoExigeCandidaturaPersistidaEntreADupla() throws Exception {
         PerfilArtista menor = artista("menor@rf24.test", LocalDate.now().minusYears(16));
+        com.portifolio.model.ResponsavelLegal responsavel = new com.portifolio.model.ResponsavelLegal();
+        responsavel.setNomeResponsavel("Responsável fixture");
+        responsavel.setEmailResponsavel("responsavel@rf24.test");
+        responsavel.setTelefoneResponsavel("11988887777");
+        responsavel.setDataConsentimento(LocalDateTime.now());
+        responsavel.setConsentimentoRevogado(false);
+        menor.getUsuario().setResponsavelLegal(responsavel);
+        usuarioRepository.saveAndFlush(menor.getUsuario());
         PerfilContratante contratante = contratante("adulto@rf24.test", LocalDate.of(1980, 1, 1));
 
         criarSalaViaApi(contratante.getUsuario(), menor.getUsuarioId(), status().isUnprocessableEntity());

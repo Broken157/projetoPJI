@@ -7,7 +7,8 @@ public enum TipoNotificacao implements DatabaseEnum {
     MENSAGEM("MENSAGEM"),
     CONVITE("CONVITE"),
     EDITAL("EDITAL"),
-    SALVO("SALVO");
+    SALVO("SALVO"),
+    BANCO_DE_TALENTOS("BANCO_DE_TALENTOS");
 
     private final String databaseValue;
 

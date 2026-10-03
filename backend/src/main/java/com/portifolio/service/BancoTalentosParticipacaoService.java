@@ -1,12 +1,14 @@
 package com.portifolio.service;
 
 import com.portifolio.dto.BancoTalentosParticipacaoResponse;
+import com.portifolio.event.NotificacaoEvento;
 import com.portifolio.exception.ForbiddenException;
 import com.portifolio.exception.ResourceNotFoundException;
 import com.portifolio.exception.UnauthorizedException;
 import com.portifolio.exception.UnprocessableEntityException;
 import com.portifolio.model.Usuario;
 import com.portifolio.model.enums.StatusConta;
+import com.portifolio.model.enums.TipoNotificacao;
 import com.portifolio.model.enums.TipoUsuario;
 import com.portifolio.repository.BancoTalentosRepository;
 import com.portifolio.repository.PerfilArtistaRepository;
@@ -14,7 +16,9 @@ import com.portifolio.repository.PerfilContratanteRepository;
 import com.portifolio.security.AuthenticatedUserResolver;
 import com.portifolio.security.GoogleAccountAccessPolicy;
 import com.portifolio.security.MenorAutorizadoPolicy;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +31,8 @@ public class BancoTalentosParticipacaoService {
     private final PerfilArtistaRepository artistas;
     private final PerfilContratanteRepository contratantes;
     private final BancoTalentosRepository banco;
+    private final NotificacaoPersistenceService notificacoes;
+    private final ApplicationEventPublisher eventos;
 
     @Transactional
     public Resultado participar(Long contratanteId, Boolean confirmado) {
@@ -39,8 +45,13 @@ public class BancoTalentosParticipacaoService {
             throw new UnprocessableEntityException("Complete seu perfil antes de participar do Banco de Talentos.");
         }
         boolean criada = banco.adicionar(contratanteId, artista.getId());
-        // RF36 pendente: database04 não possui tipo compatível para entrada em Banco.
-        // Não publicar CANDIDATURA/SALVO/CONVITE com um significado diferente do oficial.
+        if (criada) {
+            notificacoes.persistirNaTransacaoAtual(new NotificacaoEvento(
+                    Set.of(contratanteId), TipoNotificacao.BANCO_DE_TALENTOS,
+                    "Um artista entrou no seu Banco de Talentos.",
+                    "/perfis/ARTISTA/" + artista.getId()))
+                    .forEach(eventos::publishEvent);
+        }
         return new Resultado(criada, new BancoTalentosParticipacaoResponse(contratanteId, true));
     }
 

@@ -33,6 +33,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -80,8 +82,8 @@ class NotificacaoWebSocketRf23IntegrationTest {
         jdbcTemplate.execute("TRUNCATE notificacoes, usuarios RESTART IDENTITY CASCADE");
     }
 
-    @Test
-    void jwtValidoEntregaNaFilaPrivadaCorretaEmMenosDeCincoSegundos() throws Exception {
+    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS"})
+    void jwtValidoEntregaNaFilaPrivadaCorretaEmMenosDeCincoSegundos(TipoNotificacao tipo) throws Exception {
         Usuario destino = novoUsuario("destino-ws@rf23.test");
         Usuario isolado = novoUsuario("isolado-ws@rf23.test");
         WebSocketStompClient cliente = cliente();
@@ -94,15 +96,18 @@ class NotificacaoWebSocketRf23IntegrationTest {
         Thread.sleep(150);
 
         NotificacaoResponse alerta = NotificacaoResponse.builder()
-                .id(99L).tipo(TipoNotificacao.CANDIDATURA).mensagem("Entrega privada")
+                .id(99L).tipo(tipo).mensagem("Entrega privada")
                 .link("dashboard-contratante.html").lida(false).data(LocalDateTime.now()).build();
         long inicio = System.nanoTime();
-        realtimeGateway.entregar(destino.getId(), destino.getEmail(), alerta);
+        NotificacaoResponse emitida = entregarOuParticipar(destino, alerta);
         JsonNode recebida = recebidasDestino.poll(5, TimeUnit.SECONDS);
         Duration duracao = Duration.ofNanos(System.nanoTime() - inicio);
 
         assertThat(recebida).isNotNull();
-        assertThat(recebida.path("id").asLong()).isEqualTo(99L);
+        assertThat(recebida.path("id").asLong()).isEqualTo(emitida.getId());
+        assertThat(recebida.path("tipo").asText()).isEqualTo(tipo.name());
+        assertThat(recebida.path("link").asText()).isEqualTo(emitida.getLink());
+        assertThat(recebida.path("mensagem").asText()).isEqualTo(emitida.getMensagem());
         assertThat(duracao).isLessThan(Duration.ofSeconds(5));
         assertThat(recebidasIsolado.poll(700, TimeUnit.MILLISECONDS)).isNull();
         sessaoDestino.disconnect();
@@ -121,8 +126,8 @@ class NotificacaoWebSocketRf23IntegrationTest {
         cliente.stop();
     }
 
-    @Test
-    void sseComAuthorizationEntregaSomenteAoUsuarioCorreto() throws Exception {
+    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS"})
+    void sseComAuthorizationEntregaSomenteAoUsuarioCorreto(TipoNotificacao tipo) throws Exception {
         Usuario destino = novoUsuario("destino-sse@rf23.test");
         Usuario isolado = novoUsuario("isolado-sse@rf23.test");
         HttpClient clienteHttp = HttpClient.newHttpClient();
@@ -140,14 +145,18 @@ class NotificacaoWebSocketRf23IntegrationTest {
         consumirEventoConectado(leitorIsolado);
 
         NotificacaoResponse alerta = NotificacaoResponse.builder()
-                .id(77L).tipo(TipoNotificacao.CANDIDATURA).mensagem("Fallback SSE")
+                .id(77L).tipo(tipo).mensagem("Fallback SSE")
                 .link("dashboard-contratante.html").lida(false).data(LocalDateTime.now()).build();
         long inicio = System.nanoTime();
-        realtimeGateway.entregar(destino.getId(), destino.getEmail(), alerta);
+        NotificacaoResponse emitida = entregarOuParticipar(destino, alerta);
         String dados = CompletableFuture.supplyAsync(() -> lerDados(leitorDestino))
                 .get(5, TimeUnit.SECONDS);
 
-        assertThat(dados).contains("\"id\":77").contains("Fallback SSE");
+        JsonNode recebida = new ObjectMapper().readTree(dados);
+        assertThat(recebida.path("id").asLong()).isEqualTo(emitida.getId());
+        assertThat(recebida.path("tipo").asText()).isEqualTo(tipo.name());
+        assertThat(recebida.path("link").asText()).isEqualTo(emitida.getLink());
+        assertThat(recebida.path("mensagem").asText()).isEqualTo(emitida.getMensagem());
         assertThat(Duration.ofNanos(System.nanoTime() - inicio)).isLessThan(Duration.ofSeconds(5));
         Thread.sleep(250);
         assertThat(respostaIsolada.body().available()).isZero();
@@ -156,8 +165,37 @@ class NotificacaoWebSocketRf23IntegrationTest {
         Thread.sleep(100);
         // Uma escrita final permite ao servidor detectar os clientes fechados e
         // encerrar os SseEmitter sem prolongar o shutdown da suíte.
-        realtimeGateway.entregar(destino.getId(), destino.getEmail(), alerta);
-        realtimeGateway.entregar(isolado.getId(), isolado.getEmail(), alerta);
+        realtimeGateway.entregar(destino.getId(), destino.getEmail(), emitida);
+        realtimeGateway.entregar(isolado.getId(), isolado.getEmail(), emitida);
+    }
+
+    private NotificacaoResponse entregarOuParticipar(Usuario destino, NotificacaoResponse alerta) throws Exception {
+        if (alerta.getTipo() != TipoNotificacao.BANCO_DE_TALENTOS) {
+            realtimeGateway.entregar(destino.getId(), destino.getEmail(), alerta);
+            return alerta;
+        }
+        destino.setTipoUsuario(TipoUsuario.CONTRATANTE);
+        usuarioRepository.saveAndFlush(destino);
+        jdbcTemplate.update("insert into perfis_contratantes(usuario_id,tipo_contratante) values (?,'PESSOA_FISICA')", destino.getId());
+        Usuario artista = novoUsuario("artista-banco@rf36.test");
+        jdbcTemplate.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,disponivel_oportunidades) values (?,'ARTISTA_SOLO',true)", artista.getId());
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(jdbcTemplate, artista.getId());
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/talentos/contratantes/" + destino.getId() + "/participacao"))
+                .header("Authorization", "Bearer " + jwtService.gerarToken(artista))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"confirmado\":true}"))
+                .build();
+        assertThat(HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString()).statusCode())
+                .isEqualTo(201);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from banco_talentos where contratante_id=? and artista_id=?",
+                Long.class, destino.getId(), artista.getId())).isEqualTo(1L);
+        var registro = jdbcTemplate.queryForMap("select id,tipo_notificacao::text as tipo,mensagem_alerta,link_contexto from notificacoes");
+        assertThat(registro).containsEntry("tipo", "BANCO_DE_TALENTOS")
+                .containsEntry("link_contexto", "/perfis/ARTISTA/" + artista.getId());
+        return NotificacaoResponse.builder().id(((Number) registro.get("id")).longValue())
+                .tipo(TipoNotificacao.BANCO_DE_TALENTOS).mensagem((String) registro.get("mensagem_alerta"))
+                .link((String) registro.get("link_contexto")).build();
     }
 
     private void assertConexaoRejeitada(WebSocketStompClient cliente, String token) {

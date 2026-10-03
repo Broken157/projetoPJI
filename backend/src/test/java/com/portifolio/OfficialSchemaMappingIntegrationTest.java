@@ -188,10 +188,10 @@ class OfficialSchemaMappingIntegrationTest {
         conferirEnum("modelo_trabalho_enum", ModeloTrabalho.values());
         conferirEnum("status_vaga_enum", StatusVaga.values());
         conferirEnum("status_candidatura_enum", StatusCandidatura.values());
-        // Label oficial novo, ainda sem uso funcional Java/RF13 nesta sincronizacao.
-        conferirEnum("tipo_notificacao_enum", TipoNotificacao.values(), "BANCO_DE_TALENTOS");
+        // O Java corresponde integralmente aos labels do database05 oficial.
+        conferirEnum("tipo_notificacao_enum", TipoNotificacao.values());
         assertThat(java.util.Arrays.stream(TipoNotificacao.values()).map(DatabaseEnum::getDatabaseValue).toList())
-                .doesNotContain("BANCO_DE_TALENTOS");
+                .contains("BANCO_DE_TALENTOS");
         conferirEnum("status_conta_enum", StatusConta.values());
         conferirEnum("nivel_experiencia_enum", NivelExperiencia.values());
         conferirEnum("abrangencia_enum", Abrangencia.values());
@@ -220,12 +220,11 @@ class OfficialSchemaMappingIntegrationTest {
                 .containsEntry("cpf", "12345678901").containsEntry("cnpj", "12345678000199");
     }
 
-    private void conferirEnum(String tipo, DatabaseEnum[] valores, String... apenasSnapshot) {
+    private void conferirEnum(String tipo, DatabaseEnum[] valores) {
         var oficiais = jdbc.queryForList("select e.enumlabel from pg_enum e join pg_type t on t.oid=e.enumtypid "
                 + "where t.typname=? order by e.enumsortorder", String.class, tipo);
-        var esperados = new java.util.ArrayList<>(java.util.Arrays.stream(valores).map(DatabaseEnum::getDatabaseValue).toList());
-        esperados.addAll(java.util.List.of(apenasSnapshot));
-        assertThat(esperados).containsExactlyElementsOf(oficiais);
+        assertThat(java.util.Arrays.stream(valores).map(DatabaseEnum::getDatabaseValue).toList())
+                .containsExactlyElementsOf(oficiais);
     }
 
     @Test void bancoTalentosPersisteChaveCompostaPorContratante() {

@@ -2,14 +2,26 @@ package com.portifolio.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portifolio.exception.UnprocessableEntityException;
+import com.portifolio.dto.NotificacaoResponse;
+import com.portifolio.model.enums.TipoNotificacao;
+import com.portifolio.realtime.NotificacaoRealtimeGateway;
+import com.portifolio.realtime.NotificacaoSseService;
 import com.portifolio.repository.BancoTalentosRepository;
+import com.portifolio.repository.NotificacaoRepository;
 import com.portifolio.repository.UsuarioRepository;
 import com.portifolio.security.JwtService;
 import com.portifolio.support.OfficialPostgreSQLContainer;
@@ -29,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -36,9 +49,13 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -56,6 +73,11 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
     @Autowired Clock clock;
     @Autowired Environment environment;
     @MockitoSpyBean BancoTalentosRepository banco;
+    @MockitoSpyBean NotificacaoRepository notificacoes;
+    @MockitoSpyBean NotificacaoRealtimeGateway realtime;
+    @MockitoSpyBean SimpMessagingTemplate websocket;
+    @MockitoSpyBean NotificacaoSseService sse;
+    @Autowired PlatformTransactionManager transacoes;
     private final ObjectMapper mapper = new ObjectMapper();
     private long artista, outroArtista, contratante, outroContratante;
     private String token;
@@ -160,6 +182,7 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
         assertThat(vinculos()).hasSize(1);
         assertThat(vinculos().getFirst()).containsEntry("contratante_id", contratante).containsEntry("artista_id", artista);
         assertThat(vinculos().getFirst().get("data_adicao")).isNotNull();
+        notificacaoBanco();
     }
 
     @Test
@@ -170,6 +193,7 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
                 .andExpect(status().isCreated());
         assertThat(vinculos()).hasSize(1);
         assertThat(vinculos().getFirst()).containsEntry("artista_id", artista).containsEntry("contratante_id", contratante);
+        notificacaoBanco();
         mvc.perform(get(rota(contratante)).header("Authorization", bearer(outroArtista)).param("artistaId", Long.toString(artista)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.participante").value(false));
         assertThat(estado(contratante).path("participante").asBoolean()).isTrue();
@@ -181,15 +205,21 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
         assertThat(estado(outroContratante).path("participante").asBoolean()).isFalse();
         mvc.perform(entrada(outroContratante)).andExpect(status().isCreated());
         assertThat(vinculos()).hasSize(2).allSatisfy(v -> assertThat(v.get("artista_id")).isEqualTo(artista));
+        assertThat(db.queryForList("select usuario_destino_id from notificacoes order by usuario_destino_id", Long.class))
+                .containsExactly(contratante, outroContratante);
+        assertThat(db.queryForList("select link_contexto from notificacoes", String.class))
+                .containsOnly("/perfis/ARTISTA/" + artista);
     }
 
     @Test
-    void repeticao200NaoRegravaDataNemCriaSegundaRelacaoOuNotificacaoImpropria() throws Exception {
+    void repeticao200NaoRegravaDataNemCriaSegundaRelacaoOuNotificacao() throws Exception {
         mvc.perform(entrada(contratante)).andExpect(status().isCreated());
         var antes = vinculos();
+        var alerta = notificacaoBanco();
         for (int i = 0; i < 3; i++) mvc.perform(entrada(contratante)).andExpect(status().isOk());
         assertThat(vinculos()).isEqualTo(antes);
-        assertThat(quantidade("notificacoes")).isZero();
+        assertThat(notificacaoBanco()).isEqualTo(alerta);
+        verify(realtime, times(1)).entregar(eq(contratante), anyString(), any(NotificacaoResponse.class));
     }
 
     @RepeatedTest(3)
@@ -206,7 +236,8 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
                     .containsExactlyInAnyOrder(201, 200);
         }
         assertThat(vinculos()).hasSize(1);
-        assertThat(quantidade("notificacoes")).isZero();
+        notificacaoBanco();
+        verify(realtime, times(1)).entregar(eq(contratante), anyString(), any(NotificacaoResponse.class));
     }
 
     @Test
@@ -217,19 +248,27 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
         var depois = contagens(tabelas);
         assertThat(depois.remove("banco_talentos")).isEqualTo(1L);
         antes.remove("banco_talentos");
+        assertThat(depois.remove("notificacoes")).isEqualTo(1L);
+        antes.remove("notificacoes");
         assertThat(depois).isEqualTo(antes);
+        notificacaoBanco();
     }
 
     @Test
-    void database05DisponibilizaTipoMasParticipacaoAindaNaoNotifica() throws Exception {
+    void database05EJavaPersistemELeemTipoOficialNaPrimeiraParticipacao() throws Exception {
         assertThat(db.queryForList("select enumlabel::text from pg_enum join pg_type on pg_type.oid=enumtypid where typname='tipo_notificacao_enum'", String.class))
                 .containsExactlyInAnyOrder("CANDIDATURA", "MENSAGEM", "CONVITE", "EDITAL", "SALVO", "BANCO_DE_TALENTOS");
         assertThat(java.util.Arrays.stream(com.portifolio.model.enums.TipoNotificacao.values())
                 .map(com.portifolio.model.enums.TipoNotificacao::getDatabaseValue).toList())
-                .doesNotContain("BANCO_DE_TALENTOS");
+                .contains("BANCO_DE_TALENTOS");
+        assertThat(TipoNotificacao.fromDatabaseValue("BANCO_DE_TALENTOS"))
+                .isEqualTo(TipoNotificacao.BANCO_DE_TALENTOS);
         mvc.perform(entrada(contratante)).andExpect(status().isCreated());
-        assertThat(quantidade("notificacoes")).isZero();
-        // Critério RF13 de notificação na primeira entrada permanece pendente, não é dado como aprovado.
+        notificacaoBanco();
+        assertThat(notificacoes.findAll()).singleElement().satisfies(n -> {
+            assertThat(n.getTipo()).isEqualTo(TipoNotificacao.BANCO_DE_TALENTOS);
+            assertThat(n.getLink()).isEqualTo("/perfis/ARTISTA/" + artista);
+        });
     }
 
     @Test
@@ -287,6 +326,10 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
         whitelist(estado(contratante));
         assertThat(vinculos()).hasSize(1);
         assertThat(db.queryForMap("select * from responsaveis_legais where usuario_id=?", artista)).isEqualTo(consentimento);
+        notificacaoBanco();
+        JsonNode alerta = central(contratante).path("content").get(0);
+        privacidadeNotificacao(alerta);
+        assertThat(alerta.toString()).doesNotContain("responsavel-privado", "11988887777", "responsavel@rf13.test");
     }
 
     @ParameterizedTest @CsvSource({"false,false", "true,true"})
@@ -304,6 +347,8 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
         if (idade == 13) autorizar(artista, true, false);
         mvc.perform(entrada(contratante)).andExpect(status().isUnprocessableEntity());
         assertThat(vinculos()).isEmpty();
+        assertThat(quantidade("notificacoes")).isZero();
+        verify(realtime, never()).entregar(anyLong(), anyString(), any(NotificacaoResponse.class));
     }
 
     @Test
@@ -388,7 +433,7 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
     }
 
     @Test
-    void database04ContinuaValidateEChaveCompostaReal() {
+    void database05ContinuaValidateEChaveCompostaReal() {
         assertThat(environment.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(db.queryForList("""
                 select a.attname::text from pg_index i
@@ -397,6 +442,173 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
                 join pg_attribute a on a.attrelid=t.oid and a.attnum=k.attnum
                 where t.relname='banco_talentos' and i.indisprimary order by k.ordem
                 """, String.class)).containsExactly("contratante_id", "artista_id");
+    }
+
+    @Test
+    void centralListaTipoNovoSomenteAoContratanteDestinoComConteudoMinimo() throws Exception {
+        db.update("update usuarios set cpf='12345678901' where id=?", artista);
+        mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        notificacaoBanco();
+        JsonNode pagina = central(contratante);
+        assertThat(pagina.path("totalElements").asLong()).isEqualTo(1);
+        privacidadeNotificacao(pagina.path("content").get(0));
+        assertThat(pagina.toString()).doesNotContain("12345678901", LocalDate.now(clock).minusYears(30).toString());
+        assertThat(central(artista).path("content")).isEmpty();
+        assertThat(central(outroContratante).path("content")).isEmpty();
+        mvc.perform(get("/api/perfis/publicos/ARTISTA/" + artista)).andExpect(status().isOk());
+        assertThat(quantidade("notificacoes")).isEqualTo(1);
+    }
+
+    @Test
+    void getDeParticipacaoBuscaRf17EPerfilNaoGeramSegundaNotificacao() throws Exception {
+        estado(contratante);
+        mvc.perform(get("/api/talentos").header("Authorization", bearer(contratante))).andExpect(status().isOk());
+        assertThat(quantidade("notificacoes")).isZero();
+        mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        var alerta = notificacaoBanco();
+        var relacao = vinculos();
+        for (int i = 0; i < 3; i++) {
+            estado(contratante);
+            mvc.perform(get("/api/talentos").header("Authorization", bearer(contratante)))
+                    .andExpect(status().isOk());
+            mvc.perform(get("/api/perfis/publicos/ARTISTA/" + artista)).andExpect(status().isOk());
+        }
+        assertThat(vinculos()).isEqualTo(relacao);
+        assertThat(notificacaoBanco()).isEqualTo(alerta);
+        verify(realtime, times(1)).entregar(eq(contratante), anyString(), any(NotificacaoResponse.class));
+    }
+
+    @Test
+    void salvarPerfilPermaneceEventoSalvoIndependenteDaParticipacao() throws Exception {
+        mvc.perform(post("/api/salvos").header("Authorization", bearer(contratante))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tipoAlvo\":\"PERFIL_ARTISTA\",\"alvoId\":" + artista + "}"))
+                .andExpect(status().isCreated());
+        assertThat(vinculos()).isEmpty();
+        assertThat(db.queryForList("select tipo_notificacao::text from notificacoes", String.class))
+                .containsExactly("SALVO");
+        mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        assertThat(db.queryForList("select tipo_notificacao::text from notificacoes order by id", String.class))
+                .containsExactly("SALVO", "BANCO_DE_TALENTOS");
+        assertThat(db.queryForList("select usuario_destino_id from notificacoes order by id", Long.class))
+                .containsExactly(artista, contratante);
+        assertThat(quantidade("itens_salvos")).isEqualTo(1);
+        assertThat(vinculos()).hasSize(1);
+    }
+
+    @Test
+    void marcarNovaNotificacaoComoLidaExigeDestinoERepeticaoNaoReabreAlerta() throws Exception {
+        mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        long id = ((Number) notificacaoBanco().get("id")).longValue();
+        mvc.perform(patch("/api/notificacoes/" + id + "/lida").header("Authorization", bearer(outroContratante)))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/notificacoes/" + id + "/lida").header("Authorization", token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/notificacoes/nao-lidas/count").header("Authorization", bearer(contratante)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.count").value(1));
+        mvc.perform(patch("/api/notificacoes/" + id + "/lida").header("Authorization", bearer(contratante)))
+                .andExpect(status().isNoContent());
+        mvc.perform(entrada(contratante)).andExpect(status().isOk());
+        JsonNode alerta = central(contratante).path("content").get(0);
+        assertThat(alerta.path("id").asLong()).isEqualTo(id);
+        assertThat(alerta.path("lida").asBoolean()).isTrue();
+        assertThat(quantidade("notificacoes")).isEqualTo(1);
+        mvc.perform(get("/api/notificacoes/nao-lidas/count").header("Authorization", bearer(contratante)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.count").value(0));
+        verify(realtime, times(1)).entregar(eq(contratante), anyString(), any(NotificacaoResponse.class));
+    }
+
+    @Test
+    void marcarTodasComoLidasIncluiTipoNovoSemAlterarBancoDeOutroContratante() throws Exception {
+        mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        mvc.perform(request("POST", contratante).header("Authorization", bearer(outroArtista))).andExpect(status().isCreated());
+        mvc.perform(entrada(outroContratante)).andExpect(status().isCreated());
+        assertThat(central(contratante).path("content")).hasSize(2);
+        mvc.perform(patch("/api/notificacoes/lidas").header("Authorization", bearer(contratante)))
+                .andExpect(status().isNoContent());
+        assertThat(db.queryForObject("select count(*) from notificacoes where usuario_destino_id=? and lida", Long.class, contratante))
+                .isEqualTo(2);
+        assertThat(central(outroContratante).path("content").get(0).path("lida").asBoolean()).isFalse();
+        assertThat(quantidade("notificacoes")).isEqualTo(3);
+        assertThat(vinculos()).hasSize(3);
+    }
+
+    @Test
+    void entregaAconteceSomenteDepoisDoCommitDaTransacaoPrincipal() {
+        new TransactionTemplate(transacoes).executeWithoutResult(status -> {
+            entrarDentroDaTransacao();
+            assertThat(vinculos()).hasSize(1);
+            notificacaoBanco();
+            verify(realtime, never()).entregar(anyLong(), anyString(), any(NotificacaoResponse.class));
+        });
+        var payload = ArgumentCaptor.forClass(NotificacaoResponse.class);
+        verify(realtime, times(1)).entregar(eq(contratante), eq("contratante@rf13.test"), payload.capture());
+        assertThat(payload.getValue().getTipo()).isEqualTo(TipoNotificacao.BANCO_DE_TALENTOS);
+        assertThat(payload.getValue().getLink()).isEqualTo("/perfis/ARTISTA/" + artista);
+        assertThat(payload.getValue().getId()).isEqualTo(notificacaoBanco().get("id"));
+        assertThat(vinculos()).hasSize(1);
+    }
+
+    @Test
+    void rollbackPrincipalDepoisDePersistirAmbosNaoDeixaAlertaOrfaoNemEntrega() throws Exception {
+        new TransactionTemplate(transacoes).executeWithoutResult(status -> {
+            entrarDentroDaTransacao();
+            assertThat(vinculos()).hasSize(1);
+            notificacaoBanco();
+            verify(realtime, never()).entregar(anyLong(), anyString(), any(NotificacaoResponse.class));
+            status.setRollbackOnly();
+        });
+        assertThat(vinculos()).isEmpty();
+        assertThat(quantidade("notificacoes")).isZero();
+        verify(realtime, never()).entregar(anyLong(), anyString(), any(NotificacaoResponse.class));
+        mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        notificacaoBanco();
+        verify(realtime, times(1)).entregar(eq(contratante), anyString(), any(NotificacaoResponse.class));
+    }
+
+    @Test
+    void falhaDaPersistenciaAntesDoCommitReverteParticipacaoENaoEntrega() throws Exception {
+        doThrow(new DataIntegrityViolationException("Falha controlada na notificacao."))
+                .when(notificacoes).saveAllAndFlush(any());
+        mvc.perform(entrada(contratante)).andExpect(status().isConflict());
+        assertThat(vinculos()).isEmpty();
+        assertThat(quantidade("notificacoes")).isZero();
+        verify(realtime, never()).entregar(anyLong(), anyString(), any(NotificacaoResponse.class));
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"WebSocket", "SSE"})
+    void falhaDeTransportePosCommitPreservaParticipacaoENotificacao(String transporte) throws Exception {
+        if (transporte.equals("WebSocket")) {
+            doThrow(new IllegalStateException("Broker indisponivel."))
+                    .when(websocket).convertAndSendToUser(anyString(), eq("/queue/notificacoes"), any(NotificacaoResponse.class));
+        } else {
+            doThrow(new IllegalStateException("SSE indisponivel."))
+                    .when(sse).entregar(eq(contratante), any(NotificacaoResponse.class));
+        }
+        mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        assertThat(vinculos()).hasSize(1);
+        var alerta = notificacaoBanco();
+        verify(websocket, times(1)).convertAndSendToUser(eq("contratante@rf13.test"), eq("/queue/notificacoes"), any(NotificacaoResponse.class));
+        verify(sse, times(1)).entregar(eq(contratante), any(NotificacaoResponse.class));
+        mvc.perform(entrada(contratante)).andExpect(status().isOk());
+        assertThat(notificacaoBanco()).isEqualTo(alerta);
+    }
+
+    @Test
+    void exceptionDoGatewayPosCommitTambemNaoPropagaNemApagaPersistencia() throws Exception {
+        doThrow(new IllegalStateException("Gateway indisponivel."))
+                .when(realtime).entregar(anyLong(), anyString(), any(NotificacaoResponse.class));
+        mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        assertThat(vinculos()).hasSize(1);
+        notificacaoBanco();
+    }
+
+    private void entrarDentroDaTransacao() {
+        try {
+            mvc.perform(entrada(contratante)).andExpect(status().isCreated());
+        } catch (Exception erro) {
+            throw new AssertionError(erro);
+        }
     }
 
     private String rota(long alvo) { return "/api/talentos/contratantes/" + alvo + "/participacao"; }
@@ -413,6 +625,29 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
         return mapper.readTree(mvc.perform(entrada(alvo)).andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString());
     }
     private List<Map<String, Object>> vinculos() { return db.queryForList("select * from banco_talentos order by contratante_id,artista_id"); }
+    private Map<String, Object> notificacaoBanco() {
+        assertThat(quantidade("notificacoes")).isEqualTo(1L);
+        var alerta = db.queryForMap("select id,usuario_destino_id,tipo_notificacao::text as tipo,mensagem_alerta,link_contexto,lida,data_criacao from notificacoes");
+        assertThat(alerta).containsEntry("usuario_destino_id", contratante)
+                .containsEntry("tipo", "BANCO_DE_TALENTOS")
+                .containsEntry("mensagem_alerta", "Um artista entrou no seu Banco de Talentos.")
+                .containsEntry("link_contexto", "/perfis/ARTISTA/" + artista)
+                .containsEntry("lida", false);
+        assertThat(alerta.get("data_criacao")).isNotNull();
+        return alerta;
+    }
+    private JsonNode central(long usuarioId) throws Exception {
+        return mapper.readTree(mvc.perform(get("/api/notificacoes").header("Authorization", bearer(usuarioId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+    private void privacidadeNotificacao(JsonNode alerta) {
+        List<String> campos = new ArrayList<>(); alerta.fieldNames().forEachRemaining(campos::add);
+        assertThat(campos).containsExactlyInAnyOrder("id", "tipo", "mensagem", "link", "lida", "data");
+        assertThat(alerta.path("tipo").asText()).isEqualTo("BANCO_DE_TALENTOS");
+        assertThat(alerta.path("mensagem").asText()).isEqualTo("Um artista entrou no seu Banco de Talentos.");
+        assertThat(alerta.path("link").asText()).isEqualTo("/perfis/ARTISTA/" + artista);
+        assertThat(alerta.toString()).doesNotContain("@rf13.test", "11999999999", "cpf", "nascimento", "idade", "endereco", "responsavel", "consentimento", "experiencia");
+    }
     private long quantidade(String tabela) { return db.queryForObject("select count(*) from " + tabela, Long.class); }
     private Map<String, Long> contagens(List<String> tabelas) {
         Map<String, Long> resultado = new java.util.LinkedHashMap<>();

@@ -54,8 +54,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -76,7 +75,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
     @Test
     void estadosPendentesNaoSaoPromovidosENaoAceitamSenhaRefreshOuJwtAnterior() throws Exception {
         for (StatusConta estado : new StatusConta[]{StatusConta.PENDENTE_TIPO_PERFIL,
-                StatusConta.PENDENTE_VERIFICACAO_EMAIL, StatusConta.PENDENTE_CONSENTIMENTO,
+                StatusConta.PENDENTE_CONSENTIMENTO,
                 StatusConta.BLOQUEADA}) {
             Usuario usuario = usuarioLocal(estado.name() + "@palco.test", "Senha@2026", TipoUsuario.ARTISTA);
             String jwtAnterior = jwtService.gerarToken(usuario);
@@ -97,7 +96,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
                         .andExpect(jsonPath("$.status").value("AGUARDANDO_DADOS"))
                         .andExpect(jsonPath("$.statusConta").value(estado.name()))
                         .andExpect(jsonPath("$.token").isEmpty())
-                        .andExpect(jsonPath("$.refreshToken").isEmpty());
+                        .andExpect(jsonPath("$.refreshToken").doesNotExist());
                 // Repetir pelo google_id já vinculado também não promove a conta.
                 mockMvc.perform(postGoogle(payloadCompleto(estado.name(), "CONTRATANTE", true)))
                         .andExpect(status().isOk()).andExpect(jsonPath("$.token").isEmpty());
@@ -121,9 +120,47 @@ class GoogleAuthRf24HardeningIntegrationTest {
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> stompInterceptor.preSend(message, null))
                     .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
         }
-        // Somente os quatro refresh antigos de fixture; nenhum novo foi emitido.
-        assertThat(refreshTokenRepository.count()).isEqualTo(4);
+        // Somente os três refresh antigos de fixture; nenhum novo foi emitido.
+        assertThat(refreshTokenRepository.count()).isEqualTo(3);
         assertThat(perfilArtistaRepository.count()).isZero();
+    }
+
+    @Test
+    void googleConfirmaEmailPendenteSemIgnorarIdadeOuConsentimento() throws Exception {
+        Usuario adulto = usuarioLocal("google-verificado-adulto@palco.test", "Senha@2026", TipoUsuario.ARTISTA);
+        // A fixture deste cenario e incompleta; nao depende de trigger de outro snapshot.
+        adulto.setPerfilCompleto(false);
+        adulto.setStatusConta(StatusConta.PENDENTE_VERIFICACAO_EMAIL);
+        adulto.setEmailVerificado(false);
+        adulto.setTokenVerificacao("hash-pendente-adulto");
+        usuarioRepository.saveAndFlush(adulto);
+        fakeVerifier.aceitar("confirmar-adulto", claims("google-confirmar-adulto", adulto.getEmail()));
+
+        mockMvc.perform(postGoogle(payloadCompleto("confirmar-adulto", "CONTRATANTE", false)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AGUARDANDO_DADOS"))
+                .andExpect(jsonPath("$.statusConta").value("ATIVA"))
+                .andExpect(jsonPath("$.token").isEmpty());
+        Usuario adultoConfirmado = usuarioRepository.findById(adulto.getId()).orElseThrow();
+        assertThat(adultoConfirmado.getEmailVerificado()).isTrue();
+        assertThat(adultoConfirmado.getTokenVerificacao()).isNull();
+        assertThat(passwordEncoder.matches("Senha@2026", adultoConfirmado.getSenha())).isTrue();
+
+        Usuario menor = usuarioLocal("google-verificado-menor@palco.test", "Senha@2026", TipoUsuario.ARTISTA);
+        menor.setPerfilCompleto(false);
+        menor.setDataNascimento(LocalDate.now().minusYears(16));
+        menor.setStatusConta(StatusConta.PENDENTE_VERIFICACAO_EMAIL);
+        menor.setEmailVerificado(false);
+        usuarioRepository.saveAndFlush(menor);
+        fakeVerifier.aceitar("confirmar-menor", claims("google-confirmar-menor", menor.getEmail()));
+
+        mockMvc.perform(postGoogle(payloadCompleto("confirmar-menor", "CONTRATANTE", true)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AGUARDANDO_DADOS"))
+                .andExpect(jsonPath("$.statusConta").value("PENDENTE_CONSENTIMENTO"))
+                .andExpect(jsonPath("$.token").isEmpty());
+        assertThat(usuarioRepository.findById(menor.getId()).orElseThrow().getEmailVerificado()).isTrue();
+        assertThat(refreshTokenRepository.count()).isZero();
     }
 
     @Test
@@ -139,7 +176,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
                 .andExpect(jsonPath("$.statusConta").value("ATIVA"))
                 .andExpect(jsonPath("$.perfilCompleto").value(false))
                 .andExpect(jsonPath("$.token").isEmpty())
-                .andExpect(jsonPath("$.refreshToken").isEmpty());
+                .andExpect(jsonPath("$.refreshToken").doesNotExist());
         assertThat(usuarioRepository.findById(usuario.getId()).orElseThrow().getPerfilCompleto()).isFalse();
         assertThat(refreshTokenRepository.count()).isZero();
     }
@@ -147,6 +184,14 @@ class GoogleAuthRf24HardeningIntegrationTest {
     @Test
     void contaGoogleOnlyAptaExistenteContinuaAcessandoNormalmente() throws Exception {
         Usuario usuario = usuarioLocal("google-apto@palco.test", "Senha@2026", TipoUsuario.ARTISTA);
+        com.portifolio.model.PerfilArtista perfil = new com.portifolio.model.PerfilArtista();
+        perfil.setUsuario(usuario);
+        perfil.setTipoPerfilArtistico(com.portifolio.model.enums.TipoPerfilArtistico.ARTISTA_SOLO);
+        perfil.setRaioAtuacao(com.portifolio.model.enums.Abrangencia.LOCAL);
+        perfilArtistaRepository.saveAndFlush(perfil);
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                jdbcTemplate, usuario.getId());
+        usuario = usuarioRepository.findById(usuario.getId()).orElseThrow();
         usuario.setGoogleId("google-apto");
         usuario.setSenha(null);
         usuarioRepository.saveAndFlush(usuario);
@@ -164,13 +209,14 @@ class GoogleAuthRf24HardeningIntegrationTest {
     }
 
     @Test
-    void provisoriaNaoEmiteRefreshMesmoComRememberMeTrue() throws Exception {
+    void contextoNaoEmiteRefreshMesmoComRememberMeTrue() throws Exception {
         fakeVerifier.aceitar("provisoria", claims("google-provisoria", "provisoria@palco.test"));
         mockMvc.perform(postGoogle(payloadCompleto("provisoria", "ARTISTA", true)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statusConta").value("PENDENTE_TIPO_PERFIL"))
+                .andExpect(jsonPath("$.statusConta").isEmpty())
+                .andExpect(jsonPath("$.contexto").isNotEmpty())
                 .andExpect(jsonPath("$.token").isEmpty())
-                .andExpect(jsonPath("$.refreshToken").isEmpty());
+                .andExpect(jsonPath("$.refreshToken").doesNotExist());
         assertThat(refreshTokenRepository.count()).isZero();
     }
 
@@ -184,26 +230,20 @@ class GoogleAuthRf24HardeningIntegrationTest {
     }
 
     @Test
-    void credencialValidaCriaContaPendenteSemSenhaPerfilDefinitivoOuTokens() throws Exception {
+    void credencialValidaCriaSomenteContextoSemUsuarioPerfilOuSessao() throws Exception {
         fakeVerifier.aceitar("novo", claims("google-novo", "novo@palco.test"));
 
         mockMvc.perform(postGoogle(payloadCompleto("novo", "ARTISTA", false)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AGUARDANDO_DADOS"))
-                .andExpect(jsonPath("$.statusConta").value("PENDENTE_TIPO_PERFIL"))
+                .andExpect(jsonPath("$.statusConta").isEmpty())
+                .andExpect(jsonPath("$.contexto").isNotEmpty())
                 .andExpect(jsonPath("$.token").isEmpty())
-                .andExpect(jsonPath("$.refreshToken").isEmpty())
-                .andExpect(jsonPath("$.tipoUsuario").value("ARTISTA"));
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andExpect(jsonPath("$.tipoUsuario").isEmpty());
 
-        Usuario salvo = usuarioRepository.findByEmail("novo@palco.test").orElseThrow();
-        assertThat(salvo.getSenha()).isNull();
-        assertThat(salvo.getGoogleId()).isEqualTo("google-novo");
-        assertThat(salvo.getStatusConta()).isEqualTo(StatusConta.PENDENTE_TIPO_PERFIL);
-        assertThat(salvo.getEmailVerificado()).isTrue();
-        assertThat(salvo.getPerfilCompleto()).isFalse();
-        assertThat(salvo.getNome()).isEqualTo("Pessoa Google");
-        assertThat(salvo.getFotoPerfil()).isEqualTo("https://img.example/avatar");
-        assertThat(perfilArtistaRepository.findById(salvo.getId())).isEmpty();
+        assertThat(usuarioRepository.count()).isZero();
+        assertThat(perfilArtistaRepository.count()).isZero();
         assertThat(perfilContratanteRepository.count()).isZero();
     }
 
@@ -332,6 +372,11 @@ class GoogleAuthRf24HardeningIntegrationTest {
 
         MvcResult criado = mockMvc.perform(postGoogle(payloadCompleto("criar", "ARTISTA", false)))
                 .andExpect(status().isOk()).andReturn();
+        var dados = com.portifolio.support.CadastroFixtures.artista();
+        dados.put("contexto", objectMapper.readTree(criado.getResponse().getContentAsString()).get("contexto").asText());
+        criado = mockMvc.perform(post("/api/auth/google/cadastro").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dados)))
+                .andExpect(status().isCreated()).andReturn();
         long id = objectMapper.readTree(criado.getResponse().getContentAsString()).get("id").asLong();
         mockMvc.perform(postGoogle(Map.of("idToken", "login", "rememberMe", false)))
                 .andExpect(status().isOk())
@@ -347,7 +392,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
 
         mockMvc.perform(postGoogle(payloadCompleto("sem-refresh", "ARTISTA", false)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.refreshToken").isEmpty());
+                .andExpect(jsonPath("$.refreshToken").doesNotExist());
 
         assertThat(refreshTokenRepository.count()).isZero();
     }
@@ -375,7 +420,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("AGUARDANDO_DADOS"))
                 .andExpect(jsonPath("$.token").isEmpty())
-                .andExpect(jsonPath("$.refreshToken").isEmpty())
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
                 .andExpect(jsonPath("$.emailGoogle").value("incompleto@palco.test"));
 
         assertThat(usuarioRepository.count()).isZero();
@@ -400,7 +445,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
     }
 
     @Test
-    void duasAutenticacoesSimultaneasCriamUmaSoContaPendenteSemPerfil() throws Exception {
+    void duasAutenticacoesSimultaneasNaoPersistemContas() throws Exception {
         fakeVerifier.aceitar("concorrente", claims("google-concorrente", "concorrente@palco.test"));
         Map<String, Object> payload = payloadCompleto("concorrente", "ARTISTA", false);
         CountDownLatch prontas = new CountDownLatch(2);
@@ -420,9 +465,10 @@ class GoogleAuthRf24HardeningIntegrationTest {
             assertThat(resultadoB.getResponse().getStatus()).isEqualTo(200);
             JsonNode respostaA = objectMapper.readTree(resultadoA.getResponse().getContentAsString());
             JsonNode respostaB = objectMapper.readTree(resultadoB.getResponse().getContentAsString());
-            assertThat(respostaA.get("id").asLong()).isEqualTo(respostaB.get("id").asLong());
-            assertThat(respostaA.get("statusConta").asText()).isEqualTo("PENDENTE_TIPO_PERFIL");
-            assertThat(respostaB.get("statusConta").asText()).isEqualTo("PENDENTE_TIPO_PERFIL");
+            assertThat(respostaA.get("id").isNull()).isTrue();
+            assertThat(respostaB.get("id").isNull()).isTrue();
+            assertThat(respostaA.get("contexto").asText()).isNotBlank();
+            assertThat(respostaB.get("contexto").asText()).isNotBlank();
             assertThat(respostaA.get("token").isNull()).isTrue();
             assertThat(respostaB.get("token").isNull()).isTrue();
         } finally {
@@ -430,9 +476,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
             executor.shutdownNow();
         }
 
-        assertThat(usuarioRepository.count()).isOne();
-        assertThat(usuarioRepository.findByEmail("concorrente@palco.test").orElseThrow().getSenha())
-                .isNull();
+        assertThat(usuarioRepository.count()).isZero();
         assertThat(perfilArtistaRepository.count()).isZero();
         assertThat(perfilContratanteRepository.count()).isZero();
     }
@@ -468,7 +512,7 @@ class GoogleAuthRf24HardeningIntegrationTest {
     }
 
     private Usuario usuarioLocal(String email, String senha, TipoUsuario tipo) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa Local");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11988887777");

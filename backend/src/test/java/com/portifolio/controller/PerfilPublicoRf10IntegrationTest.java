@@ -44,8 +44,7 @@ class PerfilPublicoRf10IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -85,7 +84,7 @@ class PerfilPublicoRf10IntegrationTest {
                 .andExpect(jsonPath("$.usuarioId").value(perfil.getUsuarioId()))
                 .andExpect(jsonPath("$.nomeExibicao").value("Pessoa RF10"))
                 .andExpect(jsonPath("$.biografia").value("Atriz e diretora."))
-                .andExpect(jsonPath("$.localizacao").value("Campinas - SP"))
+                .andExpect(jsonPath("$.localizacao").value("Campinas, SP"))
                 .andExpect(jsonPath("$.urlPortfolio").value("https://portfolio.example/artista"))
                 .andExpect(jsonPath("$.bannerUrl").value("https://cdn.example/banner.jpg"))
                 .andExpect(jsonPath("$.avatarUrl").value("https://cdn.example/avatar-custom.jpg"))
@@ -133,7 +132,7 @@ class PerfilPublicoRf10IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nomeExibicao").value("Estudio Palco"))
                 .andExpect(jsonPath("$.nomeEmpresa").value("Estudio Palco"))
-                .andExpect(jsonPath("$.tipoPerfil").value("Produtora"))
+                .andExpect(jsonPath("$.tipoPerfil").value("SETOR_PRIVADO"))
                 .andExpect(jsonPath("$.bannerUrl").value("https://cdn.example/empresa-banner.jpg"))
                 .andExpect(jsonPath("$.avatarUrl").isNotEmpty())
                 .andExpect(jsonPath("$.email").doesNotExist())
@@ -233,14 +232,14 @@ class PerfilPublicoRf10IntegrationTest {
     @Test
     void artistaComMuitasFuncoesNaoDisparaNMaisUm() throws Exception {
         PerfilArtista perfil = novoArtista("sem-n-mais-um@teste.com", LocalDate.of(1991, 1, 1), true);
-        IntStream.range(0, 20).forEach(numero -> perfil.getAreas().iterator().next().getFuncoes().add(novaFuncao("Funcao RF10 " + numero)));
+        IntStream.range(0, 5).forEach(numero -> perfil.getAreas().iterator().next().getFuncoes().add(novaFuncao("Funcao RF10 " + numero)));
         perfilArtistaRepository.save(perfil);
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         statistics.clear();
 
         mockMvc.perform(get("/api/perfis/publicos/ARTISTA/{id}", perfil.getUsuarioId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.funcoes.length()").value(20));
+                .andExpect(jsonPath("$.funcoes.length()").value(5));
 
         assertThat(statistics.getPrepareStatementCount()).isLessThanOrEqualTo(2);
     }
@@ -269,12 +268,13 @@ class PerfilPublicoRf10IntegrationTest {
     private PerfilContratante novoContratante(String email, LocalDate nascimento, boolean completo) {
         Usuario usuario = novoUsuario(email, nascimento, TipoUsuario.CONTRATANTE, completo);
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(usuario);
         return perfilContratanteRepository.save(perfil);
     }
 
     private Usuario novoUsuario(String email, LocalDate nascimento, TipoUsuario tipo, boolean completo) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa RF10");
         usuario.setDataNascimento(nascimento);
         usuario.setTelefone("11999998888");

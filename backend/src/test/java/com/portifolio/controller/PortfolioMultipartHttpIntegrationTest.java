@@ -22,16 +22,15 @@ import org.testcontainers.junit.jupiter.*;
 
 @Testcontainers @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class PortfolioMultipartHttpIntegrationTest {
-    @Container @ServiceConnection static PostgreSQLContainer<?> postgres=new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql","db/catalogo-test.sql").withUrlParam("stringtype","unspecified");
+    @Container @ServiceConnection static PostgreSQLContainer<?> postgres=new com.portifolio.support.OfficialPostgreSQLContainer().withUrlParam("stringtype","unspecified");
     @TempDir static Path root;
     @DynamicPropertySource static void props(DynamicPropertyRegistry r){r.add("app.portfolio.storage-root",() -> root.toString());}
     @LocalServerPort int port;
     @Autowired JdbcTemplate db; @Autowired UsuarioRepository usuarios; @Autowired JwtService jwt;
     String token;
     @BeforeEach void dados() {
-        long id=db.queryForObject("insert into usuarios(nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta,perfil_completo) values ('Artista','1990-01-01','11999999999',?,'hash','ARTISTA','ATIVA',false) returning id",Long.class,UUID.randomUUID()+"@http.test");
-        db.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico) values (?,'ARTISTA_SOLO')",id);
+        long id=db.queryForObject("insert into usuarios(username,nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta,perfil_completo) values (('fixture_' || substring(replace(gen_random_uuid()::text,'-','') for 22)),'Artista','1990-01-01','11999999999',?,'hash','ARTISTA','ATIVA',false) returning id",Long.class,UUID.randomUUID()+"@http.test");
+        db.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,raio_atuacao) values (?,'ARTISTA_SOLO','LOCAL')",id);
         token=jwt.gerarToken(usuarios.findById(id).orElseThrow());
     }
     @AfterEach void limpar(){db.execute("truncate usuarios restart identity cascade");}

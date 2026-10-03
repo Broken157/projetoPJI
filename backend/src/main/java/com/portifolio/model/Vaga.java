@@ -124,9 +124,17 @@ public class Vaga {
             inverseJoinColumns = @JoinColumn(name = "especializacao_id"))
     @org.hibernate.annotations.BatchSize(size = 50)
     private Set<Especializacao> especializacoes = new HashSet<>();
-    @ManyToMany
-    @JoinTable(name = "vagas_categorias_afirmativas", joinColumns = @JoinColumn(name = "vaga_id"),
-            inverseJoinColumns = @JoinColumn(name = "categoria_id"))
-    @org.hibernate.annotations.BatchSize(size = 50)
-    private Set<CategoriaAfirmativa> categoriasAfirmativas = new HashSet<>();
+    @Column(name = "categoria_afirmativa", columnDefinition = "categoria_afirmativa_enum")
+    private CategoriaAfirmativa categoriaAfirmativa;
+
+    public Set<CategoriaAfirmativa> getCategoriasAfirmativas() {
+        return categoriaAfirmativa == null ? Set.of() : Set.of(categoriaAfirmativa);
+    }
+
+    public void setCategoriasAfirmativas(Set<CategoriaAfirmativa> categorias) {
+        if (categorias != null && categorias.size() > 1) {
+            throw new IllegalArgumentException("Database04 suporta somente uma categoria afirmativa por vaga.");
+        }
+        categoriaAfirmativa = categorias == null || categorias.isEmpty() ? null : categorias.iterator().next();
+    }
 }

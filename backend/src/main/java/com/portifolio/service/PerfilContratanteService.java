@@ -95,7 +95,9 @@ public class PerfilContratanteService {
 
     private void preencherPerfil(PerfilContratante perfil, PerfilContratanteRequest request) {
         perfil.setNomeEmpresa(request.getNomeEmpresa());
-        perfil.setTipoPerfil(request.getTipoPerfil());
+        if (request.getTipoPerfil() != null) perfil.setTipoPerfil(request.getTipoPerfil());
+        if (perfil.getTipoContratante() == null)
+            throw new com.portifolio.exception.UnprocessableEntityException("Informe tipoPerfil do catálogo oficial.");
         perfil.setBiografia(request.getBiografia());
         perfil.setLocalizacao(request.getLocalizacao());
         perfil.setBannerUrl(request.getBannerUrl());

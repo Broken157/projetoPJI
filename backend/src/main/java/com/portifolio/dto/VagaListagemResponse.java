@@ -9,6 +9,7 @@ import lombok.Getter;
 @Builder
 public class VagaListagemResponse {
     private List<VagaResponse> content;
+    private Long totalElements;
     private Long nextCursor;
     private boolean hasMore;
 

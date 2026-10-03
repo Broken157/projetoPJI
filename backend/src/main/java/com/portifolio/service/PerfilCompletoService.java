@@ -55,20 +55,41 @@ public class PerfilCompletoService {
 
     public boolean calcularArtista(Usuario usuario, PerfilArtista perfil) {
         return cadastroCompleto(usuario)
+                && preenchido(usuario.getCpf())
                 && preenchido(perfil.getBiografia())
-                && preenchido(perfil.getLocalizacao())
+                && preenchido(perfil.getCidade()) && perfil.getCidade().trim().length() <= 100
+                && preenchido(perfil.getEstado()) && perfil.getEstado().matches("[A-Za-z]{2}")
                 && preenchido(perfil.getUrlPortfolio())
                 && perfil.getTipoPerfilArtistico() != null
                 && perfil.getRaioAtuacao() != null
-                && perfil.getAreas().stream().filter(com.portifolio.model.PerfilArtistaArea::isPrincipal).count() == 1
-                && perfil.getFuncoes() != null
-                && !perfil.getFuncoes().isEmpty();
+                && (!(perfil.getTipoPerfilArtistico() == com.portifolio.model.enums.TipoPerfilArtistico.ESTUDIO
+                    || perfil.getTipoPerfilArtistico() == com.portifolio.model.enums.TipoPerfilArtistico.PRODUTORA_EMPRESA)
+                    || preenchido(usuario.getCnpj()))
+                && taxonomiaPrincipalCompleta(perfil);
+    }
+
+    private boolean taxonomiaPrincipalCompleta(PerfilArtista perfil) {
+        var principais = perfil.getAreas().stream()
+                .filter(com.portifolio.model.PerfilArtistaArea::isPrincipal).toList();
+        if (principais.size() != 1) return false;
+        var area = principais.getFirst();
+        if (area.getArea() == null || area.getArea().getId() == null || area.getNivelExperiencia() == null
+                || area.getFuncoes() == null || area.getFuncoes().isEmpty()
+                || area.getEspecializacoes() == null || area.getEspecializacoes().isEmpty()) return false;
+        if (area.getFuncoes().stream().anyMatch(f -> f.getArea() == null
+                || !area.getArea().getId().equals(f.getArea().getId()))) return false;
+        return area.getEspecializacoes().stream().anyMatch(e -> e.getId() != null
+                && area.getFuncoes().stream().anyMatch(f -> f.getEspecializacoes().stream()
+                    .anyMatch(compativel -> e.getId().equals(compativel.getId()))));
     }
 
     public boolean calcularContratante(Usuario usuario, PerfilContratante perfil) {
         return cadastroCompleto(usuario)
-                && preenchido(perfil.getBiografia())
-                && preenchido(perfil.getLocalizacao());
+                && perfil.getTipoContratante() != null
+                && preenchido(perfil.getLocalizacao())
+                && (perfil.getTipoContratante() == com.portifolio.model.enums.TipoContratante.PESSOA_FISICA
+                    ? preenchido(usuario.getCpf())
+                    : preenchido(usuario.getCnpj()) && preenchido(perfil.getNomeEmpresa()));
     }
 
     private boolean cadastroCompleto(Usuario usuario) {

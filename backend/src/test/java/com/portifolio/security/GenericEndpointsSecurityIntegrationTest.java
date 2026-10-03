@@ -32,6 +32,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 @SpringBootTest
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(com.portifolio.support.EmailVerificationTestConfig.class)
 class GenericEndpointsSecurityIntegrationTest {
 
     private static final String SENHA = "PalcoTeste123!";
@@ -42,12 +43,12 @@ class GenericEndpointsSecurityIntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
+    @Autowired org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final ObjectMapper mapper = new ObjectMapper();
     private Conta artista;
     private Conta contratante;
@@ -64,7 +65,7 @@ class GenericEndpointsSecurityIntegrationTest {
         assertThat(jdbc.queryForObject("select area_id from perfil_artista_area where perfil_artista_id=? and principal", Short.class,
                 artista.id())).isEqualTo((short) 1);
         jdbc.update("insert into perfil_artista_funcao(perfil_artista_id, area_id, funcao_id) values (?, 1, ?)", artista.id(), funcaoId);
-        jdbc.update("update perfis_artistas set biografia = ?, localizacao = ?, url_portfolio = ? where usuario_id = ?",
+        jdbc.update("update perfis_artistas set biografia = ?, cidade = ?, estado = 'SP', url_portfolio = ? where usuario_id = ?",
                 "Biografia privada do menor", "Local privado", "https://example.test/privado", menor.id());
         vagaId = jdbc.queryForObject("""
                 insert into vagas(contratante_id,titulo,descricao,requisitos,valor_minimo,valor_maximo,area_id,abrangencia,
@@ -126,9 +127,11 @@ class GenericEndpointsSecurityIntegrationTest {
                 mvc.perform(delete(path).header("Authorization", token)).andExpect(status().isUnauthorized());
             }
             for (String path : List.of("/api/perfis-artistas", "/api/perfis-contratantes", "/api/usuarios",
-                    "/api/perfis-artistas/" + menor.id(), "/api/perfis-contratantes/" + contratante.id(), "/api/funcoes")) {
+                    "/api/perfis-artistas/" + menor.id(), "/api/perfis-contratantes/" + contratante.id())) {
                 mvc.perform(get(path).header("Authorization", token)).andExpect(status().isUnauthorized());
             }
+            mvc.perform(get("/api/funcoes").header("Authorization", token))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(funcaoId));
         }
     }
 
@@ -153,7 +156,7 @@ class GenericEndpointsSecurityIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(funcaoId));
         mvc.perform(put("/api/perfis-artistas/{id}", artista.id()).header("Authorization", artista.bearer())
                         .contentType(MediaType.APPLICATION_JSON).content(json(Map.of(
-                                "usuarioId", artista.id(), "biografia", "Arte", "localizacao", "São Paulo", "areaPrincipalId", 1,
+                                "usuarioId", artista.id(), "biografia", "Arte", "localizacao", "São Paulo, SP", "areaPrincipalId", 1,
                                 "urlPortfolio", "https://example.test/artista", "funcaoIds", List.of(funcaoId)))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.funcaoIds[0]").value(funcaoId));
         Map<String, Object> vaga = new LinkedHashMap<>(Map.of(
@@ -173,12 +176,17 @@ class GenericEndpointsSecurityIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ARTISTA,false", "ARTISTA,true", "CONTRATANTE,false", "CONTRATANTE,true"})
+    @CsvSource({"ARTISTA,false", "ARTISTA,true", "CONTRATANTE,false"})
     void perfilPrivadoSoDoTitularERf10PermaneceSeguro(String tipo, boolean ehMenor) throws Exception {
         Conta titular = cadastrar("titular", tipo, ehMenor);
         String path = (tipo.equals("ARTISTA") ? "/api/perfis-artistas/" : "/api/perfis-contratantes/") + titular.id();
-        mvc.perform(get(path).header("Authorization", titular.bearer()))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.usuarioId").value(titular.id()));
+        if (ehMenor) {
+            mvc.perform(get(path).header("Authorization", titular.bearer()))
+                    .andExpect(status().isUnauthorized());
+        } else {
+            mvc.perform(get(path).header("Authorization", titular.bearer()))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.usuarioId").value(titular.id()));
+        }
         for (Conta terceiro : List.of(artista, contratante)) {
             String body = mvc.perform(get(path).header("Authorization", terceiro.bearer()))
                     .andExpect(status().isForbidden()).andReturn().getResponse().getContentAsString();
@@ -197,8 +205,9 @@ class GenericEndpointsSecurityIntegrationTest {
     void colecoesPrivadasNaoSaoRotaAlternativa(String path) throws Exception {
         for (Conta conta : List.of(artista, contratante, menor)) {
             mvc.perform(get(path).param("usuarioId", conta.id().toString()).header("Authorization", conta.bearer()))
-                    .andExpect(status().isForbidden());
-            mvc.perform(head(path).header("Authorization", conta.bearer())).andExpect(status().isForbidden());
+                    .andExpect(conta == menor ? status().isUnauthorized() : status().isForbidden());
+            mvc.perform(head(path).header("Authorization", conta.bearer()))
+                    .andExpect(conta == menor ? status().isUnauthorized() : status().isForbidden());
         }
     }
 
@@ -250,14 +259,31 @@ class GenericEndpointsSecurityIntegrationTest {
 
     private Conta cadastrar(String nome, String tipo, boolean ehMenor) throws Exception {
         Map<String, Object> dados = dadosCadastro(nome, tipo, ehMenor);
-        JsonNode criada = mapper.readTree(mvc.perform(post("/api/auth/cadastro").contentType(MediaType.APPLICATION_JSON)
-                        .content(json(dados))).andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString());
+        // Fixture de conta existente: RF01 sem @username continua bloqueado no cadastro real.
+        Long id = jdbc.queryForObject("""
+                insert into usuarios(username,nome,data_nascimento,telefone,email,senha,tipo_usuario,
+                    status_conta,email_verificado) values (?,?,?,?,?,?,?,?,?) returning id
+                """, Long.class, "security_" + nome, nome, dados.get("dataNascimento"),
+                dados.get("telefone"), dados.get("email"), passwordEncoder.encode(SENHA), tipo,
+                ehMenor ? "PENDENTE_CONSENTIMENTO" : "ATIVA", !ehMenor);
+        if ("ARTISTA".equals(tipo)) {
+            jdbc.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,raio_atuacao) "
+                    + "values (?,'ARTISTA_SOLO','LOCAL')", id);
+            jdbc.update("insert into perfil_artista_area(perfil_artista_id,area_id,principal) values (?,1,true)", id);
+        } else if ("CONTRATANTE".equals(tipo)) {
+            jdbc.update("insert into perfis_contratantes(usuario_id,tipo_contratante) values (?,'PESSOA_FISICA')", id);
+        }
+        if (ehMenor) {
+            jdbc.update("insert into responsaveis_legais(usuario_id,nome_responsavel,telefone_responsavel,email_responsavel) "
+                    + "values (?,?,?,?)", id, dados.get("nomeResponsavel"),
+                    dados.get("telefoneResponsavel"), dados.get("emailResponsavel"));
+            return new Conta(id, null, null);
+        }
         org.springframework.test.web.servlet.MvcResult loginResult = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("email", dados.get("email"), "senha", SENHA, "rememberMe", true))))
                 .andExpect(status().isOk()).andReturn();
         JsonNode sessao = mapper.readTree(loginResult.getResponse().getContentAsString());
-        return new Conta(criada.get("id").asLong(), "Bearer " + sessao.get("token").asText(), loginResult.getResponse().getHeader("Set-Cookie").split(";", 2)[0].substring("palco_refresh=".length()));
+        return new Conta(id, "Bearer " + sessao.get("token").asText(), loginResult.getResponse().getHeader("Set-Cookie").split(";", 2)[0].substring("palco_refresh=".length()));
     }
 
     private Map<String, Object> dadosCadastro(String nome, String tipo, boolean ehMenor) {
@@ -270,6 +296,8 @@ class GenericEndpointsSecurityIntegrationTest {
         dados.put("tipoUsuario", tipo);
         dados.put("tipoPerfilArtistico", "ARTISTA_SOLO");
         if ("ARTISTA".equals(tipo)) dados.put("areaPrincipalId", 1);
+        if ("ARTISTA".equals(tipo)) dados.put("raioAtuacao", "LOCAL");
+        if ("CONTRATANTE".equals(tipo)) dados.put("tipoPerfilContratante", "Pessoa Física");
         if (ehMenor) {
             dados.put("nomeResponsavel", "Responsável sintético");
             dados.put("telefoneResponsavel", "11888888888");

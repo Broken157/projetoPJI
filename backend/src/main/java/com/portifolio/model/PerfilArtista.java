@@ -30,8 +30,12 @@ public class PerfilArtista {
     @Column(columnDefinition = "text")
     private String biografia;
 
-    @Column(length = 150)
-    private String localizacao;
+    @Column(length = 100)
+    private String cidade;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.CHAR)
+    @Column(length = 2, columnDefinition = "char(2)")
+    private String estado;
 
     @Column(name = "url_portfolio", length = 255)
     private String urlPortfolio;
@@ -53,6 +57,17 @@ public class PerfilArtista {
 
     @OneToMany(mappedBy = "perfil", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<PerfilArtistaArea> areas = new HashSet<>();
+
+    @Transient
+    public String getLocalizacao() {
+        return com.portifolio.validation.LocalizacaoArtista.formatar(cidade, estado);
+    }
+
+    public void setLocalizacao(String texto) {
+        var local = com.portifolio.validation.LocalizacaoArtista.deTexto(texto);
+        cidade = local.cidade();
+        estado = local.estado();
+    }
 
     /** Visão agregada; alterações pertencem às associações de cada área. */
     public Set<Funcao> getFuncoes() {

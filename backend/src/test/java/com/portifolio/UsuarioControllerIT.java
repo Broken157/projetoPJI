@@ -4,12 +4,14 @@ import com.portifolio.dto.CadastroRequest;
 import com.portifolio.dto.LoginRequest;
 import com.portifolio.dto.UsuarioAtualizacaoRequest;
 import com.portifolio.model.enums.TipoUsuario;
+import org.springframework.jdbc.core.JdbcTemplate;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -27,16 +29,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@org.springframework.context.annotation.Import(com.portifolio.support.EmailVerificationTestConfig.class)
 class UsuarioControllerIntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -47,6 +52,8 @@ class UsuarioControllerIntegrationTest {
 
         CadastroRequest cadastro = new CadastroRequest();
         cadastro.setNome("Usuário Teste");
+        cadastro.setUsername("usuario_" + UUID.randomUUID().toString().substring(0, 8));
+        cadastro.setCpf(com.portifolio.support.CadastroFixtures.cpf());
         cadastro.setDataNascimento(LocalDate.of(1990, 1, 1));
         cadastro.setTelefone("11999999999");
         cadastro.setEmail(email);
@@ -57,6 +64,8 @@ class UsuarioControllerIntegrationTest {
         ResponseEntity<Map> criado = restTemplate.postForEntity(
                 baseUrl + "/api/auth/cadastro", cadastro, Map.class);
         assertThat(criado.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        jdbc.update("update usuarios set status_conta='ATIVA', email_verificado=true where email=?", email);
 
         LoginRequest login = new LoginRequest();
         login.setEmail(email);

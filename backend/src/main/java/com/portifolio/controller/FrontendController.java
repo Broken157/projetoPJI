@@ -26,13 +26,19 @@ public class FrontendController {
         return "forward:/index.html";
     }
 
-    @GetMapping({"/login", "/cadastro"})
+    @GetMapping({"/login", "/cadastro", "/cadastro/contratante", "/confirmar-email",
+            "/consentimento-responsavel", "/aguardando-responsavel"})
     public String encaminharRotasReactDeAutenticacao() {
         return "forward:/index.html";
     }
 
-    @GetMapping({"/dashboard", "/perfil", "/salvos", "/salvos/"})
+    @GetMapping({"/dashboard", "/perfil", "/salvos", "/salvos/", "/denuncias", "/denuncias/"})
     public String encaminharRotasReactDaConta() {
+        return "forward:/index.html";
+    }
+
+    @GetMapping({"/configuracoes", "/configuracoes/acesso", "/moderacao", "/solicitacoes"})
+    public String encaminharRotasReactAuxiliares() {
         return "forward:/index.html";
     }
 

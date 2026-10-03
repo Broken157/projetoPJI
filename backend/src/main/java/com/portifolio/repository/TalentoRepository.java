@@ -85,8 +85,16 @@ public class TalentoRepository {
             params.put("especializacoes", f.especializacaoIds());
         }
         if (f.localizacao() != null && !f.localizacao().isBlank()) {
-            where.append(" and position(lower(:localizacao) in lower(p.localizacao)) > 0");
+            where.append(" and position(lower(:localizacao) in lower(concat_ws(', ',nullif(trim(p.cidade),''),nullif(trim(p.estado),'')))) > 0");
             params.put("localizacao", f.localizacao().trim());
+        }
+        if (f.cidade() != null) {
+            where.append(" and lower(p.cidade)=lower(:cidade)");
+            params.put("cidade", f.cidade());
+        }
+        if (f.estado() != null) {
+            where.append(" and p.estado=:estado");
+            params.put("estado", f.estado());
         }
         if (f.disponivel() != null) {
             where.append(" and p.disponivel_oportunidades=:disponivel");
@@ -104,7 +112,7 @@ public class TalentoRepository {
         String areaSpec = area == null ? "" : " and ae.area_id=:area";
         String select = """
                 select p.usuario_id,u.nome,u.foto_perfil_url,left(p.biografia,400) biografia,
-                       p.localizacao,p.url_portfolio,p.tipo_perfil_artistico,p.raio_atuacao,
+                       p.cidade,p.estado,p.url_portfolio,p.tipo_perfil_artistico,p.raio_atuacao,
                        p.disponivel_oportunidades,p.ultima_atualizacao,
                        (select count(*) from perfil_artista_funcao af
                          where af.perfil_artista_id=p.usuario_id and af.funcao_id in (:matchFuncoes)
@@ -127,7 +135,9 @@ public class TalentoRepository {
                 (rs, n) -> TalentoResponse.builder()
                         .artistaId(rs.getLong("usuario_id")).nomeExibicao(rs.getString("nome"))
                         .avatarUrl(rs.getString("foto_perfil_url")).biografia(rs.getString("biografia"))
-                        .localizacao(rs.getString("localizacao")).urlPortfolio(rs.getString("url_portfolio"))
+                        .cidade(rs.getString("cidade")).estado(rs.getString("estado"))
+                        .localizacao(com.portifolio.validation.LocalizacaoArtista.formatar(rs.getString("cidade"), rs.getString("estado")))
+                        .urlPortfolio(rs.getString("url_portfolio"))
                         .tipoPerfilArtistico(rs.getString("tipo_perfil_artistico")).raioAtuacao(rs.getString("raio_atuacao"))
                         .disponivelOportunidades(rs.getObject("disponivel_oportunidades", Boolean.class))
                         .ultimaAtualizacao(rs.getObject("ultima_atualizacao", java.time.LocalDateTime.class))

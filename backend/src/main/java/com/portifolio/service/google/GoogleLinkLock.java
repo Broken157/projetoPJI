@@ -2,6 +2,7 @@ package com.portifolio.service.google;
 
 import jakarta.persistence.EntityManager;
 import java.util.stream.Stream;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -15,9 +16,14 @@ public class GoogleLinkLock {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void bloquear(String email, String googleId) {
-        Stream.of("email:" + email, "google:" + googleId)
+        Stream.of("email:" + email.trim().toLowerCase(Locale.ROOT), "google:" + googleId)
                 .sorted()
                 .forEach(this::bloquearChave);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void bloquearEmail(String email) {
+        bloquearChave("email:" + email.trim().toLowerCase(Locale.ROOT));
     }
 
     private void bloquearChave(String chave) {

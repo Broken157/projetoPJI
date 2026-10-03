@@ -31,10 +31,8 @@ public class TalentoController {
             @RequestParam(defaultValue="20") int size,
             @RequestParam(required=false) String cidade,
             @RequestParam(required=false) String estado) {
-        if (cidade != null || estado != null)
-            throw new com.portifolio.exception.UnprocessableEntityException("Cidade/Estado estruturados indisponíveis. Use localização textual.");
         return service.buscar(new FiltroTalentos(areaId, funcaoIds, especializacaoIds, localizacao,
-                raios, experienciaMinima, disponivel, tipos, vagaId, recomendados, ordenacao, page, size));
+                raios, experienciaMinima, disponivel, tipos, vagaId, recomendados, ordenacao, page, size, cidade, estado));
     }
 
     @GetMapping("/contextos")

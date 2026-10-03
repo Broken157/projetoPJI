@@ -58,8 +58,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @LocalServerPort int port;
@@ -69,7 +68,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
     @Autowired NotificacaoRealtimeGateway realtimeGateway;
 
     private static String requireTestSecret() {
-        String secret = System.getenv("JWT_SECRET");
+        String secret = System.getProperty("JWT_SECRET", System.getenv("JWT_SECRET"));
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("JWT_SECRET deve ser fornecido externamente para o teste WebSocket");
         }
@@ -235,7 +234,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
     }
 
     private Usuario novoUsuario(String email) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa WebSocket");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
@@ -243,6 +242,8 @@ class NotificacaoWebSocketRf23IntegrationTest {
         usuario.setSenha("{noop}teste");
         usuario.setTipoUsuario(TipoUsuario.ARTISTA);
         usuario.setPerfilCompleto(true);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }

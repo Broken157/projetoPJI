@@ -1,0 +1,2 @@
+# Ciclo de vida exclusivo dos testes; nao participa da aplicacao empacotada.
+org.springframework.test.context.TestExecutionListener=com.portifolio.support.PostgresContextCleanupListener

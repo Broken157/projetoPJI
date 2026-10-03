@@ -10,6 +10,7 @@ public class CadastroResponse {
 
     private Long id;
     private String nome;
+    private String username;
     private String email;
     private TipoUsuario tipoUsuario;
     private Boolean menorDeIdade;

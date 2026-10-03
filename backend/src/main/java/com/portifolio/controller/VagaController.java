@@ -9,8 +9,11 @@ import com.portifolio.dto.VagaRequest;
 import com.portifolio.dto.VagaResponse;
 import com.portifolio.dto.VagaStatusAcaoRequest;
 import com.portifolio.model.enums.ModeloTrabalho;
+import com.portifolio.model.enums.Abrangencia;
+import com.portifolio.model.enums.FormaRemuneracao;
 import com.portifolio.service.VagaService;
 import com.portifolio.service.CandidaturaService;
+import com.portifolio.repository.CategoriaAfirmativaRepository;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.Set;
@@ -35,12 +38,23 @@ public class VagaController {
 
     private final VagaService vagaService;
     private final CandidaturaService candidaturaService;
+    private final CategoriaAfirmativaRepository categoriasAfirmativas;
+
+    public record CategoriaAfirmativaOpcao(Integer id, String nome) {}
+
+    @GetMapping("/categorias-afirmativas")
+    public java.util.List<CategoriaAfirmativaOpcao> listarCategoriasAfirmativas() {
+        return categoriasAfirmativas.findAll().stream()
+                .map(categoria -> new CategoriaAfirmativaOpcao(categoria.getId(), categoria.getNome()))
+                .toList();
+    }
 
     // RF03 — Listagem/busca pública, paginação cursor-based (RNF12)
     @GetMapping
     public ResponseEntity<VagaListagemResponse> listar(
             @RequestParam(required = false) String titulo,
             @RequestParam(required = false) String empresa,
+            @RequestParam(required = false) String busca,
             @RequestParam(required = false) String cidade,
             @RequestParam(required = false) String estado,
             @RequestParam(required = false) ModeloTrabalho modeloTrabalho,
@@ -48,7 +62,14 @@ public class VagaController {
             @RequestParam(required = false) BigDecimal faixaSalarialMin,
             @RequestParam(required = false) BigDecimal faixaSalarialMax,
             @RequestParam(required = false) String areaAtuacao,
+            @RequestParam(required = false) Short areaId,
             @RequestParam(required = false) Set<Long> funcaoIds,
+            @RequestParam(required = false) Set<Long> especializacaoIds,
+            @RequestParam(required = false) String experiencia,
+            @RequestParam(required = false) Abrangencia abrangencia,
+            @RequestParam(required = false) FormaRemuneracao formaRemuneracao,
+            @RequestParam(required = false) Boolean afirmativa,
+            @RequestParam(required = false) Set<Integer> categoriaAfirmativaIds,
             @RequestParam(required = false) Set<Long> tagIds,
             @RequestParam(required = false) Long cursor,
             @RequestParam(required = false) Long cursorCanceladas,
@@ -61,6 +82,7 @@ public class VagaController {
         VagaBuscaFiltro filtro = new VagaBuscaFiltro();
         filtro.setTitulo(titulo);
         filtro.setEmpresa(empresa);
+        filtro.setBusca(busca);
         filtro.setCidade(cidade);
         filtro.setEstado(estado);
         filtro.setModeloTrabalho(modeloTrabalho);
@@ -68,7 +90,14 @@ public class VagaController {
         filtro.setFaixaSalarialMin(faixaSalarialMin);
         filtro.setFaixaSalarialMax(faixaSalarialMax);
         filtro.setAreaAtuacao(areaAtuacao);
+        filtro.setAreaId(areaId);
         filtro.setFuncaoIds(funcaoIds);
+        filtro.setEspecializacaoIds(especializacaoIds);
+        filtro.setExperiencia(experiencia);
+        filtro.setAbrangencia(abrangencia);
+        filtro.setFormaRemuneracao(formaRemuneracao);
+        filtro.setAfirmativa(afirmativa);
+        filtro.setCategoriaAfirmativaIds(categoriaAfirmativaIds);
         filtro.setCursor(cursor);
         filtro.setCursorCanceladas(cursorCanceladas);
         filtro.setSize(size);
@@ -122,7 +151,7 @@ public class VagaController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletar(
-            @PathVariable Long id, @Valid @RequestBody VagaCancelamentoRequest request) {
+            @PathVariable Long id, @Valid @RequestBody(required = false) VagaCancelamentoRequest request) {
         vagaService.deletar(id, request);
         return ResponseEntity.noContent().build();
     }

@@ -52,8 +52,7 @@ class DashboardRf11IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -85,12 +84,11 @@ class DashboardRf11IntegrationTest {
 
     @Test
     void artistaRecebeSomenteVagasAbertasComFuncoesCoincidentesOrdenadasPorCompatibilidade() throws Exception {
-        PerfilArtista artista = criarArtista("artista@rf11.test", true, LocalDate.of(1990, 1, 1));
         Funcao teatro = criarFuncao("Teatro");
         Funcao danca = criarFuncao("Danca");
         Funcao musica = criarFuncao("Musica");
-        com.portifolio.support.OfficialSchemaFixtures.funcoes(artista, new HashSet<>(Set.of(teatro, danca)));
-        perfilArtistaRepository.save(artista);
+        PerfilArtista artista = criarArtista(
+                "artista@rf11.test", true, LocalDate.of(1990, 1, 1), teatro, danca);
 
         PerfilContratante contratante = criarContratante("contratante@rf11.test", true);
         criarVaga(contratante, "Uma coincidencia", StatusVaga.ABERTA, teatro);
@@ -248,10 +246,12 @@ class DashboardRf11IntegrationTest {
                 "duas-novo@rf11.test", true, LocalDate.of(1990, 1, 1), teatro, musica);
         PerfilArtista umaFuncao = criarArtista(
                 "uma@rf11.test", true, LocalDate.of(1990, 1, 1), teatro);
-        duasFuncoesAntigo.setUltimaAtualizacao(LocalDateTime.now().minusDays(2));
-        duasFuncoesNovo.setUltimaAtualizacao(LocalDateTime.now());
-        umaFuncao.setUltimaAtualizacao(LocalDateTime.now().plusDays(1));
-        perfilArtistaRepository.saveAll(Set.of(duasFuncoesAntigo, duasFuncoesNovo, umaFuncao));
+        jdbcTemplate.update("update perfis_artistas set ultima_atualizacao=? where usuario_id=?",
+                LocalDateTime.now().minusDays(2), duasFuncoesAntigo.getUsuarioId());
+        jdbcTemplate.update("update perfis_artistas set ultima_atualizacao=? where usuario_id=?",
+                LocalDateTime.now(), duasFuncoesNovo.getUsuarioId());
+        jdbcTemplate.update("update perfis_artistas set ultima_atualizacao=? where usuario_id=?",
+                LocalDateTime.now().plusDays(1), umaFuncao.getUsuarioId());
 
         mockMvc.perform(get("/api/dashboard")
                         .header("Authorization", bearer(dono.getUsuario())))
@@ -280,10 +280,9 @@ class DashboardRf11IntegrationTest {
 
     @Test
     void paginacaoInformaTotalEHasMore() throws Exception {
-        PerfilArtista artista = criarArtista("paginacao@rf11.test", true, LocalDate.of(1990, 1, 1));
         Funcao funcao = criarFuncao("Paginada");
-        com.portifolio.support.OfficialSchemaFixtures.funcoes(artista, new HashSet<>(Set.of(funcao)));
-        perfilArtistaRepository.save(artista);
+        PerfilArtista artista = criarArtista(
+                "paginacao@rf11.test", true, LocalDate.of(1990, 1, 1), funcao);
         PerfilContratante contratante = criarContratante("paginador@rf11.test", true);
         IntStream.range(0, 3).forEach(i -> criarVaga(contratante, "Vaga " + i, StatusVaga.ABERTA, funcao));
 
@@ -297,10 +296,9 @@ class DashboardRf11IntegrationTest {
 
     @Test
     void vinteRecomendacoesNaoDisparamNMaisUm() throws Exception {
-        PerfilArtista artista = criarArtista("nmaisum@rf11.test", true, LocalDate.of(1990, 1, 1));
         Funcao funcao = criarFuncao("Escalavel");
-        com.portifolio.support.OfficialSchemaFixtures.funcoes(artista, new HashSet<>(Set.of(funcao)));
-        perfilArtistaRepository.save(artista);
+        PerfilArtista artista = criarArtista(
+                "nmaisum@rf11.test", true, LocalDate.of(1990, 1, 1), funcao);
         PerfilContratante contratante = criarContratante("volume@rf11.test", true);
         IntStream.range(0, 20).forEach(i -> criarVaga(contratante, "Vaga volume " + i, StatusVaga.ABERTA, funcao));
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
@@ -342,7 +340,7 @@ class DashboardRf11IntegrationTest {
     }
 
     private Usuario criarUsuario(String email, TipoUsuario tipo, boolean completo, LocalDate nascimento) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa " + email.substring(0, email.indexOf('@')));
         usuario.setDataNascimento(nascimento);
         usuario.setTelefone("11999999999");
@@ -350,28 +348,52 @@ class DashboardRf11IntegrationTest {
         usuario.setSenha("hash-privado");
         usuario.setTipoUsuario(tipo);
         usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
-        usuario.setPerfilCompleto(completo);
+        usuario.setPerfilCompleto(false);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }
 
     private PerfilArtista criarArtista(String email, boolean completo, LocalDate nascimento, Funcao... funcoes) {
+        Usuario usuario = criarUsuario(email, TipoUsuario.ARTISTA, completo, nascimento);
         PerfilArtista perfil = new PerfilArtista();
         perfil.setTipoPerfilArtistico(com.portifolio.model.enums.TipoPerfilArtistico.ARTISTA_SOLO);
         perfil.setRaioAtuacao(com.portifolio.model.enums.Abrangencia.LOCAL);
-        perfil.setUsuario(criarUsuario(email, TipoUsuario.ARTISTA, completo, nascimento));
+        perfil.setUsuario(usuario);
         perfil.setBiografia("Biografia publica");
         perfil.setLocalizacao("Sao Paulo - SP");
         perfil.setUrlPortfolio("https://portfolio.example/" + email);
         com.portifolio.support.OfficialSchemaFixtures.funcoes(perfil, new HashSet<>(Set.of(funcoes)));
-        return perfilArtistaRepository.save(perfil);
+        perfil = perfilArtistaRepository.saveAndFlush(perfil);
+        perfil.setUsuario(usuario);
+        if (completo) {
+            if (funcoes.length == 0) {
+                com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                        jdbcTemplate, perfil.getUsuarioId());
+            } else {
+                com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                        jdbcTemplate, perfil.getUsuarioId(), funcoes[0].getId());
+            }
+            perfil.getUsuario().setPerfilCompleto(true);
+        }
+        return perfil;
     }
 
     private PerfilContratante criarContratante(String email, boolean completo) {
+        Usuario usuario = criarUsuario(email, TipoUsuario.CONTRATANTE, completo, LocalDate.of(1985, 1, 1));
         PerfilContratante perfil = new PerfilContratante();
-        perfil.setUsuario(criarUsuario(email, TipoUsuario.CONTRATANTE, completo, LocalDate.of(1985, 1, 1)));
+        perfil.setTipoPerfil("PESSOA_FISICA");
+        perfil.setUsuario(usuario);
         perfil.setNomeEmpresa("Empresa " + email.substring(0, email.indexOf('@')));
-        return perfilContratanteRepository.save(perfil);
+        perfil.setBiografia("Biografia pública do contratante");
+        perfil.setLocalizacao("São Paulo, SP");
+        perfil = perfilContratanteRepository.saveAndFlush(perfil);
+        perfil.setUsuario(usuario);
+        if (completo) {
+            com.portifolio.support.OfficialSchemaFixtures.completarContratante(
+                    jdbcTemplate, perfil.getUsuarioId());
+            perfil.getUsuario().setPerfilCompleto(true);
+        }
+        return perfil;
     }
 
     private Funcao criarFuncao(String nome) {

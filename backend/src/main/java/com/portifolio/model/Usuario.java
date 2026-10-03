@@ -26,6 +26,10 @@ public class Usuario {
     @Column(nullable = false, length = 150)
     private String nome;
 
+    @Column(name = "username", nullable = false, unique = true, length = 30)
+    @JsonIgnore
+    private String username;
+
     @Column(name = "data_nascimento", nullable = false)
     private LocalDate dataNascimento;
 
@@ -57,8 +61,11 @@ public class Usuario {
     private LocalDateTime dataCriacao;
 
     @JsonIgnore
-    @OneToOne(mappedBy = "usuario", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
-    private ResponsavelLegal responsavelLegal;
+    @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY,
+            cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @lombok.Getter(lombok.AccessLevel.NONE)
+    @lombok.Setter(lombok.AccessLevel.NONE)
+    private java.util.Set<ResponsavelLegal> responsaveisLegais = new java.util.HashSet<>();
 
     @Column(name = "status_conta", nullable = false, columnDefinition = "status_conta_enum")
     private StatusConta statusConta = StatusConta.PENDENTE_VERIFICACAO_EMAIL;
@@ -78,14 +85,40 @@ public class Usuario {
     private LocalDateTime ultimoReenvioVerificacao;
 
     // Accessors legados delegam à associação normalizada, sem colunas fictícias.
-    @JsonIgnore public String getNomeResponsavel() { return responsavelLegal == null ? null : responsavelLegal.getNomeResponsavel(); }
-    @JsonIgnore public String getTelefoneResponsavel() { return responsavelLegal == null ? null : responsavelLegal.getTelefoneResponsavel(); }
-    @JsonIgnore public String getEmailResponsavel() { return responsavelLegal == null ? null : responsavelLegal.getEmailResponsavel(); }
+    @JsonIgnore @Transient
+    public ResponsavelLegal getResponsavelLegal() {
+        return responsaveisLegais.stream().findFirst().orElse(null);
+    }
+
+    public void setResponsavelLegal(ResponsavelLegal responsavelLegal) {
+        responsaveisLegais.clear();
+        if (responsavelLegal != null) {
+            responsavelLegal.setUsuario(this);
+            responsaveisLegais.add(responsavelLegal);
+        }
+    }
+
+    @JsonIgnore public String getNomeResponsavel() {
+        ResponsavelLegal responsavelLegal = getResponsavelLegal();
+        return responsavelLegal == null ? null : responsavelLegal.getNomeResponsavel();
+    }
+    @JsonIgnore public String getTelefoneResponsavel() {
+        ResponsavelLegal responsavelLegal = getResponsavelLegal();
+        return responsavelLegal == null ? null : responsavelLegal.getTelefoneResponsavel();
+    }
+    @JsonIgnore public String getEmailResponsavel() {
+        ResponsavelLegal responsavelLegal = getResponsavelLegal();
+        return responsavelLegal == null ? null : responsavelLegal.getEmailResponsavel();
+    }
     public void setNomeResponsavel(String value) { if (value != null) responsavel().setNomeResponsavel(value); }
     public void setTelefoneResponsavel(String value) { if (value != null) responsavel().setTelefoneResponsavel(value); }
     public void setEmailResponsavel(String value) { if (value != null) responsavel().setEmailResponsavel(value); }
     private ResponsavelLegal responsavel() {
-        if (responsavelLegal == null) { responsavelLegal = new ResponsavelLegal(); responsavelLegal.setUsuario(this); }
+        ResponsavelLegal responsavelLegal = getResponsavelLegal();
+        if (responsavelLegal == null) {
+            responsavelLegal = new ResponsavelLegal();
+            setResponsavelLegal(responsavelLegal);
+        }
         return responsavelLegal;
     }
 

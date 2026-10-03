@@ -22,12 +22,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FrontendServingIntegrationTest {
 
     private static final String REACT_ROOT = "<div id=\"root\"></div>";
-    private static final Pattern MAIN_SCRIPT = Pattern.compile("src=\"(/static/js/main\\.[^\"]+\\.js)\"");
+    private static final Pattern MAIN_SCRIPT = Pattern.compile("<script[^>]+src=\"(/[^\"]+\\.js)\"");
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @LocalServerPort
@@ -73,7 +72,7 @@ class FrontendServingIntegrationTest {
     void rotasReactDeAutenticacaoRecebemOMesmoIndex() throws Exception {
         String index = get("/").body();
 
-        for (String rota : new String[]{"/login", "/cadastro"}) {
+        for (String rota : new String[]{"/login", "/cadastro", "/cadastro/contratante"}) {
             Resposta resposta = get(rota);
             assertThat(resposta.status()).as(rota).isEqualTo(200);
             assertThat(resposta.body()).as(rota).isEqualTo(index);
@@ -167,8 +166,57 @@ class FrontendServingIntegrationTest {
     }
 
     @Test
+    void novasRotasAuxiliaresSuportamRecargaDireta() throws Exception {
+        String index = get("/").body();
+        for (String path : new String[]{"/configuracoes", "/configuracoes/acesso", "/moderacao", "/solicitacoes"}) {
+            Resposta response = get(path);
+            assertThat(response.status()).as(path).isEqualTo(200);
+            assertThat(response.body()).as(path).isEqualTo(index);
+        }
+    }
+
+    @Test
+    void navegacaoHtmlInexistenteRecebeTelaOficialComStatus404() throws Exception {
+        String index = get("/").body();
+        for (String path : new String[]{"/pagina-inexistente", "/404", "/configuracoes/inexistente"}) {
+            Resposta response = getHtml(path);
+            assertThat(response.status()).as(path).isEqualTo(404);
+            assertThat(response.contentType()).contains("text/html");
+            assertThat(response.body()).as(path).isEqualTo(index);
+        }
+    }
+
+    @Test
+    void pedidoHtmlNaoMascaraApiProtegidaOuProibida() throws Exception {
+        assertThat(getHtml("/api/usuarios/me").status()).isEqualTo(401);
+        for (String path : new String[]{"/api/usuarios/me", "/api/usuarios", "/api/moderacao", "/api/solicitacoes", "/ws"}) {
+            assertThat(getHtml(path).body()).as(path).doesNotContain(REACT_ROOT);
+        }
+        Resposta missing = getHtml("/api/vagas/999999999");
+        assertThat(missing.status()).isEqualTo(404);
+        assertThat(missing.contentType()).contains("application/json");
+        assertThat(missing.body()).doesNotContain(REACT_ROOT);
+    }
+
+    @Test
+    void pedidoHtmlDeAssetInexistenteContinua404SemIndex() throws Exception {
+        for (String path : new String[]{"/assets/falta.js", "/static/falta", "/css/falta", "/js/falta"}) {
+            Resposta response = getHtml(path);
+            assertThat(response.status()).as(path).isEqualTo(404);
+            assertThat(response.body()).as(path).doesNotContain(REACT_ROOT);
+        }
+    }
+
+    private Resposta getHtml(String path) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+                .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8").GET().build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        return new Resposta(response.statusCode(), response.headers().firstValue("content-type").orElse(""), response.body());
+    }
+
+    @Test
     void apiContinuaApiENaoRecebeHtmlReact() throws Exception {
-        Resposta vagaInexistente = get("/api/vagas/1");
+        Resposta vagaInexistente = get("/api/vagas/999999999");
         assertThat(vagaInexistente.status()).isEqualTo(404);
         assertThat(vagaInexistente.contentType()).contains("application/json");
         assertThat(vagaInexistente.body()).doesNotContain(REACT_ROOT);

@@ -49,8 +49,7 @@ class ChatWebSocketRf24IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @LocalServerPort int port;
@@ -63,6 +62,7 @@ class ChatWebSocketRf24IntegrationTest {
     @Autowired JwtService jwtService;
 
     @AfterEach
+    @org.junit.jupiter.api.BeforeEach
     void limpar() {
         jdbcTemplate.execute("TRUNCATE notificacoes, mensagens_chat, participantes_chat, "
                 + "salas_chat, usuarios RESTART IDENTITY CASCADE");
@@ -155,7 +155,7 @@ class ChatWebSocketRf24IntegrationTest {
     }
 
     private Usuario usuario(String email, TipoUsuario tipo) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa RF24 WebSocket");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
@@ -163,6 +163,8 @@ class ChatWebSocketRf24IntegrationTest {
         usuario.setSenha("{noop}teste");
         usuario.setTipoUsuario(tipo);
         usuario.setPerfilCompleto(true);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }

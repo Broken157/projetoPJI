@@ -1,6 +1,8 @@
 package com.portifolio.dto;
 
 import com.portifolio.model.enums.ModeloTrabalho;
+import com.portifolio.model.enums.Abrangencia;
+import com.portifolio.model.enums.FormaRemuneracao;
 import java.math.BigDecimal;
 import java.util.Set;
 import lombok.Getter;
@@ -12,6 +14,7 @@ import lombok.Setter;
 public class VagaBuscaFiltro {
     private String titulo;
     private String empresa;
+    private String busca;
     private String cidade;
     private String estado;
     private ModeloTrabalho modeloTrabalho;
@@ -19,7 +22,14 @@ public class VagaBuscaFiltro {
     private BigDecimal faixaSalarialMin;
     private BigDecimal faixaSalarialMax;
     private String areaAtuacao;
+    private Short areaId;
     private Set<Long> funcaoIds;
+    private Set<Long> especializacaoIds;
+    private String experiencia;
+    private Abrangencia abrangencia;
+    private FormaRemuneracao formaRemuneracao;
+    private Boolean afirmativa;
+    private Set<Integer> categoriaAfirmativaIds;
     private Long cursor;
     private Long cursorCanceladas;
     private Integer size;

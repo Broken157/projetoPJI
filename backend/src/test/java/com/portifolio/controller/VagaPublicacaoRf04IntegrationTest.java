@@ -37,6 +37,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,8 +51,7 @@ class VagaPublicacaoRf04IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -62,6 +65,7 @@ class VagaPublicacaoRf04IntegrationTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @AfterEach
+    @org.junit.jupiter.api.BeforeEach
     void limparBanco() {
         jdbcTemplate.execute("TRUNCATE vagas, funcoes, perfis_artistas, "
                 + "perfis_contratantes, usuarios RESTART IDENTITY CASCADE");
@@ -97,7 +101,7 @@ class VagaPublicacaoRf04IntegrationTest {
         ObjectNode payload = payloadValido();
         payload.put("contratanteId", terceiro.getId());
         payload.put("id", 999999);
-        payload.put("status", "CANCELADA");
+        payload.put("status", "ABERTA");
         payload.put("dataPublicacao", "2000-01-01T00:00:00");
         payload.put("titulo", "  Fotógrafo de evento  ");
         payload.put("estado", "sp");
@@ -142,6 +146,146 @@ class VagaPublicacaoRf04IntegrationTest {
                 .andExpect(jsonPath("$.contratanteId").value(contratante.getId()));
     }
 
+    @Test
+    void rascunhoPrivadoPodeSerEditadoEPublicadoAposCompletarModalidade() throws Exception {
+        Usuario dono = criarUsuario("rascunho-rf04@teste.com", TipoUsuario.CONTRATANTE);
+        criarPerfil(dono, "Empresa rascunho");
+        Usuario outro = criarUsuario("outro-rascunho-rf04@teste.com", TipoUsuario.CONTRATANTE);
+        criarPerfil(outro, "Empresa outra");
+        ObjectNode rascunho = payloadValido();
+        rascunho.put("status", "RASCUNHO");
+        rascunho.remove("modeloTrabalho");
+        rascunho.remove("requisitos");
+        MvcResult criado = publicar(dono, rascunho)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("RASCUNHO"))
+                .andReturn();
+        long id = objectMapper.readTree(criado.getResponse().getContentAsString()).get("id").asLong();
+        assertThat(vagaRepository.findById(id).orElseThrow().getDataPublicacao()).isNull();
+        assertThat(vagaRepository.findById(id).orElseThrow().getRequisitos()).isEmpty();
+        mockMvc.perform(get("/api/vagas/{id}", id)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/vagas/{id}/similares", id)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/vagas/{id}", id)
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(outro)))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/vagas/{id}", id)
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(dono)))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/vagas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
+
+        mockMvc.perform(patch("/api/vagas/{id}/status", id)
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(dono))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"acao\":\"PUBLICAR\"}"))
+                .andExpect(status().isUnprocessableEntity());
+        rascunho.put("titulo", "Rascunho editado");
+        mockMvc.perform(put("/api/vagas/{id}", id)
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(dono))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(rascunho)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.titulo").value("Rascunho editado"));
+        rascunho.put("modeloTrabalho", "PRESENCIAL");
+        mockMvc.perform(put("/api/vagas/{id}", id)
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(dono))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(rascunho)))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/api/vagas/{id}/status", id)
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(dono))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"acao\":\"PUBLICAR\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ABERTA"));
+        assertThat(vagaRepository.findById(id).orElseThrow().getDataPublicacao()).isNotNull();
+        mockMvc.perform(get("/api/vagas/{id}", id)).andExpect(status().isOk());
+    }
+
+    @Test
+    void apenasDonoExcluiRascunhoESolicitacaoDeStatusArbitrarioNaoCriaVaga() throws Exception {
+        Usuario dono = criarUsuario("excluir-rf04@teste.com", TipoUsuario.CONTRATANTE);
+        criarPerfil(dono, "Empresa rascunho");
+        Usuario outro = criarUsuario("invasor-rf04@teste.com", TipoUsuario.CONTRATANTE);
+        criarPerfil(outro, "Empresa invasora");
+        ObjectNode invalido = payloadValido();
+        invalido.put("status", "CANCELADA");
+        publicar(dono, invalido).andExpect(status().isUnprocessableEntity());
+        ObjectNode rascunho = payloadValido();
+        rascunho.put("status", "RASCUNHO");
+        MvcResult criado = publicar(dono, rascunho).andExpect(status().isCreated()).andReturn();
+        long id = objectMapper.readTree(criado.getResponse().getContentAsString()).get("id").asLong();
+        mockMvc.perform(delete("/api/vagas/{id}", id)
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(outro)))
+                .andExpect(status().isForbidden());
+        assertThat(vagaRepository.existsById(id)).isTrue();
+        mockMvc.perform(delete("/api/vagas/{id}", id)
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(dono)))
+                .andExpect(status().isNoContent());
+        assertThat(vagaRepository.existsById(id)).isFalse();
+    }
+
+    @Test
+    void requisitosSeparadosSaoOpcionaisMasPrazoInformadoDeveSerFuturo() throws Exception {
+        Usuario dono = criarUsuario("opcionais-rf04@teste.com", TipoUsuario.CONTRATANTE);
+        criarPerfil(dono, "Empresa opcionais");
+        ObjectNode semRequisitos = payloadValido();
+        semRequisitos.remove("requisitos");
+        publicar(dono, semRequisitos).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.requisitos").value(""));
+        ObjectNode prazoPassado = payloadValido();
+        prazoPassado.put("dataLimiteCandidatura", LocalDate.now().minusDays(1).toString());
+        publicar(dono, prazoPassado).andExpect(status().isUnprocessableEntity());
+        assertThat(vagaRepository.count()).isOne();
+    }
+
+    @Test
+    void afirmativaSimExigeUmaCategoriaDoEnumOficial() throws Exception {
+        Usuario dono = criarUsuario("afirmativa-rf04@teste.com", TipoUsuario.CONTRATANTE);
+        criarPerfil(dono, "Empresa afirmativa");
+        Integer categoria = com.portifolio.model.CategoriaAfirmativa.MULHER.getId();
+        mockMvc.perform(get("/api/vagas/categorias-afirmativas")
+                        .header("Authorization", "Bearer " + jwtService.gerarToken(dono)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id").value(
+                        org.hamcrest.Matchers.hasItem(categoria)));
+        ObjectNode simSemCategoria = payloadValido();
+        simSemCategoria.put("afirmativa", true);
+        publicar(dono, simSemCategoria).andExpect(status().isUnprocessableEntity());
+        ObjectNode naoComCategoria = payloadValido();
+        naoComCategoria.put("afirmativa", false);
+        naoComCategoria.putArray("categoriaAfirmativaIds").add(categoria);
+        publicar(dono, naoComCategoria).andExpect(status().isUnprocessableEntity());
+        ObjectNode simValida = payloadValido();
+        simValida.put("afirmativa", true);
+        simValida.putArray("categoriaAfirmativaIds").add(categoria);
+        publicar(dono, simValida).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.categoriaAfirmativaIds[0]").value(categoria));
+        assertThat(vagaRepository.count()).isOne();
+    }
+
+    @Test
+    void database04RejeitaMultiplasCategoriasESemRepresentacaoSemDescartarDados() throws Exception {
+        Usuario dono = criarUsuario("limite-afirmativa@rf04.teste", TipoUsuario.CONTRATANTE);
+        criarPerfil(dono, "Empresa afirmativa");
+        ObjectNode payload = payloadValido();
+        payload.putArray("categoriaAfirmativaIds").add(1).add(3);
+        publicar(dono, payload).andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("database04")));
+        assertThat(vagaRepository.count()).isZero();
+        payload.putArray("categoriaAfirmativaIds").add(5);
+        publicar(dono, payload).andExpect(status().isUnprocessableEntity());
+        assertThat(vagaRepository.count()).isZero();
+        payload.putArray("categoriaAfirmativaIds").add(1);
+        var criada = publicar(dono, payload).andExpect(status().isCreated()).andReturn();
+        long id = objectMapper.readTree(criada.getResponse().getContentAsString()).get("id").asLong();
+        String tituloAnterior = jdbcTemplate.queryForObject("select titulo from vagas where id=?", String.class, id);
+        payload.put("titulo", "Alteração que deve ser revertida");
+        payload.putArray("categoriaAfirmativaIds").add(1).add(3);
+        editarTaxonomia(id, dono, payload).andExpect(status().isUnprocessableEntity());
+        assertThat(jdbcTemplate.queryForObject("select titulo from vagas where id=?", String.class, id))
+                .isEqualTo(tituloAnterior);
+        assertThat(jdbcTemplate.queryForObject("select categoria_afirmativa::text from vagas where id=?", String.class, id))
+                .isEqualTo("MULHER");
+    }
+
     @ParameterizedTest(name = "campo obrigatório inválido: {0}")
     @MethodSource("camposObrigatoriosInvalidos")
     void camposObrigatoriosDevemSerValidadosNoServidor(String campo, boolean usarNull) throws Exception {
@@ -165,12 +309,10 @@ class VagaPublicacaoRf04IntegrationTest {
         return Stream.of(
                 Arguments.of("titulo", false),
                 Arguments.of("descricao", false),
-                Arguments.of("requisitos", false),
                 Arguments.of("areaId", true),
                 Arguments.of("formaRemuneracao", true),
                 Arguments.of("cidade", false),
                 Arguments.of("estado", false),
-                Arguments.of("modeloTrabalho", true),
                 Arguments.of("tipoContrato", false));
     }
 
@@ -286,7 +428,7 @@ class VagaPublicacaoRf04IntegrationTest {
         Funcao segunda = criarFuncao("Função secundária");
         Long esp1 = jdbcTemplate.queryForObject("insert into especializacoes(nome) values ('Especialização A') returning id", Long.class);
         Long esp2 = jdbcTemplate.queryForObject("insert into especializacoes(nome) values ('Especialização B') returning id", Long.class);
-        Integer categoria = jdbcTemplate.queryForObject("insert into categorias_afirmativas(nome) values ('Categoria auditada') returning id", Integer.class);
+        Integer categoria = com.portifolio.model.CategoriaAfirmativa.MULHER.getId();
         jdbcTemplate.update("insert into funcao_especializacao values (?,?), (?,?)", primeira.getId(), esp1, segunda.getId(), esp2);
         ObjectNode payload = payloadValido();
         payload.putArray("funcaoIds").add(primeira.getId()).add(segunda.getId());
@@ -299,7 +441,7 @@ class VagaPublicacaoRf04IntegrationTest {
         assertThat(jdbcTemplate.queryForList("select especializacao_id from vaga_especializacao where vaga_id=?", Long.class, id))
                 .containsExactlyInAnyOrder(esp1, esp2);
         assertThat(jdbcTemplate.queryForObject("select count(*) from vaga_funcao where vaga_id=?", Integer.class, id)).isEqualTo(2);
-        assertThat(jdbcTemplate.queryForObject("select categoria_id from vagas_categorias_afirmativas where vaga_id=?", Integer.class, id)).isEqualTo(categoria);
+        assertThat(jdbcTemplate.queryForObject("select categoria_afirmativa::text from vagas where id=?", String.class, id)).isEqualTo("MULHER");
 
         payload.remove("especializacaoIds");
         payload.remove("categoriaAfirmativaIds");
@@ -328,7 +470,7 @@ class VagaPublicacaoRf04IntegrationTest {
                 .andExpect(jsonPath("$.categoriaAfirmativaIds[0]").value(categoria));
         payload.putArray("categoriaAfirmativaIds");
         editarTaxonomia(id, dono, payload).andExpect(status().isOk());
-        assertThat(jdbcTemplate.queryForObject("select count(*) from vagas_categorias_afirmativas where vaga_id=?", Integer.class, id)).isZero();
+        assertThat(jdbcTemplate.queryForObject("select categoria_afirmativa::text from vagas where id=?", String.class, id)).isNull();
     }
 
     @Test
@@ -345,7 +487,7 @@ class VagaPublicacaoRf04IntegrationTest {
         publicar(dono, payload).andExpect(status().isBadRequest());
         payload.putArray("especializacaoIds");
         payload.putArray("categoriaAfirmativaIds").add(999999);
-        publicar(dono, payload).andExpect(status().isNotFound());
+        publicar(dono, payload).andExpect(status().isUnprocessableEntity());
         payload.remove("categoriaAfirmativaIds");
         payload.putArray("especializacaoIds").add(1).add(2).add(3).add(4).add(5).add(6);
         publicar(dono, payload).andExpect(status().isBadRequest());
@@ -435,7 +577,7 @@ class VagaPublicacaoRf04IntegrationTest {
     }
 
     private Usuario criarUsuario(String email, TipoUsuario tipo) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Usuário RF04");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
@@ -443,12 +585,15 @@ class VagaPublicacaoRf04IntegrationTest {
         usuario.setSenha("{noop}senha-teste");
         usuario.setTipoUsuario(tipo);
         usuario.setPerfilCompleto(false);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }
 
     private PerfilContratante criarPerfil(Usuario usuario, String nomeEmpresa) {
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(usuario);
         perfil.setNomeEmpresa(nomeEmpresa);
         return perfilContratanteRepository.save(perfil);

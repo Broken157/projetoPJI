@@ -2,9 +2,12 @@ package com.portifolio.repository.specification;
 
 import com.portifolio.model.Vaga;
 import com.portifolio.model.enums.ModeloTrabalho;
+import com.portifolio.model.enums.Abrangencia;
+import com.portifolio.model.enums.FormaRemuneracao;
 import com.portifolio.model.enums.StatusVaga;
 import jakarta.persistence.criteria.Join;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Set;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -17,6 +20,24 @@ public final class VagaSpecifications {
         return (root, query, cb) -> status == null
                 ? cb.conjunction()
                 : cb.equal(root.get("status"), status);
+    }
+
+    public static Specification<Vaga> prazoAindaValido(LocalDate hoje) {
+        return (root, query, cb) -> cb.or(
+                cb.isNull(root.get("dataLimiteCandidatura")),
+                cb.greaterThan(root.get("dataLimiteCandidatura"), hoje));
+    }
+
+    public static Specification<Vaga> buscaTituloOuContratante(String busca) {
+        return (root, query, cb) -> {
+            if (busca == null || busca.isBlank()) return cb.conjunction();
+            String termo = "%" + busca.trim().toLowerCase() + "%";
+            var contratante = root.join("contratante");
+            var usuario = contratante.join("usuario");
+            return cb.or(cb.like(cb.lower(root.get("titulo")), termo),
+                    cb.like(cb.lower(contratante.get("nomeEmpresa")), termo),
+                    cb.like(cb.lower(usuario.get("nome")), termo));
+        };
     }
 
     public static Specification<Vaga> idMaiorQue(Long cursor) {
@@ -86,6 +107,50 @@ public final class VagaSpecifications {
                 ? cb.conjunction()
                 : cb.like(cb.lower(root.join("area").get("nome")),
                         "%" + areaAtuacao.trim().toLowerCase() + "%");
+    }
+
+    public static Specification<Vaga> areaIgual(Short areaId) {
+        return (root, query, cb) -> areaId == null
+                ? cb.conjunction() : cb.equal(root.get("area").get("id"), areaId);
+    }
+
+    public static Specification<Vaga> experienciaIgual(String experiencia) {
+        return (root, query, cb) -> experiencia == null || experiencia.isBlank()
+                ? cb.conjunction()
+                : cb.equal(cb.lower(root.get("experiencia")), experiencia.trim().toLowerCase());
+    }
+
+    public static Specification<Vaga> abrangenciaIgual(Abrangencia abrangencia) {
+        return (root, query, cb) -> abrangencia == null
+                ? cb.conjunction() : cb.equal(root.get("abrangencia"), abrangencia);
+    }
+
+    public static Specification<Vaga> formaRemuneracaoIgual(FormaRemuneracao forma) {
+        return (root, query, cb) -> forma == null
+                ? cb.conjunction() : cb.equal(root.get("formaRemuneracao"), forma);
+    }
+
+    public static Specification<Vaga> afirmativa(Boolean afirmativa) {
+        return (root, query, cb) -> afirmativa == null ? cb.conjunction()
+                : afirmativa ? cb.isNotNull(root.get("categoriaAfirmativa"))
+                : cb.isNull(root.get("categoriaAfirmativa"));
+    }
+
+    public static Specification<Vaga> comAlgumaCategoriaAfirmativa(Set<Integer> ids) {
+        return (root, query, cb) -> {
+            if (ids == null || ids.isEmpty()) return cb.conjunction();
+            var categorias = java.util.Arrays.stream(com.portifolio.model.CategoriaAfirmativa.values())
+                    .filter(c -> ids.contains(c.getId())).toList();
+            return root.get("categoriaAfirmativa").in(categorias);
+        };
+    }
+
+    public static Specification<Vaga> comAlgumaEspecializacao(Set<Long> ids) {
+        return (root, query, cb) -> {
+            if (ids == null || ids.isEmpty()) return cb.conjunction();
+            query.distinct(true);
+            return root.join("especializacoes").get("id").in(ids);
+        };
     }
 
     public static Specification<Vaga> idDiferente(Long id) {

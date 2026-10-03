@@ -18,18 +18,44 @@ public class PortfolioVideoService {
     private final EmbedExternoRepository videos;
     private final PortfolioAccessService acesso;
     private final VideoPortfolioValidator validator;
-    public record VideoResponse(Long id, String urlOriginal, String embedUrl, String provedor) {}
+    public record VideoResponse(Long id, String urlOriginal, String embedUrl, String provedor, String legenda) {}
 
     @Transactional
     public VideoResponse cadastrar(Map<String, String> request) {
         var dono = acesso.artistaAtual();
-        if (request == null || request.size() != 1 || !request.containsKey("url"))
-            throw new UnprocessableEntityException("Envie somente o link do vídeo, sem HTML ou identificadores de proprietário.");
+        validarCampos(request);
         var video = validator.validar(request.get("url"));
+        // Provedor ja validado; persistir o metadado obrigatorio do database04.
         var item = new EmbedExterno(); item.setTipoMidia(legacySchema ? (video.provedor().equalsIgnoreCase("SPOTIFY") ? "audio" : "video") : (video.provedor().equalsIgnoreCase("SPOTIFY") ? "AUDIO" : "VIDEO")); item.setArtista(dono); item.setUrlOriginal(video.urlOriginal());
+        item.setPlataforma(video.provedor());
         item.setCodigoIframe("<iframe src=\"" + video.embedUrl() + "\" title=\"Vídeo do portfólio\" loading=\"lazy\" allowfullscreen></iframe>");
+        item.setLegenda(legenda(request));
         dono.setUltimaAtualizacao(LocalDateTime.now());
         return dto(videos.saveAndFlush(item));
+    }
+    @Transactional
+    public VideoResponse atualizar(Long id, Map<String, String> request) {
+        var dono = acesso.artistaAtual();
+        var item = videos.findByIdAndArtistaUsuarioId(id, dono.getUsuarioId()).orElseThrow(PortfolioAccessService::naoEncontrado);
+        validarCampos(request);
+        var video = validator.validar(request.get("url"));
+        item.setUrlOriginal(video.urlOriginal());
+        item.setPlataforma(video.provedor());
+        item.setTipoMidia(legacySchema ? (video.provedor().equalsIgnoreCase("SPOTIFY") ? "audio" : "video") : (video.provedor().equalsIgnoreCase("SPOTIFY") ? "AUDIO" : "VIDEO"));
+        item.setCodigoIframe("<iframe src=\"" + video.embedUrl() + "\" title=\"Vídeo do portfólio\" loading=\"lazy\" allowfullscreen></iframe>");
+        item.setLegenda(legenda(request));
+        dono.setUltimaAtualizacao(LocalDateTime.now());
+        return dto(videos.saveAndFlush(item));
+    }
+    private void validarCampos(Map<String, String> request) {
+        if (request == null || !request.containsKey("url") || request.keySet().stream().anyMatch(key -> !key.equals("url") && !key.equals("legenda")))
+            throw new UnprocessableEntityException("Envie somente o link e a legenda, sem HTML ou identificadores de proprietário.");
+    }
+    private String legenda(Map<String, String> request) {
+        String value = request.get("legenda");
+        if (value != null && (value.length() > 255 || value.chars().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t')))
+            throw new UnprocessableEntityException("A legenda deve ter até 255 caracteres, sem caracteres de controle.");
+        return value == null || value.isBlank() ? null : value.strip();
     }
     @Transactional(readOnly = true)
     public PortfolioPagina<VideoResponse> meus(int page, int size) {
@@ -51,6 +77,6 @@ public class PortfolioVideoService {
     private VideoResponse dto(EmbedExterno item) {
         // Nunca devolve nem confia no HTML armazenado, inclusive registros de versões anteriores.
         var video = validator.validar(item.getUrlOriginal());
-        return new VideoResponse(item.getId(), video.urlOriginal(), video.embedUrl(), video.provedor());
+        return new VideoResponse(item.getId(), video.urlOriginal(), video.embedUrl(), video.provedor(), item.getLegenda());
     }
 }

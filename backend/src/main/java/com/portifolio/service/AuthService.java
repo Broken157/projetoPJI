@@ -1,6 +1,10 @@
 package com.portifolio.service;
 
 import com.portifolio.dto.CadastroRequest;
+import com.portifolio.dto.CadastroDadosRequest;
+import com.portifolio.dto.GoogleCadastroRequest;
+import com.portifolio.service.google.GoogleRegistrationContextService;
+import com.portifolio.validation.CadastroValidator;
 import com.portifolio.dto.CadastroResponse;
 import com.portifolio.dto.GoogleAuthRequest;
 import com.portifolio.dto.GoogleAuthResponse;
@@ -12,9 +16,7 @@ import com.portifolio.exception.ConflictException;
 import com.portifolio.exception.ForbiddenException;
 import com.portifolio.exception.UnauthorizedException;
 import com.portifolio.model.Usuario;
-import com.portifolio.model.AreaArtistica;
 import com.portifolio.model.PerfilArtistaArea;
-import com.portifolio.repository.AreaArtisticaRepository;
 import com.portifolio.model.PerfilArtista;
 import com.portifolio.model.PerfilContratante;
 import com.portifolio.model.enums.TipoUsuario;
@@ -28,9 +30,7 @@ import com.portifolio.service.google.GoogleLinkLock;
 import com.portifolio.service.google.GoogleTokenClaims;
 import com.portifolio.service.google.GoogleTokenVerifier;
 import com.portifolio.validation.PasswordPolicy;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Period;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -42,13 +42,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
-    @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}")
-    private boolean legacySchema;
-
     private final UsuarioRepository usuarioRepository;
     private final PerfilArtistaRepository perfilArtistaRepository;
     private final PerfilContratanteRepository perfilContratanteRepository;
-    private final AreaArtisticaRepository areaArtisticaRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
@@ -56,6 +52,11 @@ public class AuthService {
     private final PasswordPolicy passwordPolicy;
     private final GoogleTokenVerifier googleTokenVerifier;
     private final GoogleLinkLock googleLinkLock;
+    private final EmailVerificationService emailVerificationService;
+    private final GuardianConsentService guardianConsentService;
+    private final CadastroValidator cadastroValidator;
+    private final GoogleRegistrationContextService googleRegistrationContext;
+    private final GoogleAccountAccessPolicy accountAccessPolicy;
 
     // ──────────────────────────────────────────────────────────
     // RF01 — Cadastro convencional e vínculo com uma área principal
@@ -63,88 +64,63 @@ public class AuthService {
 
     @Transactional
     public CadastroResponse cadastrar(CadastroRequest request) {
-
-        if (usuarioRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new ConflictException("Este email ja esta cadastrado.");
-        }
-
-        LocalDate hoje = LocalDate.now();
-        if (request.getDataNascimento().isAfter(hoje)) {
-            throw new IllegalArgumentException("Data de nascimento não pode estar no futuro.");
-        }
-
-        int idade = Period.between(request.getDataNascimento(), hoje).getYears();
-        if (idade < 14) {
-            throw new IllegalArgumentException("A idade mínima para cadastro é 14 anos.");
-        }
-        boolean menorDeIdade = idade < 18;
-
-        if (menorDeIdade) {
-            if (request.getNomeResponsavel() == null || request.getNomeResponsavel().isBlank()) {
-                throw new IllegalArgumentException("Nome do responsavel e obrigatorio para menores de 18 anos.");
-            }
-            if (request.getTelefoneResponsavel() == null || request.getTelefoneResponsavel().isBlank()) {
-                throw new IllegalArgumentException("Telefone do responsavel e obrigatorio para menores de 18 anos.");
-            }
-            if (request.getEmailResponsavel() == null || request.getEmailResponsavel().isBlank()) {
-                throw new IllegalArgumentException("Email do responsavel e obrigatorio para menores de 18 anos.");
-            }
-        }
-
-        validarTipoCadastro(request.getTipoUsuario());
-        AreaArtistica areaPrincipal = validarPerfilInicial(request.getTipoUsuario(),
-                request.getTipoPerfilArtistico(), request.getAreaPrincipalId());
-        Usuario usuario = new Usuario();
-        usuario.setNome(request.getNome());
-        usuario.setDataNascimento(request.getDataNascimento());
-        usuario.setTelefone(request.getTelefone());
-        usuario.setEmail(request.getEmail());
-        usuario.setSenha(passwordPolicy.encode(request.getSenha()));
-        usuario.setTipoUsuario(request.getTipoUsuario());
-        usuario.setPerfilCompleto(false);
+        googleLinkLock.bloquearEmail(request.getEmail());
+        CadastroValidator.DadosValidados dados = cadastroValidator.validar(request, request.getEmail());
+        String senha = passwordPolicy.encode(request.getSenha());
+        Usuario usuario = novoUsuario(request, dados, request.getNome(), request.getEmail());
+        usuario.setSenha(senha);
         usuario.setStatusConta(StatusConta.PENDENTE_VERIFICACAO_EMAIL);
-        usuario.setDataCriacao(LocalDateTime.now());
+        Usuario salvo = usuarioRepository.saveAndFlush(usuario);
+        criarPerfilInicial(salvo, request, dados);
+        emailVerificationService.iniciarCadastro(salvo);
+        return CadastroResponse.builder()
+                .id(salvo.getId()).nome(salvo.getNome()).email(salvo.getEmail())
+                .username(salvo.getUsername()).tipoUsuario(salvo.getTipoUsuario())
+                .menorDeIdade(dados.menor())
+                .mensagem("Cadastro realizado; conta pendente de verificação de e-mail.")
+                .build();
+    }
 
-        if (menorDeIdade) {
+    private Usuario novoUsuario(CadastroDadosRequest request, CadastroValidator.DadosValidados dados,
+            String nome, String email) {
+        Usuario usuario = new Usuario();
+        usuario.setNome(nome);
+        usuario.setUsername(request.getUsername());
+        usuario.setEmail(email);
+        usuario.setTelefone(request.getTelefone());
+        usuario.setDataNascimento(request.getDataNascimento());
+        usuario.setTipoUsuario(request.getTipoUsuario());
+        usuario.setCpf(dados.cpf());
+        usuario.setCnpj(dados.cnpj());
+        usuario.setPerfilCompleto(false);
+        usuario.setDataCriacao(LocalDateTime.now());
+        if (dados.menor()) {
             usuario.setNomeResponsavel(request.getNomeResponsavel());
             usuario.setTelefoneResponsavel(request.getTelefoneResponsavel());
             usuario.setEmailResponsavel(request.getEmailResponsavel());
         }
-
-        Usuario salvo = usuarioRepository.save(usuario);
-        criarPerfilInicial(salvo, request.getTipoPerfilContratante(), request.getTipoPerfilArtistico(), areaPrincipal);
-
-        return CadastroResponse.builder()
-                .id(salvo.getId())
-                .nome(salvo.getNome())
-                .email(salvo.getEmail())
-                .tipoUsuario(salvo.getTipoUsuario())
-                .menorDeIdade(menorDeIdade)
-                .mensagem("Cadastro realizado com sucesso! Faca login.")
-                .build();
+        return usuario;
     }
 
-    private void criarPerfilInicial(Usuario usuario, String tipoPerfilContratante, com.portifolio.model.enums.TipoPerfilArtistico tipoArtistico, AreaArtistica areaPrincipal) {
-        if (legacySchema && usuario.getTipoUsuario() == TipoUsuario.ARTISTA) {
-            PerfilArtista perfil = new PerfilArtista(); perfil.setUsuario(usuario); perfilArtistaRepository.save(perfil); return;
-        }
+    private void criarPerfilInicial(Usuario usuario, CadastroDadosRequest request,
+            CadastroValidator.DadosValidados dados) {
         if (usuario.getTipoUsuario() == TipoUsuario.CONTRATANTE) {
             PerfilContratante perfil = new PerfilContratante();
             perfil.setUsuario(usuario);
-            perfil.setTipoPerfil(tipoPerfilContratante);
-            perfilContratanteRepository.save(perfil);
+            perfil.setTipoContratante(dados.contratante());
+            perfil.setNomeEmpresa(request.getNomeEntidade());
+            perfilContratanteRepository.saveAndFlush(perfil);
             return;
         }
-
         PerfilArtista perfil = new PerfilArtista();
         perfil.setUsuario(usuario);
-        perfil.setTipoPerfilArtistico(tipoArtistico);
+        perfil.setTipoPerfilArtistico(request.getTipoPerfilArtistico());
         PerfilArtistaArea vinculo = new PerfilArtistaArea();
         vinculo.setPerfil(perfil);
-        vinculo.setArea(areaPrincipal);
+        vinculo.setArea(dados.area());
         vinculo.setPrincipal(true);
         perfil.getAreas().add(vinculo);
-        perfilArtistaRepository.save(perfil);
+        perfilArtistaRepository.saveAndFlush(perfil);
     }
 
     // ──────────────────────────────────────────────────────────
@@ -160,16 +136,16 @@ public class AuthService {
         Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Email ou senha incorretos."));
 
-        // RF32: guard — usuario Google nao tem senha local
+        // Conta Google sem senha local nao revela a existencia do e-mail.
         if (usuario.getSenha() == null) {
-            throw new IllegalArgumentException("Esta conta usa login via Google. Use o botao 'Entrar com Google'.");
+            throw new UnauthorizedException("Email ou senha incorretos.");
         }
 
         if (!passwordEncoder.matches(request.getSenha(), usuario.getSenha())) {
             throw new UnauthorizedException("Email ou senha incorretos.");
         }
 
-        exigirAcessoNormalGoogle(usuario);
+        exigirAcessoNormal(usuario);
 
 
         // RF33: gera refresh token apenas se rememberMe = true
@@ -200,100 +176,64 @@ public class AuthService {
 
     @Transactional
     public GoogleAuthResponse loginComGoogle(GoogleAuthRequest request) {
-
-        if (legacySchema) throw new com.portifolio.exception.UnprocessableEntityException("Login Google bloqueado: o schema não contém o estado e consentimento da conta.");
-        // 1. Valida o ID Token com a chave publica do Google
         GoogleTokenClaims claims = googleTokenVerifier.verificar(request.getIdToken());
-
-        String googleId = claims.subject();
-        String email = claims.email();
-        String nome = claims.nome();
-        String foto = claims.foto();
-        validarDadosGoogleNoSchema(googleId, email, nome, foto);
-        googleLinkLock.bloquear(email, googleId);
-
-        // 2. Resolve os dois identificadores antes de vincular para detectar conflitos.
-        Optional<Usuario> usuarioPorGoogle = usuarioRepository.findByGoogleId(googleId);
-        Optional<Usuario> usuarioPorEmail = usuarioRepository.findByEmailIgnoreCase(email);
-
-        // 3. Reutiliza a conta; o provedor não altera seu estado ou completude.
+        validarDadosGoogleNoSchema(claims.subject(), claims.email(), claims.nome(), claims.foto());
+        googleLinkLock.bloquear(claims.email(), claims.subject());
+        Optional<Usuario> usuarioPorEmail = usuarioRepository.findByEmailIgnoreCaseForUpdate(claims.email());
+        Optional<Usuario> usuarioPorGoogle = usuarioRepository.findByGoogleIdForUpdate(claims.subject());
         if (usuarioPorGoogle.isPresent()) {
             Usuario usuario = usuarioPorGoogle.get();
-            if (usuarioPorEmail.isPresent()
-                    && !Objects.equals(usuario.getId(), usuarioPorEmail.get().getId())) {
+            if (!usuario.getEmail().equalsIgnoreCase(claims.email())
+                    || (usuarioPorEmail.isPresent()
+                        && !Objects.equals(usuario.getId(), usuarioPorEmail.get().getId()))) {
                 throw falhaGoogle();
             }
+            emailVerificationService.confirmarPeloGoogle(usuario);
             return autenticarUsuario(usuario, request.getRememberMe());
         }
         if (usuarioPorEmail.isPresent()) {
             Usuario usuario = usuarioPorEmail.get();
-            if (usuario.getGoogleId() != null
-                    && !usuario.getGoogleId().equals(googleId)) {
+            if (usuario.getGoogleId() != null && !usuario.getGoogleId().equals(claims.subject())) {
                 throw falhaGoogle();
             }
             if (usuario.getGoogleId() == null) {
-                usuario.setGoogleId(googleId);
-                if (usuario.getFotoPerfil() == null) {
-                    usuario.setFotoPerfil(foto);
-                }
+                usuario.setGoogleId(claims.subject());
+                if (usuario.getFotoPerfil() == null) usuario.setFotoPerfil(claims.foto());
                 try {
                     usuarioRepository.saveAndFlush(usuario);
                 } catch (DataIntegrityViolationException ex) {
                     throw falhaGoogle();
                 }
             }
+            emailVerificationService.confirmarPeloGoogle(usuario);
             return autenticarUsuario(usuario, request.getRememberMe());
         }
+        return GoogleAuthResponse.builder().status("AGUARDANDO_DADOS")
+                .nomeGoogle(claims.nome()).emailGoogle(claims.email()).fotoGoogle(claims.foto())
+                .contexto(googleRegistrationContext.emitir(claims, request.getRememberMe()))
+                .contextoExpiraEmSegundos(GoogleRegistrationContextService.VALIDADE.toSeconds()).build();
+    }
 
-        // 4. O schema exige esses três campos até para uma conta provisória.
-        // Sem eles, mantém AGUARDANDO_DADOS sem inventar valores nem emitir JWT.
-        boolean dadosInsuficientes = request.getTipoUsuario() == null
-                || request.getDataNascimento() == null
-                || request.getTelefone() == null
-                || request.getTelefone().isBlank();
-
-        if (dadosInsuficientes) {
-            // Retorna dados do Google para o frontend pre-preencher o form de conclusao
-            return GoogleAuthResponse.builder()
-                    .status("AGUARDANDO_DADOS")
-                    .nomeGoogle(nome)
-                    .emailGoogle(email)
-                    .fotoGoogle(foto)
-                    .build();
+    @Transactional
+    public GoogleAuthResponse concluirCadastroGoogle(GoogleCadastroRequest request) {
+        var contexto = googleRegistrationContext.validar(request.getContexto());
+        GoogleTokenClaims claims = contexto.identidade();
+        validarDadosGoogleNoSchema(claims.subject(), claims.email(), claims.nome(), claims.foto());
+        googleLinkLock.bloquear(claims.email(), claims.subject());
+        if (usuarioRepository.findByGoogleIdForUpdate(claims.subject()).isPresent()
+                || usuarioRepository.findByEmailIgnoreCaseForUpdate(claims.email()).isPresent()) {
+            throw new ConflictException("Cadastro Google ja concluido ou conta existente. Entre novamente.");
         }
-
-        // 5. Persistência provisória somente com os campos obrigatórios do schema.
-        // A conclusão do RF01 e o consentimento não são inferidos de um login Google.
-        LocalDate hoje = LocalDate.now();
-        if (request.getDataNascimento().isAfter(hoje)) {
-            throw new IllegalArgumentException("Data de nascimento não pode estar no futuro.");
-        }
-        int idade = Period.between(request.getDataNascimento(), hoje).getYears();
-        if (idade < 14 || (request.getTipoUsuario() == TipoUsuario.CONTRATANTE && idade < 18)) {
-            throw new IllegalArgumentException("Idade insuficiente para o tipo de cadastro informado.");
-        }
-
-        validarTipoCadastro(request.getTipoUsuario());
-        Usuario novoUsuario = new Usuario();
-        novoUsuario.setGoogleId(googleId);
-        novoUsuario.setNome(nome);
-        novoUsuario.setEmail(email);
-        novoUsuario.setFotoPerfil(foto);     // RF34 Opcao B: foto Google como ponto de partida
-        novoUsuario.setSenha(null);           // sem senha local
-        novoUsuario.setTipoUsuario(request.getTipoUsuario());
-        novoUsuario.setDataNascimento(request.getDataNascimento());
-        novoUsuario.setTelefone(request.getTelefone());
-        novoUsuario.setPerfilCompleto(false);
-        novoUsuario.setEmailVerificado(true);
-        novoUsuario.setStatusConta(StatusConta.PENDENTE_TIPO_PERFIL);
-        novoUsuario.setDataCriacao(LocalDateTime.now());
-
-        try {
-            Usuario salvo = usuarioRepository.saveAndFlush(novoUsuario);
-            return autenticarUsuario(salvo, request.getRememberMe());
-        } catch (DataIntegrityViolationException ex) {
-            throw falhaGoogle();
-        }
+        CadastroValidator.DadosValidados dados = cadastroValidator.validar(request, claims.email());
+        Usuario usuario = novoUsuario(request, dados, claims.nome(), claims.email());
+        usuario.setGoogleId(claims.subject());
+        usuario.setFotoPerfil(claims.foto());
+        usuario.setEmailVerificado(true);
+        usuario.setStatusConta(dados.menor() ? StatusConta.PENDENTE_CONSENTIMENTO : StatusConta.ATIVA);
+        Usuario salvo = usuarioRepository.saveAndFlush(usuario);
+        criarPerfilInicial(salvo, request, dados);
+        if (dados.menor()) guardianConsentService.iniciarConvite(salvo);
+        return autenticarUsuario(salvo, contexto.rememberMe());
     }
 
     // ──────────────────────────────────────────────────────────
@@ -303,7 +243,7 @@ public class AuthService {
     @Transactional
     public RefreshResponse refreshToken(RefreshRequest request) {
         Usuario usuario = refreshTokenService.validarRefreshToken(request.getRefreshToken());
-        exigirAcessoNormalGoogle(usuario);
+        exigirAcessoNormal(usuario);
 
         String novoRefresh = refreshTokenService.rotacionar(request.getRefreshToken());
         String novoToken = jwtService.gerarToken(usuario, novoRefresh);
@@ -324,7 +264,7 @@ public class AuthService {
     // ──────────────────────────────────────────────────────────
 
     private GoogleAuthResponse autenticarUsuario(Usuario usuario, Boolean rememberMe) {
-        if (!GoogleAccountAccessPolicy.acessoNormalPermitido(usuario)) {
+        if (!accountAccessPolicy.acessoNormalPermitido(usuario)) {
             if (usuario.getStatusConta() == StatusConta.BLOQUEADA) {
                 throw new ForbiddenException("Conta indisponível para autenticação.");
             }
@@ -363,9 +303,15 @@ public class AuthService {
                 .build();
     }
 
-    private void exigirAcessoNormalGoogle(Usuario usuario) {
-        if (!GoogleAccountAccessPolicy.acessoNormalPermitido(usuario)) {
-            throw new ForbiddenException("Conta Google sem acesso normal: conclusão cadastral ou consentimento pendente, ou conta bloqueada.");
+    private void exigirAcessoNormal(Usuario usuario) {
+        if (!accountAccessPolicy.acessoNormalPermitido(usuario)) {
+            if (usuario.getStatusConta() == StatusConta.PENDENTE_VERIFICACAO_EMAIL) {
+                throw new ForbiddenException("Confirme seu e-mail antes de entrar.");
+            }
+            if (usuario.getStatusConta() == StatusConta.PENDENTE_CONSENTIMENTO) {
+                throw new ForbiddenException("Aguarde a autorização do responsável antes de entrar.");
+            }
+            throw new ForbiddenException("Conta indisponível para autenticação.");
         }
     }
 
@@ -373,7 +319,7 @@ public class AuthService {
         if (googleId == null || googleId.isBlank() || googleId.length() > 255) {
             throw falhaGoogle();
         }
-        if (email == null || email.isBlank() || email.length() > 150) {
+        if (email == null || email.length() > 150 || !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
             throw falhaGoogle();
         }
         if (nome == null || nome.isBlank() || nome.length() > 150) {
@@ -387,19 +333,5 @@ public class AuthService {
     private UnauthorizedException falhaGoogle() {
         return new UnauthorizedException(GoogleTokenVerifier.MENSAGEM_ERRO);
     }
-    private void validarTipoCadastro(TipoUsuario tipo) {
-        if (tipo != TipoUsuario.ARTISTA && tipo != TipoUsuario.CONTRATANTE) {
-            throw new IllegalArgumentException("Cadastro permitido somente para ARTISTA ou CONTRATANTE.");
-        }
-    }
 
-    private AreaArtistica validarPerfilInicial(TipoUsuario tipo,
-            com.portifolio.model.enums.TipoPerfilArtistico perfil, Short areaPrincipalId) {
-        if (legacySchema || tipo != TipoUsuario.ARTISTA) return null;
-        if (perfil == null || areaPrincipalId == null) {
-            throw new IllegalArgumentException("Informe tipoPerfilArtistico e areaPrincipalId para o artista.");
-        }
-        return areaArtisticaRepository.findById(areaPrincipalId)
-                .orElseThrow(() -> new IllegalArgumentException("Área artística principal não encontrada."));
-    }
 }

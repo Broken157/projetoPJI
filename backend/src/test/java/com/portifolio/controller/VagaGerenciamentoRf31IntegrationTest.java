@@ -56,8 +56,7 @@ class VagaGerenciamentoRf31IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -169,8 +168,49 @@ class VagaGerenciamentoRf31IntegrationTest {
         assertThat(statusPersistido(vaga)).isEqualTo(StatusVaga.ABERTA);
     }
 
+    @Test
+    void encerradaSemPrazoPodeReabrirSemInventarData() throws Exception {
+        PerfilContratante dono = novoContratante("sem-prazo@rf23.test");
+        Vaga vaga = novaVaga(dono, StatusVaga.ENCERRADA);
+        gerenciar(vaga, dono.getUsuario(), "REABRIR")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ABERTA"));
+        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getDataLimiteCandidatura())
+                .isNull();
+    }
+
+    @Test
+    void encerradaComPrazoVencidoExigeNovoPrazoFuturo() throws Exception {
+        PerfilContratante dono = novoContratante("prazo-vencido@rf23.test");
+        Vaga vaga = novaVaga(dono, StatusVaga.ENCERRADA);
+        vaga.setDataLimiteCandidatura(LocalDate.now().minusDays(1));
+        vagaRepository.saveAndFlush(vaga);
+        gerenciar(vaga, dono.getUsuario(), "REABRIR")
+                .andExpect(status().isUnprocessableEntity());
+        assertThat(statusPersistido(vaga)).isEqualTo(StatusVaga.ENCERRADA);
+        gerenciarComPrazo(vaga, dono.getUsuario(), LocalDate.now())
+                .andExpect(status().isUnprocessableEntity());
+        assertThat(statusPersistido(vaga)).isEqualTo(StatusVaga.ENCERRADA);
+        LocalDate futuro = LocalDate.now().plusDays(10);
+        gerenciarComPrazo(vaga, dono.getUsuario(), futuro)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ABERTA"));
+        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getDataLimiteCandidatura())
+                .isEqualTo(futuro);
+    }
+
+    @Test
+    void outroContratanteNaoReabreEncerrada() throws Exception {
+        PerfilContratante dono = novoContratante("dono-encerrada@rf23.test");
+        PerfilContratante outro = novoContratante("outro-encerrada@rf23.test");
+        Vaga vaga = novaVaga(dono, StatusVaga.ENCERRADA);
+        gerenciar(vaga, outro.getUsuario(), "REABRIR")
+                .andExpect(status().isForbidden());
+        assertThat(statusPersistido(vaga)).isEqualTo(StatusVaga.ENCERRADA);
+    }
+
     @ParameterizedTest
-    @EnumSource(value = StatusVaga.class, names = {"ABERTA", "ENCERRADA", "CANCELADA"})
+    @EnumSource(value = StatusVaga.class, names = {"ABERTA", "RASCUNHO", "CANCELADA"})
     void reaberturaDeEstadoInvalidoDeveRetornar422(StatusVaga estado) throws Exception {
         PerfilContratante dono = novoContratante("reabrir-" + estado + "@rf31.test");
         Vaga vaga = novaVaga(dono, estado);
@@ -207,7 +247,7 @@ class VagaGerenciamentoRf31IntegrationTest {
         gerenciar(vaga, dono.getUsuario(), "ENCERRAR")
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.mensagem").value(
-                        org.hamcrest.Matchers.containsString("estado final")));
+                        org.hamcrest.Matchers.containsString("Ações permitidas")));
 
         assertThat(statusPersistido(vaga)).isEqualTo(estado);
     }
@@ -327,6 +367,14 @@ class VagaGerenciamentoRf31IntegrationTest {
                 .content(objectMapper.writeValueAsString(Map.of("acao", acao))));
     }
 
+    private ResultActions gerenciarComPrazo(Vaga vaga, Usuario usuario, LocalDate prazo) throws Exception {
+        return mockMvc.perform(patch("/api/vagas/{id}/status", vaga.getId())
+                .header("Authorization", bearer(usuario))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "acao", "REABRIR", "dataLimiteCandidatura", prazo.toString()))));
+    }
+
     private ResultActions gerenciarSemToken(Vaga vaga, String acao) throws Exception {
         return mockMvc.perform(patch("/api/vagas/{id}/status", vaga.getId())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -384,13 +432,14 @@ class VagaGerenciamentoRf31IntegrationTest {
     private PerfilContratante novoContratante(String email) {
         Usuario usuario = novoUsuario(email, TipoUsuario.CONTRATANTE, false);
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(usuario);
         perfil.setNomeEmpresa("Empresa RF31");
         return perfilContratanteRepository.save(perfil);
     }
 
     private PerfilArtista novoArtista(String email) {
-        Usuario usuario = novoUsuario(email, TipoUsuario.ARTISTA, true);
+        Usuario usuario = novoUsuario(email, TipoUsuario.ARTISTA, false);
         PerfilArtista perfil = new PerfilArtista();
         perfil.setTipoPerfilArtistico(com.portifolio.model.enums.TipoPerfilArtistico.ARTISTA_SOLO);
         perfil.setRaioAtuacao(com.portifolio.model.enums.Abrangencia.LOCAL);
@@ -399,11 +448,16 @@ class VagaGerenciamentoRf31IntegrationTest {
         perfil.setLocalizacao("São Paulo, SP");
         perfil.setUrlPortfolio("https://portfolio.example");
         perfil.setUltimaAtualizacao(LocalDateTime.now());
-        return perfilArtistaRepository.save(perfil);
+        perfil = perfilArtistaRepository.saveAndFlush(perfil);
+        perfil.setUsuario(usuario);
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                jdbcTemplate, perfil.getUsuarioId());
+        perfil.getUsuario().setPerfilCompleto(true);
+        return perfil;
     }
 
     private Usuario novoUsuario(String email, TipoUsuario tipo, boolean perfilCompleto) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome(tipo == TipoUsuario.ARTISTA ? "Artista RF31" : "Contratante RF31");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
@@ -411,6 +465,8 @@ class VagaGerenciamentoRf31IntegrationTest {
         usuario.setSenha("hash-teste");
         usuario.setTipoUsuario(tipo);
         usuario.setPerfilCompleto(perfilCompleto);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }

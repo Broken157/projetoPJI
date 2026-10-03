@@ -29,4 +29,6 @@ public class GoogleAuthResponse {
     private String nomeGoogle;
     private String emailGoogle;
     private String fotoGoogle;
+    private String contexto;
+    private Long contextoExpiraEmSegundos;
 }

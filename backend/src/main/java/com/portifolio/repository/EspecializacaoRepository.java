@@ -4,6 +4,13 @@ import com.portifolio.model.*;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface EspecializacaoRepository extends JpaRepository<Especializacao, Long> {
+    long countByIdIn(java.util.Set<Long> ids);
+
+    @org.springframework.data.jpa.repository.Query("select count(distinct e.id) from Funcao f join f.especializacoes e where f.area.id=:area and e.id in :ids")
+    long contarDaArea(Short area, java.util.Set<Long> ids);
+
+    @org.springframework.data.jpa.repository.Query("select count(distinct e.id) from Funcao f join f.especializacoes e where f.id in :funcoes and e.id in :ids")
+    long contarDasFuncoes(java.util.Set<Long> funcoes, java.util.Set<Long> ids);
     @org.springframework.data.jpa.repository.Query("select count(distinct e.id) from Funcao f join f.especializacoes e where f.area.id=:area and f.id in :funcoes and e.id in :ids")
     long contarCompativeis(Short area, java.util.Set<Long> funcoes, java.util.Set<Long> ids);
 

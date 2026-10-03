@@ -10,6 +10,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface PerfilArtistaRepository extends JpaRepository<PerfilArtista, Long> {
 
+    @EntityGraph(attributePaths = {
+            "usuario", "areas", "areas.funcoes", "areas.funcoes.area"
+    })
     @Query("select distinct perfil from PerfilArtista perfil where perfil.usuarioId = :usuarioId")
     Optional<PerfilArtista> buscarPublicoPorUsuarioId(@Param("usuarioId") Long usuarioId);
 

@@ -40,9 +40,11 @@ public class TalentoService {
         return buscarDoContratante(contratante().getId(), filtro);
     }
 
-    // Chamada interna do dashboard; o dono é resolvido do JWT pelo DashboardService.
+    // A chamada interna preserva a mesma identidade e elegibilidade da API.
     public Pagina<TalentoResponse> recomendarDoContratante(Long dono, int size) {
-        return buscarDoContratante(dono, FiltroTalentos.recomendados(size));
+        Usuario atual = contratante();
+        if (!atual.getId().equals(dono)) throw new ForbiddenException("Contexto pertence a outro contratante.");
+        return buscarDoContratante(atual.getId(), FiltroTalentos.recomendados(size));
     }
 
     private Pagina<TalentoResponse> buscarDoContratante(Long dono, FiltroTalentos f) {
@@ -64,6 +66,7 @@ public class TalentoService {
                 .artistaId(t.getArtistaId()).nomeExibicao(t.getNomeExibicao())
                 .avatarUrl(avatars.resolverUrl(t.getArtistaId(), t.getAvatarUrl(), null))
                 .biografia(t.getBiografia()).localizacao(t.getLocalizacao()).urlPortfolio(t.getUrlPortfolio())
+                .cidade(t.getCidade()).estado(t.getEstado())
                 .tipoPerfilArtistico(t.getTipoPerfilArtistico()).raioAtuacao(t.getRaioAtuacao())
                 .disponivelOportunidades(t.getDisponivelOportunidades()).areas(t.getAreas())
                 .quantidadeFuncoesCoincidentes(t.getQuantidadeFuncoesCoincidentes())
@@ -103,7 +106,9 @@ public class TalentoService {
     }
 
     public Pagina<Item> especializacoes(Short areaId, Set<Long> funcaoIds, int page, int size) {
-        contratante(); validarPagina(page, size);
+        if (legacySchema) throw new UnprocessableEntityException(
+                "BLOQUEADA POR SCHEMA DO BANCO: catálogo de especializações indisponível.");
+        validarPagina(page, size);
         var ids = funcaoIds == null ? Set.<Long>of() : funcaoIds;
         validarTaxonomia(areaId, ids, Set.of());
         if (areaId == null || ids.isEmpty()) throw new UnprocessableEntityException("Selecione área e funções.");

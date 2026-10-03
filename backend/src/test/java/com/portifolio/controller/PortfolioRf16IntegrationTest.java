@@ -35,8 +35,7 @@ import org.testcontainers.junit.jupiter.*;
 
 @Testcontainers @SpringBootTest @AutoConfigureMockMvc
 class PortfolioRf16IntegrationTest {
-    @Container @ServiceConnection static PostgreSQLContainer<?> postgres=new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql","db/catalogo-test.sql").withUrlParam("stringtype","unspecified");
+    @Container @ServiceConnection static PostgreSQLContainer<?> postgres=new com.portifolio.support.OfficialPostgreSQLContainer().withUrlParam("stringtype","unspecified");
     @TempDir static Path root;
     @DynamicPropertySource static void propriedades(DynamicPropertyRegistry r) { r.add("app.portfolio.storage-root",() -> root.toString()); }
     @Autowired MockMvc mvc; @Autowired JdbcTemplate db; @Autowired UsuarioRepository usuarios; @Autowired JwtService jwt;
@@ -46,6 +45,7 @@ class PortfolioRf16IntegrationTest {
     @MockitoSpyBean PortfolioArquivoService service;
     long dono,outro,contratante; String token;
     @BeforeEach void dados() {
+        db.execute("truncate usuarios restart identity cascade");
         dono=usuario("ARTISTA");outro=usuario("ARTISTA");contratante=usuario("CONTRATANTE");token=bearer(dono);
     }
     @AfterEach void limpar() throws Exception {
@@ -84,9 +84,9 @@ class PortfolioRf16IntegrationTest {
     @ParameterizedTest @ValueSource(strings={"BLOQUEADA","PENDENTE_CONSENTIMENTO","PENDENTE_TIPO_PERFIL","PENDENTE_VERIFICACAO_EMAIL"})
     void estadoContaImpedeGestao(String estado) throws Exception {
         long id=enviar("a.pdf","application/pdf",pdf());db.update("update usuarios set status_conta=? where id=?",estado,dono);
-        mvc.perform(multipart("/api/portfolio/arquivos").file(new MockMultipartFile("arquivo","a.pdf","application/pdf",pdf())).header("Authorization",token)).andExpect(status().isForbidden());
-        mvc.perform(get("/api/portfolio/me/arquivos").header("Authorization",token)).andExpect(status().isForbidden());
-        mvc.perform(delete("/api/portfolio/arquivos/"+id).header("Authorization",token)).andExpect(status().isForbidden());
+        mvc.perform(multipart("/api/portfolio/arquivos").file(new MockMultipartFile("arquivo","a.pdf","application/pdf",pdf())).header("Authorization",token)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/portfolio/me/arquivos").header("Authorization",token)).andExpect(status().isUnauthorized());
+        mvc.perform(delete("/api/portfolio/arquivos/"+id).header("Authorization",token)).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/portfolio/publico/arquivos/"+id+"/conteudo")).andExpect(status().isNotFound());
     }
     @Test void adultoPublicoPdfAttachmentERangeMp3() throws Exception {
@@ -185,6 +185,32 @@ class PortfolioRf16IntegrationTest {
         mvc.perform(delete(base+"/"+id).header("Authorization",token)).andExpect(status().isNoContent());
         assertThat(db.queryForObject("select count(*) from embeds_externos",Long.class)).isZero();
     }
+    @Test void legendaPersistidaEdicaoSomenteOwnerSemAlterarIdentidade() throws Exception {
+        String base="/api/portfolio/videos";
+        var created=mvc.perform(post(base).header("Authorization",token).contentType("application/json")
+                .content("{\"url\":\"https://vimeo.com/123\",\"legenda\":\"Primeira legenda\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.legenda").value("Primeira legenda")).andReturn();
+        long id=((Number)com.jayway.jsonpath.JsonPath.read(created.getResponse().getContentAsString(),"$.id")).longValue();
+        String body="{\"url\":\"https://youtu.be/dQw4w9WgXcQ\",\"legenda\":\"Legenda atualizada\"}";
+        mvc.perform(put(base+"/"+id).contentType("application/json").content(body)).andExpect(status().isUnauthorized());
+        mvc.perform(put(base+"/"+id).header("Authorization",bearer(outro)).contentType("application/json").content(body)).andExpect(status().isNotFound());
+        mvc.perform(put(base+"/"+id).header("Authorization",bearer(contratante)).contentType("application/json").content(body)).andExpect(status().isForbidden());
+        mvc.perform(put(base+"/"+id).header("Authorization",token).contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.legenda").value("Legenda atualizada"));
+        mvc.perform(get("/api/portfolio/me/videos").header("Authorization",token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].legenda").value("Legenda atualizada"));
+        mvc.perform(get("/api/portfolio/publico/artistas/"+dono+"/videos")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].legenda").value("Legenda atualizada"));
+        assertThat(db.queryForObject("select legenda from embeds_externos where id=?",String.class,id)).isEqualTo("Legenda atualizada");
+        assertThat(db.queryForObject("select artista_id from embeds_externos where id=?",Long.class,id)).isEqualTo(dono);
+        mvc.perform(put(base+"/"+id).header("Authorization",token).contentType("application/json")
+                .content("{\"url\":\"https://vimeo.com/123\",\"artistaId\":\""+outro+"\"}")).andExpect(status().isUnprocessableEntity());
+        mvc.perform(put(base+"/"+id).header("Authorization",token).contentType("application/json")
+                .content("{\"url\":\"https://vimeo.com/123\",\"legenda\":\""+"x".repeat(256)+"\"}")).andExpect(status().isUnprocessableEntity());
+        mvc.perform(put(base+"/"+id).header("Authorization",token).contentType("application/json")
+                .content("{\"url\":\"https://evil.example/123\",\"legenda\":\"inválida\"}")).andExpect(status().isUnprocessableEntity());
+        assertThat(db.queryForObject("select legenda from embeds_externos where id=?",String.class,id)).isEqualTo("Legenda atualizada");
+    }
     long enviar(String name,String mime,byte[] bytes) throws Exception {
         var r=mvc.perform(multipart("/api/portfolio/arquivos").file(new MockMultipartFile("arquivo",name,mime,bytes))
                 .param("artistaId",""+outro).header("Authorization",token)).andExpect(status().isCreated()).andReturn();
@@ -197,8 +223,8 @@ class PortfolioRf16IntegrationTest {
     long numeroArquivos() {try(var paths=Files.walk(root)){return paths.filter(Files::isRegularFile).count();}catch(IOException e){throw new java.io.UncheckedIOException(e);}}
     String bearer(long id){return "Bearer "+jwt.gerarToken(usuarios.findById(id).orElseThrow());}
     long usuario(String tipo) {
-        long id=db.queryForObject("insert into usuarios(nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta,perfil_completo) values ('Artista','1990-01-01','11999999999',?,'hash',?,'ATIVA',false) returning id",Long.class,UUID.randomUUID()+"@rf16.test",tipo);
-        if(tipo.equals("ARTISTA")) db.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico) values (?,'ARTISTA_SOLO')",id);
+        long id=db.queryForObject("insert into usuarios(username,nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta,perfil_completo) values (('fixture_' || substring(replace(gen_random_uuid()::text,'-','') for 22)),'Artista','1990-01-01','11999999999',?,'hash',?,'ATIVA',false) returning id",Long.class,UUID.randomUUID()+"@rf16.test",tipo);
+        if(tipo.equals("ARTISTA")) db.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,raio_atuacao) values (?,'ARTISTA_SOLO','LOCAL')",id);
         return id;
     }
 }

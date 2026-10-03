@@ -20,10 +20,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /** Usa somente a instância oficial. Todos os dados de teste são revertidos na transação. */
-@SpringBootTest(properties={"spring.datasource.url=jdbc:postgresql://localhost:5434/portifoliodb?stringtype=unspecified",
+@SpringBootTest(properties={"spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/palco_dev_manu04}?stringtype=unspecified",
         "app.vagas.auto-close.enabled=false"})
 @ActiveProfiles("banco-oficial-local")
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(com.portifolio.support.EmailVerificationTestConfig.class)
 @Transactional
 @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="palco.official-db-tests", matches="true")
 class OfficialLocalApiIntegrationTest {

@@ -87,7 +87,6 @@ public class DashboardService {
                 .notificacoes(NOTIFICACOES_DISPONIVEIS)
                 .mensagens(mensagensDisponiveis(usuario.getId()))
                 .vagasRecomendadas(buscarVagasRecomendadas(funcaoIds, tamanho))
-                .candidaturasRecentes(candidaturasDoArtista(usuario.getId(), tamanho))
                 .build();
     }
 
@@ -230,9 +229,5 @@ public class DashboardService {
 
     private <T> DashboardSecaoResponse<T> secaoVazia() {
         return secao(List.of(), 0, false);
-    }
-    private DashboardSecaoResponse<DashboardCandidaturaResponse> candidaturasDoArtista(Long id,int size) {
-        var page=candidaturaRepository.findByArtistaUsuarioId(id,PageRequest.of(0,size,org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC,"id")));
-        return secao(page.stream().map(c->DashboardCandidaturaResponse.builder().id(c.getId()).vagaId(c.getVaga().getId()).tituloVaga(c.getVaga().getTitulo()).status(c.getStatus()).dataCandidatura(c.getDataCandidatura()).build()).toList(),page.getTotalElements(),page.hasNext());
     }
 }

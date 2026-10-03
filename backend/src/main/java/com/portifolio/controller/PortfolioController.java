@@ -36,6 +36,8 @@ public class PortfolioController {
     public void excluir(@PathVariable Long id) { arquivos.excluir(id); }
     @PostMapping("/videos") @ResponseStatus(HttpStatus.CREATED)
     public PortfolioVideoService.VideoResponse video(@RequestBody Map<String, String> request) { return videos.cadastrar(request); }
+    @PutMapping("/videos/{id}")
+    public PortfolioVideoService.VideoResponse editarVideo(@PathVariable Long id, @RequestBody Map<String, String> request) { return videos.atualizar(id, request); }
     @GetMapping("/me/videos")
     public PortfolioPagina<PortfolioVideoService.VideoResponse> meusVideos(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
         return videos.meus(page, size);

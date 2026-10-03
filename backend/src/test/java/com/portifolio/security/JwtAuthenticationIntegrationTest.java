@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portifolio.model.Usuario;
+import com.portifolio.model.enums.StatusConta;
 import com.portifolio.model.enums.TipoUsuario;
 import com.portifolio.repository.UsuarioRepository;
 import java.time.LocalDate;
@@ -39,8 +40,7 @@ class JwtAuthenticationIntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -128,7 +128,7 @@ class JwtAuthenticationIntegrationTest {
     }
 
     private Usuario criarUsuario(String email, TipoUsuario tipoUsuario) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa FIX-AUTH-01");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
@@ -136,6 +136,8 @@ class JwtAuthenticationIntegrationTest {
         usuario.setSenha(passwordEncoder.encode(SENHA));
         usuario.setTipoUsuario(tipoUsuario);
         usuario.setPerfilCompleto(false);
+        usuario.setStatusConta(StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }

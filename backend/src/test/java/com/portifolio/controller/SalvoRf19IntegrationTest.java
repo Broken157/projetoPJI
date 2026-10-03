@@ -32,8 +32,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers @SpringBootTest(properties="spring.jpa.properties.hibernate.generate_statistics=true") @AutoConfigureMockMvc
 class SalvoRf19IntegrationTest {
-    @Container @ServiceConnection static PostgreSQLContainer<?> postgres=new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql","db/catalogo-test.sql").withUrlParam("stringtype","unspecified");
+    @Container @ServiceConnection static PostgreSQLContainer<?> postgres=new com.portifolio.support.OfficialPostgreSQLContainer().withUrlParam("stringtype","unspecified");
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired UsuarioRepository usuarios;
@@ -46,9 +45,9 @@ class SalvoRf19IntegrationTest {
     @BeforeEach void fixtures() {
         reset(realtime);
         jdbc.execute("truncate usuarios,funcoes,especializacoes restart identity cascade");
-        jdbc.execute("insert into usuarios(id,nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta) values (1,'Contratante A','1990-01-01','11900000001','a@rf19.test','hash','CONTRATANTE','ATIVA'),(2,'Contratante B','1990-01-01','11900000002','b@rf19.test','hash','CONTRATANTE','ATIVA'),(3,'Marina','1990-01-01','11900000003','marina@rf19.test','hash','ARTISTA','ATIVA'),(4,'Menor privado',current_date-interval '16 years','11900000004','menor@rf19.test','hash','ARTISTA','ATIVA')");
-        jdbc.execute("insert into perfis_contratantes(usuario_id,nome_empresa) values(1,'Empresa A'),(2,'Empresa B')");
-        jdbc.execute("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,localizacao) values(3,'ARTISTA_SOLO','São Paulo/SP'),(4,'ARTISTA_SOLO','Local privado')");
+        jdbc.execute("insert into usuarios(id,username,nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta) values (1,'salvo_contratante_a','Contratante A','1990-01-01','11900000001','a@rf19.test','hash','CONTRATANTE','ATIVA'),(2,'salvo_contratante_b','Contratante B','1990-01-01','11900000002','b@rf19.test','hash','CONTRATANTE','ATIVA'),(3,'salvo_marina','Marina','1990-01-01','11900000003','marina@rf19.test','hash','ARTISTA','ATIVA'),(4,'salvo_menor','Menor privado',current_date-interval '16 years','11900000004','menor@rf19.test','hash','ARTISTA','ATIVA')");
+        jdbc.execute("insert into perfis_contratantes(usuario_id,nome_empresa,tipo_contratante) values(1,'Empresa A','SETOR_PRIVADO'),(2,'Empresa B','SETOR_PRIVADO')");
+        jdbc.execute("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,raio_atuacao,cidade,estado) values(3,'ARTISTA_SOLO','LOCAL','São Paulo','SP'),(4,'ARTISTA_SOLO','LOCAL','Local privado','SP')");
         jdbc.execute("insert into vagas(id,contratante_id,area_id,titulo,descricao,requisitos,cidade,estado,tipo_contrato,abrangencia,status,endereco_completo) values(10,2,1,'Vaga pública','Descrição','Requisitos','São Paulo','SP','Projeto','LOCAL','ABERTA','Endereço privado'),(11,2,1,'Rascunho privado','Descrição','Requisitos','São Paulo','SP','Projeto','LOCAL','RASCUNHO',null)");
         a=usuarios.findById(1L).orElseThrow(); b=usuarios.findById(2L).orElseThrow(); artista=usuarios.findById(3L).orElseThrow();
     }
@@ -140,8 +139,8 @@ class SalvoRf19IntegrationTest {
                 .andExpect(jsonPath("$.content[0].funcoes").value("Canto"));
     }
     @Test void paginaOrdenaEstavelmenteSemNMaisUm() throws Exception {
-        jdbc.execute("insert into usuarios(id,nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta) select n,'Artista '||n,'1990-01-01','11999999999',n||'@page.test','hash','ARTISTA','ATIVA' from generate_series(100,159)n");
-        jdbc.execute("insert into perfis_artistas(usuario_id,tipo_perfil_artistico) select n,'ARTISTA_SOLO' from generate_series(100,159)n");
+        jdbc.execute("insert into usuarios(id,username,nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta) select n,'salvo_page_'||n,'Artista '||n,'1990-01-01','11999999999',n||'@page.test','hash','ARTISTA','ATIVA' from generate_series(100,159)n");
+        jdbc.execute("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,raio_atuacao) select n,'ARTISTA_SOLO','LOCAL' from generate_series(100,159)n");
         jdbc.execute("insert into itens_salvos(usuario_id,tipo_alvo,alvo_id,data_salvamento) select 1,'PERFIL_ARTISTA',n,timestamp '2026-09-14 12:00:00' from generate_series(100,159)n");
         var stats=emf.unwrap(SessionFactory.class).getStatistics();stats.clear();
         mvc.perform(get("/api/salvos").header("Authorization",token(a))).andExpect(jsonPath("$.content.length()").value(20))
@@ -154,15 +153,30 @@ class SalvoRf19IntegrationTest {
         mvc.perform(get("/api/salvos").header("Authorization",token(a)).param("page","1"))
                 .andExpect(jsonPath("$.content[0].alvoId").value(139));
     }
-    @ParameterizedTest @ValueSource(strings={"PAUSADA","ENCERRADA","CANCELADA"})
+    @ParameterizedTest @ValueSource(strings={"RASCUNHO","PAUSADA","ENCERRADA","CANCELADA"})
     void mudancaDeStatusMantemHistoricoSemLiberarAcesso(String statusVaga) throws Exception {
         salvar(a,"VAGA",10);
         jdbc.update("update vagas set status=cast(? as status_vaga_enum) where id=10",statusVaga);
-        mvc.perform(get("/api/salvos").header("Authorization",token(a)))
-                .andExpect(jsonPath("$.content[0].status").value(statusVaga))
-                .andExpect(jsonPath("$.content[0].disponivel").value(false)).andExpect(jsonPath("$.content[0].href").isEmpty());
+        var res=mvc.perform(get("/api/salvos").header("Authorization",token(a)))
+                .andExpect(jsonPath("$.content[0].nome").value("Vaga indisponível"))
+                .andExpect(jsonPath("$.content[0].disponivel").value(false))
+                .andExpect(jsonPath("$.content[0].href").isEmpty())
+                .andExpect(jsonPath("$.content[0].status").isEmpty())
+                .andExpect(jsonPath("$.content[0].nomeContratante").isEmpty())
+                .andExpect(jsonPath("$.content[0].localizacao").isEmpty()).andReturn();
+        assertThat(res.getResponse().getContentAsString()).doesNotContain("Vaga pública","Empresa B","São Paulo");
         salvar(a,"VAGA",10).andExpect(status().isOk());
         assertThat(count()).isEqualTo(1);
+    }
+    @Test void candidaturaHistoricaNaoLiberaRascunhoAlheioNaLista() throws Exception {
+        salvar(artista,"VAGA",10).andExpect(status().isCreated());
+        jdbc.execute("insert into candidaturas(vaga_id,artista_id,mensagem_apresentacao,link_portfolio_candidatura) values(10,3,'Teste','https://example.test')");
+        jdbc.execute("update vagas set status='RASCUNHO' where id=10");
+        mvc.perform(get("/api/vagas/10").header("Authorization",token(artista))).andExpect(status().isNotFound());
+        var res=mvc.perform(get("/api/salvos").header("Authorization",token(artista)))
+                .andExpect(jsonPath("$.content[0].disponivel").value(false))
+                .andExpect(jsonPath("$.content[0].href").isEmpty()).andReturn();
+        assertThat(res.getResponse().getContentAsString()).doesNotContain("Vaga pública","Empresa B","São Paulo");
     }
     @Test void alvoRemovidoOuPrivadoPodeSerRemovidoDaColecao() throws Exception {
         salvar(a,"PERFIL_ARTISTA",3);
@@ -187,7 +201,7 @@ class SalvoRf19IntegrationTest {
     }
     @Test void contaPendenteNaoUsaSalvos() throws Exception {
         jdbc.update("update usuarios set status_conta='PENDENTE_VERIFICACAO_EMAIL' where id=1");
-        salvar(a,"VAGA",10).andExpect(status().isForbidden());
+        salvar(a,"VAGA",10).andExpect(status().isUnauthorized());
     }
     @Test void falhaRealtimeNaoDesfazSalvoNemNotificacaoPersistida() throws Exception {
         doThrow(new IllegalStateException("offline")).when(realtime).entregar(any(),any(),any());

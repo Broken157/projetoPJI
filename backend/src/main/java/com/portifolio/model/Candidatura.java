@@ -10,7 +10,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -18,9 +17,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "candidaturas", uniqueConstraints = {
-        @UniqueConstraint(name = "candidatura_unica", columnNames = {"vaga_id", "artista_id"})
-})
+@Table(name = "candidaturas")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -39,10 +36,10 @@ public class Candidatura {
     @JoinColumn(name = "artista_id", nullable = false)
     private PerfilArtista artista;
 
-    @Column(name = "mensagem_apresentacao", nullable = false, columnDefinition = "text")
+    @Column(name = "mensagem_apresentacao", columnDefinition = "text")
     private String mensagemApresentacao;
 
-    @Column(name = "link_portfolio_candidatura", nullable = false, length = 255)
+    @Column(name = "link_portfolio_candidatura", length = 255)
     private String linkPortfolioCandidatura;
 
     @Column(name = "status", columnDefinition = "status_candidatura_enum")

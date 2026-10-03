@@ -57,8 +57,7 @@ class VagaControllerRf03IntegrationTest {
     // String nas colunas de enum customizado.
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -71,10 +70,12 @@ class VagaControllerRf03IntegrationTest {
     @Autowired VagaRepository vagaRepository;
     @Autowired CandidaturaRepository candidaturaRepository;
     @Autowired JwtService jwtService;
+    @Autowired com.portifolio.service.VagaPrazoPolicy vagaPrazoPolicy;
 
     // Mesmo padrao de reset usado manualmente em dev (RESTART IDENTITY garante
     // que os IDs comecem do 1 a cada teste, o que o teste de cursor depende).
     @AfterEach
+    @org.junit.jupiter.api.BeforeEach
     void limparBanco() {
         jdbcTemplate.execute(
                 "TRUNCATE candidaturas, vagas, funcoes, perfis_artistas, perfis_contratantes, usuarios RESTART IDENTITY CASCADE");
@@ -83,7 +84,7 @@ class VagaControllerRf03IntegrationTest {
     // ---------- helpers de setup (via repository, nao via REST) ----------
 
     private Usuario criarUsuario(String email, TipoUsuario tipo) {
-        Usuario u = new Usuario();
+        Usuario u = com.portifolio.support.OfficialSchemaFixtures.usuario();
         u.setNome("Usuario Teste");
         u.setDataNascimento(LocalDate.of(1990, 1, 1));
         u.setTelefone("11999999999");
@@ -91,6 +92,8 @@ class VagaControllerRf03IntegrationTest {
         u.setSenha("{noop}senha-teste");
         u.setTipoUsuario(tipo);
         u.setPerfilCompleto(false);
+        u.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        u.setEmailVerificado(true);
         u.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(u);
     }
@@ -99,6 +102,7 @@ class VagaControllerRf03IntegrationTest {
     // (key learning ja documentado - evita merge() no lugar de persist()).
     private PerfilContratante criarContratante(Usuario usuario) {
         PerfilContratante p = new PerfilContratante();
+        p.setTipoPerfil("PESSOA_FISICA");
         p.setUsuario(usuario);
         p.setNomeEmpresa("Empresa Teste");
         return perfilContratanteRepository.save(p);
@@ -173,6 +177,11 @@ class VagaControllerRf03IntegrationTest {
         criarVaga(contratante, "Vaga Pausada", "São Paulo", ModeloTrabalho.REMOTO, new BigDecimal("1000"), StatusVaga.PAUSADA);
         criarVaga(contratante, "Vaga Cancelada", "São Paulo", ModeloTrabalho.REMOTO, new BigDecimal("1000"), StatusVaga.CANCELADA);
         criarVaga(contratante, "Vaga Encerrada", "São Paulo", ModeloTrabalho.REMOTO, new BigDecimal("1000"), StatusVaga.ENCERRADA);
+        criarVaga(contratante, "Vaga Rascunho", "São Paulo", ModeloTrabalho.REMOTO, new BigDecimal("1000"), StatusVaga.RASCUNHO);
+        var vencida = criarVaga(contratante, "Vaga Vencida", "São Paulo", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        vencida.setDataLimiteCandidatura(vagaPrazoPolicy.hoje());
+        vagaRepository.save(vencida);
 
         mockMvc.perform(get("/api/vagas"))
                 .andExpect(status().isOk())
@@ -308,6 +317,9 @@ class VagaControllerRf03IntegrationTest {
                 ModeloTrabalho.HIBRIDO, new BigDecimal("2500"), StatusVaga.ABERTA);
         alvo.setEstado("SP");
         alvo.setTipoContrato("Temporário");
+        alvo.setExperiencia("Iniciante");
+        alvo.setAbrangencia(com.portifolio.model.enums.Abrangencia.NACIONAL);
+        alvo.setFormaRemuneracao(com.portifolio.model.enums.FormaRemuneracao.DIARIA);
         alvo.setArea(com.portifolio.support.OfficialSchemaFixtures.area((short) 1));
         vagaRepository.save(alvo);
 
@@ -328,12 +340,17 @@ class VagaControllerRf03IntegrationTest {
         String[][] filtros = {
                 {"titulo", "guitarrista"},
                 {"empresa", "palco cultural"},
+                {"busca", "palco cultural"},
                 {"cidade", "Campinas"},
                 {"estado", "sp"},
                 {"modeloTrabalho", "HIBRIDO"},
                 {"tipoContrato", "temporário"},
                 {"faixaSalarialMin", "2000"},
-                {"areaAtuacao", "música"},
+                {"areaAtuacao", "artes cênicas"},
+                {"areaId", "1"},
+                {"experiencia", "iniciante"},
+                {"abrangencia", "NACIONAL"},
+                {"formaRemuneracao", "DIARIA"},
                 {"funcaoIds", funcaoAlvo.toString()}
         };
 
@@ -344,11 +361,16 @@ class VagaControllerRf03IntegrationTest {
                     .andExpect(jsonPath("$.content[0].id").value(alvo.getId()));
         }
 
+        mockMvc.perform(get("/api/vagas").param("faixaSalarialMax", "1000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(outro.getId()));
+
         mockMvc.perform(get("/api/vagas")
                         .param("empresa", "Palco")
                         .param("cidade", "Campinas")
                         .param("modeloTrabalho", "HIBRIDO")
-                        .param("areaAtuacao", "Música")
+                        .param("areaAtuacao", "Artes Cênicas")
                         .param("funcaoIds", funcaoAlvo.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
@@ -421,6 +443,112 @@ class VagaControllerRf03IntegrationTest {
     }
 
     @Test
+    void taxonomiaPublicaFiltraAntesDaPaginaERejeitaCombinacoesInvalidas() throws Exception {
+        PerfilContratante contratante = criarContratante(criarUsuario("taxonomia-rf03@teste.com", TipoUsuario.CONTRATANTE));
+        var musica = criarVaga(contratante, "Músico", "Campinas", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        var teatro = criarVaga(contratante, "Ator", "Campinas", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        teatro.setArea(com.portifolio.support.OfficialSchemaFixtures.area((short) 2));
+        vagaRepository.save(teatro);
+
+        Long musicaFuncao = jdbcTemplate.queryForObject(
+                "insert into funcoes(area_id, nome) values (1, ?) returning id", Long.class, "Função música RF03");
+        Long musicaOutraFuncao = jdbcTemplate.queryForObject(
+                "insert into funcoes(area_id, nome) values (1, ?) returning id", Long.class, "Outra função música RF03");
+        Long teatroFuncao = jdbcTemplate.queryForObject(
+                "insert into funcoes(area_id, nome) values (2, ?) returning id", Long.class, "Função teatro RF03");
+        Long musicaSpec = jdbcTemplate.queryForObject(
+                "insert into especializacoes(nome) values (?) returning id", Long.class, "Especialização música RF03");
+        Long teatroSpec = jdbcTemplate.queryForObject(
+                "insert into especializacoes(nome) values (?) returning id", Long.class, "Especialização teatro RF03");
+        jdbcTemplate.update("insert into funcao_especializacao values (?, ?)", musicaFuncao, musicaSpec);
+        jdbcTemplate.update("insert into funcao_especializacao values (?, ?)", musicaOutraFuncao, musicaSpec);
+        jdbcTemplate.update("insert into funcao_especializacao values (?, ?)", teatroFuncao, teatroSpec);
+        jdbcTemplate.update("insert into vaga_funcao values (?, ?), (?, ?), (?, ?)",
+                musica.getId(), musicaFuncao, musica.getId(), musicaOutraFuncao, teatro.getId(), teatroFuncao);
+        jdbcTemplate.update("insert into vaga_especializacao values (?, ?), (?, ?)",
+                musica.getId(), musicaSpec, teatro.getId(), teatroSpec);
+
+        mockMvc.perform(get("/api/vagas").param("areaId", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(musica.getId()));
+        mockMvc.perform(get("/api/vagas").param("funcaoIds", musicaFuncao + "," + musicaOutraFuncao))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/vagas").param("especializacaoIds", musicaSpec.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(musica.getId()));
+        mockMvc.perform(get("/api/vagas").param("areaId", "1")
+                        .param("funcaoIds", musicaFuncao.toString())
+                        .param("especializacaoIds", musicaSpec.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1));
+        mockMvc.perform(get("/api/vagas").param("areaId", "1").param("funcaoIds", teatroFuncao.toString()))
+                .andExpect(status().isUnprocessableEntity());
+        mockMvc.perform(get("/api/vagas").param("funcaoIds", musicaFuncao.toString())
+                        .param("especializacaoIds", teatroSpec.toString()))
+                .andExpect(status().isUnprocessableEntity());
+        mockMvc.perform(get("/api/vagas").param("especializacaoIds", "999999"))
+                .andExpect(status().isUnprocessableEntity());
+        mockMvc.perform(get("/api/vagas").param("areaId", "0"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/funcoes")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/vagas/categorias-afirmativas")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/talentos/especializacoes")
+                        .param("areaId", "1").param("funcaoIds", musicaFuncao.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(musicaSpec));
+    }
+
+    @Test
+    void afirmativasFiltramSomenteCaracteristicasDaVaga() throws Exception {
+        PerfilContratante contratante = criarContratante(criarUsuario("afirmativa-rf03@teste.com", TipoUsuario.CONTRATANTE));
+        var afirmativa = criarVaga(contratante, "Vaga afirmativa", "Campinas", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        var geral = criarVaga(contratante, "Vaga geral", "Campinas", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        Integer categoriaId = com.portifolio.model.CategoriaAfirmativa.MULHER.getId();
+        jdbcTemplate.update("update vagas set categoria_afirmativa='MULHER' where id=?", afirmativa.getId());
+
+        mockMvc.perform(get("/api/vagas").param("afirmativa", "true"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(afirmativa.getId()))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/vagas").param("afirmativa", "false"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(geral.getId()));
+        mockMvc.perform(get("/api/vagas").param("categoriaAfirmativaIds", categoriaId.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(afirmativa.getId()));
+        mockMvc.perform(get("/api/vagas").param("afirmativa", "false")
+                        .param("categoriaAfirmativaIds", categoriaId.toString()))
+                .andExpect(status().isUnprocessableEntity());
+        mockMvc.perform(get("/api/vagas").param("categoriaAfirmativaIds", "999999"))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void totalFiltradoPermaneceEstavelEntrePaginasOrdenadas() throws Exception {
+        PerfilContratante contratante = criarContratante(criarUsuario("total-rf03@teste.com", TipoUsuario.CONTRATANTE));
+        var primeira = criarVaga(contratante, "Palco A", "Campinas", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        criarVaga(contratante, "Outra", "Campinas", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        var segunda = criarVaga(contratante, "Palco B", "Campinas", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+
+        mockMvc.perform(get("/api/vagas").param("busca", "Palco").param("size", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(primeira.getId()))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.hasMore").value(true))
+                .andExpect(jsonPath("$.nextCursor").value(primeira.getId()));
+        mockMvc.perform(get("/api/vagas").param("busca", "Palco").param("size", "1")
+                        .param("cursor", primeira.getId().toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(segunda.getId()))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.hasMore").value(false));
+    }
+
+    @Test
     void vagasCanceladasDoArtistaDevemTerCursorProprioEIsolamento() throws Exception {
         Usuario contratanteUsuario = criarUsuario("canceladas-paginadas-c@teste.com", TipoUsuario.CONTRATANTE);
         PerfilContratante contratante = criarContratante(contratanteUsuario);
@@ -476,20 +604,33 @@ class VagaControllerRf03IntegrationTest {
                 new BigDecimal("1000"), StatusVaga.ABERTA);
         var similar = criarVaga(contratante, "Similar aberta", "SP", ModeloTrabalho.REMOTO,
                 new BigDecimal("1000"), StatusVaga.ABERTA);
+        similar.setEnderecoCompleto("Endereço privado da similar");
+        vagaRepository.save(similar);
         var pausada = criarVaga(contratante, "Similar pausada", "SP", ModeloTrabalho.REMOTO,
                 new BigDecimal("1000"), StatusVaga.PAUSADA);
+        var vencida = criarVaga(contratante, "Similar vencida", "SP", ModeloTrabalho.REMOTO,
+                new BigDecimal("1000"), StatusVaga.ABERTA);
+        vencida.setDataLimiteCandidatura(vagaPrazoPolicy.hoje());
+        vagaRepository.save(vencida);
         var semCorrespondencia = criarVaga(contratante, "Sem correspondência", "SP", ModeloTrabalho.REMOTO,
                 new BigDecimal("1000"), StatusVaga.ABERTA);
         jdbcTemplate.update("insert into vaga_funcao (vaga_id, funcao_id) values (?, ?)", origem.getId(), funcaoComum);
         jdbcTemplate.update("insert into vaga_funcao (vaga_id, funcao_id) values (?, ?)", similar.getId(), funcaoComum);
         jdbcTemplate.update("insert into vaga_funcao (vaga_id, funcao_id) values (?, ?)", pausada.getId(), funcaoComum);
+        jdbcTemplate.update("insert into vaga_funcao (vaga_id, funcao_id) values (?, ?)", vencida.getId(), funcaoComum);
         jdbcTemplate.update("insert into vaga_funcao (vaga_id, funcao_id) values (?, ?)", semCorrespondencia.getId(), funcaoDiferente);
 
         mockMvc.perform(get("/api/vagas/{id}/similares", origem.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].id").value(similar.getId()))
-                .andExpect(jsonPath("$.content[0].status").value("ABERTA"));
+                .andExpect(jsonPath("$.content[0].status").value("ABERTA"))
+                .andExpect(jsonPath("$.content[0].enderecoCompleto").doesNotExist());
+        mockMvc.perform(get("/api/vagas/{id}/similares", origem.getId())
+                        .header("Authorization", "Bearer " + tokenPara(usuario)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].propriaDoContratante").value(false))
+                .andExpect(jsonPath("$.content[0].enderecoCompleto").doesNotExist());
     }
 
     @Test
@@ -546,6 +687,8 @@ class VagaControllerRf03IntegrationTest {
         PerfilContratante perfilDono = criarContratante(dono);
         var vagaDono = criarVaga(perfilDono, "Vaga própria", "SP", ModeloTrabalho.REMOTO,
                 new BigDecimal("1000"), StatusVaga.ABERTA);
+        vagaDono.setEnderecoCompleto("Rua privada, 123");
+        vagaRepository.save(vagaDono);
 
         Usuario outro = criarUsuario("privacidade-outro@teste.com", TipoUsuario.CONTRATANTE);
         PerfilContratante perfilOutro = criarContratante(outro);
@@ -559,6 +702,7 @@ class VagaControllerRf03IntegrationTest {
                 .andExpect(jsonPath("$.content[0].email").doesNotExist())
                 .andExpect(jsonPath("$.content[0].telefone").doesNotExist())
                 .andExpect(jsonPath("$.content[0].senha").doesNotExist())
+                .andExpect(jsonPath("$.content[0].enderecoCompleto").doesNotExist())
                 .andExpect(jsonPath("$.content[0].tokenRecuperacao").doesNotExist())
                 .andExpect(jsonPath("$.content[0].dataNascimento").doesNotExist());
 
@@ -566,9 +710,16 @@ class VagaControllerRf03IntegrationTest {
                         .header("Authorization", "Bearer " + tokenPara(dono)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(vagaDono.getId()))
-                .andExpect(jsonPath("$.content[0].propriaDoContratante").value(true))
+                .andExpect(jsonPath("$.content[0].propriaDoContratante").value(false))
+                .andExpect(jsonPath("$.content[0].enderecoCompleto").doesNotExist())
                 .andExpect(jsonPath("$.content[1].id").value(vagaOutro.getId()))
                 .andExpect(jsonPath("$.content[1].propriaDoContratante").value(false));
+
+        mockMvc.perform(get("/api/vagas/minhas")
+                        .header("Authorization", "Bearer " + tokenPara(dono)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].propriaDoContratante").value(true))
+                .andExpect(jsonPath("$.content[0].enderecoCompleto").value("Rua privada, 123"));
     }
 
     // ---------- Fase 2: vagas CANCELADA visíveis só pra quem se candidatou ----------
@@ -699,7 +850,7 @@ class VagaControllerRf03IntegrationTest {
         mockMvc.perform(get("/api/vagas/{id}", vagaId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.categoria").value("Música"));
+                .andExpect(jsonPath("$.categoria").value("Artes Cênicas"));
 
         mockMvc.perform(delete("/api/vagas/{id}", vagaId)
                         .header("Authorization", "Bearer " + token)
@@ -733,9 +884,10 @@ class VagaControllerRf03IntegrationTest {
                 new BigDecimal("1000"), StatusVaga.ABERTA);
 
         Usuario artistaUsuario = criarUsuario("candidatura-artista@teste.com", TipoUsuario.ARTISTA);
-        artistaUsuario.setPerfilCompleto(true);
-        usuarioRepository.save(artistaUsuario);
-        criarArtista(artistaUsuario);
+        PerfilArtista artista = criarArtista(artistaUsuario);
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                jdbcTemplate, artista.getUsuarioId());
+        artistaUsuario = usuarioRepository.findById(artistaUsuario.getId()).orElseThrow();
 
         String corpo = """
                 {
@@ -776,8 +928,9 @@ class VagaControllerRf03IntegrationTest {
                         .content(perfilIncompleto))
                 .andExpect(status().isUnprocessableEntity());
 
-        artistaUsuario.setPerfilCompleto(true);
-        usuarioRepository.save(artistaUsuario);
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                jdbcTemplate, artistaUsuario.getId());
+        artistaUsuario = usuarioRepository.findById(artistaUsuario.getId()).orElseThrow();
         String vagaSemCandidatura = corpoCandidatura(vagaCancelada.getId(), artistaUsuario.getId());
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", "Bearer " + tokenPara(artistaUsuario))
@@ -794,14 +947,16 @@ class VagaControllerRf03IntegrationTest {
                 new BigDecimal("1000"), StatusVaga.ABERTA);
 
         Usuario autenticado = criarUsuario("artista-autenticado@teste.com", TipoUsuario.ARTISTA);
-        autenticado.setPerfilCompleto(true);
-        usuarioRepository.save(autenticado);
         criarArtista(autenticado);
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                jdbcTemplate, autenticado.getId());
+        autenticado = usuarioRepository.findById(autenticado.getId()).orElseThrow();
 
         Usuario outro = criarUsuario("outro-artista@teste.com", TipoUsuario.ARTISTA);
-        outro.setPerfilCompleto(true);
-        usuarioRepository.save(outro);
         criarArtista(outro);
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                jdbcTemplate, outro.getId());
+        outro = usuarioRepository.findById(outro.getId()).orElseThrow();
 
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", "Bearer " + tokenPara(autenticado))
@@ -823,6 +978,12 @@ class VagaControllerRf03IntegrationTest {
         criarArtista(outroArtista);
         Long funcaoId = jdbcTemplate.queryForObject(
                 "insert into funcoes(area_id, nome) values (1, ?) returning id", Long.class, "Funcao perfil completo");
+        jdbcTemplate.update("update usuarios set cpf='12345678901' where id=?", artista.getId());
+        jdbcTemplate.update("insert into perfil_artista_area(perfil_artista_id,area_id,principal,nivel_experiencia) values (?,1,true,'INICIANTE')", artista.getId());
+        jdbcTemplate.update("insert into perfil_artista_funcao values (?,1,?)", artista.getId(), funcaoId);
+        Long specId = jdbcTemplate.queryForObject("insert into especializacoes(nome) values (?) returning id",Long.class,"Spec perfil completo " + java.util.UUID.randomUUID());
+        jdbcTemplate.update("insert into funcao_especializacao values (?,?)",funcaoId,specId);
+        jdbcTemplate.update("insert into perfil_artista_especializacao values (?,1,?)",artista.getId(),specId);
 
         String corpo = """
                 {

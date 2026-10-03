@@ -53,8 +53,7 @@ class NotificacaoRf23IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -63,15 +62,14 @@ class NotificacaoRf23IntegrationTest {
     @Autowired PerfilArtistaRepository perfilArtistaRepository;
     @Autowired PerfilContratanteRepository perfilContratanteRepository;
     @Autowired VagaRepository vagaRepository;
-    @Autowired CandidaturaRepository candidaturaRepository;
-    @Autowired NotificacaoRepository notificacaoRepository;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean CandidaturaRepository candidaturaRepository;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean NotificacaoRepository notificacaoRepository;
     @Autowired JwtService jwtService;
     @Autowired EntityManagerFactory entityManagerFactory;
 
     @AfterEach
+    @org.junit.jupiter.api.BeforeEach
     void limparBanco() {
-        jdbcTemplate.execute("ALTER TABLE candidaturas DROP CONSTRAINT IF EXISTS rf23_forcar_rollback");
-        jdbcTemplate.execute("ALTER TABLE notificacoes DROP CONSTRAINT IF EXISTS rf23_forcar_falha");
         jdbcTemplate.execute("TRUNCATE notificacoes, candidaturas, vagas, perfis_artistas, "
                 + "perfis_contratantes, usuarios RESTART IDENTITY CASCADE");
     }
@@ -193,7 +191,8 @@ class NotificacaoRf23IntegrationTest {
         PerfilContratante dono = novoContratante("dono-rollback@rf23.test");
         PerfilArtista artista = novoArtista("artista-rollback@rf23.test");
         Vaga vaga = novaVaga(dono, StatusVaga.ABERTA);
-        jdbcTemplate.execute("ALTER TABLE candidaturas ADD CONSTRAINT rf23_forcar_rollback CHECK (false)");
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("Falha de persistencia simulada"))
+                .when(candidaturaRepository).saveAndFlush(org.mockito.ArgumentMatchers.any(Candidatura.class));
 
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
@@ -209,7 +208,8 @@ class NotificacaoRf23IntegrationTest {
         PerfilContratante dono = novoContratante("dono-falha-notificacao@rf23.test");
         PerfilArtista artista = novoArtista("artista-falha-notificacao@rf23.test");
         Vaga vaga = novaVaga(dono, StatusVaga.ABERTA);
-        jdbcTemplate.execute("ALTER TABLE notificacoes ADD CONSTRAINT rf23_forcar_falha CHECK (false)");
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("Falha de persistencia simulada"))
+                .when(notificacaoRepository).saveAllAndFlush(org.mockito.ArgumentMatchers.any());
 
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
@@ -287,32 +287,41 @@ class NotificacaoRf23IntegrationTest {
     }
 
     private Usuario novoUsuario(String email, TipoUsuario tipo) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa RF23");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
         usuario.setEmail(email);
         usuario.setSenha("{noop}teste");
         usuario.setTipoUsuario(tipo);
-        usuario.setPerfilCompleto(true);
+        usuario.setPerfilCompleto(false);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }
 
     private PerfilContratante novoContratante(String email) {
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(novoUsuario(email, TipoUsuario.CONTRATANTE));
         perfil.setNomeEmpresa("Empresa RF23");
         return perfilContratanteRepository.save(perfil);
     }
 
     private PerfilArtista novoArtista(String email) {
+        Usuario usuario = novoUsuario(email, TipoUsuario.ARTISTA);
         PerfilArtista perfil = new PerfilArtista();
         perfil.setTipoPerfilArtistico(com.portifolio.model.enums.TipoPerfilArtistico.ARTISTA_SOLO);
         perfil.setRaioAtuacao(com.portifolio.model.enums.Abrangencia.LOCAL);
-        perfil.setUsuario(novoUsuario(email, TipoUsuario.ARTISTA));
+        perfil.setUsuario(usuario);
         perfil.setBiografia("Biografia RF23");
-        return perfilArtistaRepository.save(perfil);
+        perfil = perfilArtistaRepository.saveAndFlush(perfil);
+        perfil.setUsuario(usuario);
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                jdbcTemplate, perfil.getUsuarioId());
+        perfil.getUsuario().setPerfilCompleto(true);
+        return perfil;
     }
 
     private Vaga novaVaga(PerfilContratante contratante, StatusVaga status) {

@@ -30,8 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class AreaArtisticaIntegrationTest {
     @Container @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
     @Autowired MockMvc mvc;
     @Autowired AreaArtisticaRepository areas;
@@ -67,8 +66,8 @@ class AreaArtisticaIntegrationTest {
 
     private String bearer(String tipo) {
         Long id = db.queryForObject("""
-                insert into usuarios(nome,email,senha,tipo_usuario,status_conta,data_nascimento,perfil_completo,telefone)
-                values ('Catálogo',?,'hash',?,'ATIVA','1990-01-01',true,'11999999999') returning id
+                insert into usuarios(username,nome,email,senha,tipo_usuario,status_conta,data_nascimento,perfil_completo,telefone)
+                values (('fixture_' || substring(replace(gen_random_uuid()::text,'-','') for 22)),'Catálogo',?,'hash',?,'ATIVA','1990-01-01',true,'11999999999') returning id
                 """, Long.class, UUID.randomUUID() + "@catalogo.test", tipo);
         return "Bearer " + jwt.gerarToken(usuarios.findById(id).orElseThrow());
     }

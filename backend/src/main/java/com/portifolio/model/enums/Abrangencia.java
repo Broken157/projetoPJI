@@ -4,6 +4,7 @@ public enum Abrangencia implements DatabaseEnum {
     LOCAL,
     REGIONAL,
     NACIONAL,
+    MUNICIPAL,
     INTERNACIONAL,
     REMOTO;
 

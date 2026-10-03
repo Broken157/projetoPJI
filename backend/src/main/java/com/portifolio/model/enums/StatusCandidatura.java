@@ -7,6 +7,7 @@ public enum StatusCandidatura implements DatabaseEnum {
     EM_ANALISE("EM_ANALISE"),
     ACEITA("ACEITA"),
     REJEITADA("REJEITADA"),
+    BLOQUEADA("BLOQUEADA"),
     RETIRADA("RETIRADA"),
     CANCELADA_POR_VAGA("CANCELADA_POR_VAGA");
 

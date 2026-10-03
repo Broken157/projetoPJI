@@ -82,11 +82,11 @@ public class SalvoService {
             var alvo = (artista ? perfisPublicos : vagasPublicas).get(item.getAlvoId());
             boolean disponivel = alvo != null && alvo.disponivel();
             return new SalvoResponse(item.getTipoAlvo(),item.getAlvoId(),item.getDataSalvamento(),
-                    alvo == null ? (artista ? "Perfil indisponível" : "Vaga indisponível") : alvo.nome(),
-                    artista && alvo != null ? avatars.resolverUrl(alvo.id(),alvo.foto(),null) : null,
-                    alvo == null ? null : alvo.localizacao(),alvo == null ? null : alvo.contratante(),
-                    alvo == null ? null : alvo.status(),disponivel,disponivel ? href(item.getTipoAlvo(),item.getAlvoId()) : null,
-                    alvo == null ? null : alvo.funcoes());
+                    disponivel ? alvo.nome() : (artista ? "Perfil indisponível" : "Vaga indisponível"),
+                    disponivel && artista ? avatars.resolverUrl(alvo.id(),alvo.foto(),null) : null,
+                    disponivel ? alvo.localizacao() : null,disponivel ? alvo.contratante() : null,
+                    disponivel ? alvo.status() : null,disponivel,disponivel ? href(item.getTipoAlvo(),item.getAlvoId()) : null,
+                    disponivel ? alvo.funcoes() : null);
         }).toList();
         return new SalvoResponse.Pagina(content,resultado.getNumber(),resultado.getSize(),resultado.getTotalElements(),
                 resultado.getTotalPages(),resultado.hasNext(),resultado.hasPrevious());

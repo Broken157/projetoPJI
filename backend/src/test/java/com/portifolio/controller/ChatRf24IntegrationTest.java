@@ -67,8 +67,7 @@ class ChatRf24IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -81,15 +80,15 @@ class ChatRf24IntegrationTest {
     @Autowired CandidaturaRepository candidaturaRepository;
     @Autowired SalaChatRepository salaChatRepository;
     @Autowired ParticipanteChatRepository participanteChatRepository;
-    @Autowired MensagemChatRepository mensagemChatRepository;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean MensagemChatRepository mensagemChatRepository;
     @Autowired NotificacaoRepository notificacaoRepository;
     @Autowired JwtService jwtService;
     @Autowired EntityManagerFactory entityManagerFactory;
     @Autowired ChatService chatService;
 
     @AfterEach
+    @org.junit.jupiter.api.BeforeEach
     void limpar() {
-        jdbcTemplate.execute("ALTER TABLE mensagens_chat DROP CONSTRAINT IF EXISTS rf24_forcar_rollback");
         jdbcTemplate.execute("TRUNCATE notificacoes, mensagens_chat, participantes_chat, salas_chat, "
                 + "candidaturas, vagas, perfis_artistas, perfis_contratantes, usuarios "
                 + "RESTART IDENTITY CASCADE");
@@ -319,7 +318,8 @@ class ChatRf24IntegrationTest {
         Usuario artista = usuario("rollback@rf24.test", TipoUsuario.ARTISTA, LocalDate.of(1990, 1, 1));
         Usuario contratante = usuario("rollback-destino@rf24.test", TipoUsuario.CONTRATANTE, LocalDate.of(1980, 1, 1));
         SalaChat sala = sala(artista, contratante);
-        jdbcTemplate.execute("ALTER TABLE mensagens_chat ADD CONSTRAINT rf24_forcar_rollback CHECK (false)");
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("Falha de persistencia simulada"))
+                .when(mensagemChatRepository).saveAndFlush(org.mockito.ArgumentMatchers.any(MensagemChat.class));
 
         mockMvc.perform(post("/api/chat/salas/{id}/mensagens", sala.getId())
                         .header("Authorization", bearer(artista))
@@ -427,7 +427,7 @@ class ChatRf24IntegrationTest {
     }
 
     private Usuario usuario(String email, TipoUsuario tipo, LocalDate nascimento) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa RF24 " + email.substring(0, email.indexOf('@')));
         usuario.setDataNascimento(nascimento);
         usuario.setTelefone("11999999999");
@@ -435,6 +435,8 @@ class ChatRf24IntegrationTest {
         usuario.setSenha("{noop}teste");
         usuario.setTipoUsuario(tipo);
         usuario.setPerfilCompleto(true);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }
@@ -450,6 +452,7 @@ class ChatRf24IntegrationTest {
 
     private PerfilContratante contratante(String email, LocalDate nascimento) {
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(usuario(email, TipoUsuario.CONTRATANTE, nascimento));
         perfil.setNomeEmpresa("Empresa RF24");
         return perfilContratanteRepository.save(perfil);

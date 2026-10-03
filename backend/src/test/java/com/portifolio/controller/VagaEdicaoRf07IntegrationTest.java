@@ -52,8 +52,7 @@ class VagaEdicaoRf07IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -153,15 +152,15 @@ class VagaEdicaoRf07IntegrationTest {
         assertThat(persistida.getEnderecoCompleto()).isEqualTo("Rua Nova, 10");
         assertThat(persistida.getBeneficios()).isEqualTo("Transporte");
         assertThat(persistida.getTipoContrato()).isEqualTo("Temporário");
-        assertThat(persistida.getArea().getNome()).isEqualTo("Música");
+        assertThat(persistida.getArea().getNome()).isEqualTo("Artes Cênicas");
         assertThat(persistida.getExperiencia()).isEqualTo("Pleno");
         assertThat(persistida.getDataLimiteCandidatura()).isEqualTo(LocalDate.of(2030, 12, 20));
         assertThat(persistida.getAbrangencia()).isEqualTo(com.portifolio.model.enums.Abrangencia.NACIONAL);
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusVaga.class, names = {"PAUSADA", "ENCERRADA", "CANCELADA"})
-    void edicaoDeDetalhesNaoDeveInventarRestricaoPorStatus(StatusVaga statusOriginal) throws Exception {
+    @EnumSource(value = StatusVaga.class, names = {"RASCUNHO", "PAUSADA"})
+    void edicaoPermitidaPreservaStatus(StatusVaga statusOriginal) throws Exception {
         Usuario dono = criarUsuario("status-" + statusOriginal + "@teste.com", TipoUsuario.CONTRATANTE);
         Vaga vaga = criarVaga(criarContratante(dono), statusOriginal);
         ObjectNode payload = payloadValido();
@@ -170,6 +169,16 @@ class VagaEdicaoRf07IntegrationTest {
         editar(vaga.getId(), dono, payload)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(statusOriginal.name()));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StatusVaga.class, names = {"ENCERRADA", "CANCELADA"})
+    void edicaoBloqueadaPreservaConteudo(StatusVaga statusOriginal) throws Exception {
+        Usuario dono = criarUsuario("imutavel-" + statusOriginal + "@teste.com", TipoUsuario.CONTRATANTE);
+        Vaga vaga = criarVaga(criarContratante(dono), statusOriginal);
+        editar(vaga.getId(), dono, payloadValido())
+                .andExpect(status().isUnprocessableEntity());
+        assertThat(vagaRepository.findById(vaga.getId()).orElseThrow().getTitulo()).isEqualTo("Original");
     }
 
     @Test
@@ -350,7 +359,7 @@ class VagaEdicaoRf07IntegrationTest {
     }
 
     private Usuario criarUsuario(String email, TipoUsuario tipo) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Usuário RF07");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
@@ -358,12 +367,15 @@ class VagaEdicaoRf07IntegrationTest {
         usuario.setSenha("{noop}senha-teste");
         usuario.setTipoUsuario(tipo);
         usuario.setPerfilCompleto(tipo == TipoUsuario.ARTISTA);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }
 
     private PerfilContratante criarContratante(Usuario usuario) {
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(usuario);
         perfil.setNomeEmpresa("Empresa RF07");
         return perfilContratanteRepository.save(perfil);

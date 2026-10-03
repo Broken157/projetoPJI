@@ -28,6 +28,8 @@ public class VagaResponse {
     private String formaPagamento;
     private String cidade;
     private String estado;
+    @com.fasterxml.jackson.annotation.JsonInclude(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     private String enderecoCompleto;
     private String beneficios;
     private ModeloTrabalho modeloTrabalho;

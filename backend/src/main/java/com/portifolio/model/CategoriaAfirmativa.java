@@ -1,20 +1,19 @@
 package com.portifolio.model;
 
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.NoArgsConstructor;
-import java.util.*;
-import java.time.*;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.portifolio.model.enums.*;
+import com.portifolio.model.enums.DatabaseEnum;
 
-@Entity
-@Table(name = "categorias_afirmativas")
-@Getter @Setter @NoArgsConstructor
-public class CategoriaAfirmativa {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
-    @Column(nullable = false, unique = true, length = 100)
-    private String nome;
+/** Valores exatos de categoria_afirmativa_enum; IDs estaveis do catalogo da API. */
+public enum CategoriaAfirmativa implements DatabaseEnum {
+    MULHER(1, "Mulheres"),
+    ETNICO_RACIAL(2, "Étnico-racial"),
+    PCD(3, "Pessoas com deficiência"),
+    LGBTQIA(4, "LGBTQIA+");
+
+    private final Integer id;
+    private final String nome;
+
+    CategoriaAfirmativa(Integer id, String nome) { this.id = id; this.nome = nome; }
+    public Integer getId() { return id; }
+    public String getNome() { return nome; }
+    @Override public String getDatabaseValue() { return name(); }
 }

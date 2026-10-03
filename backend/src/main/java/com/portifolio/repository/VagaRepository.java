@@ -58,10 +58,12 @@ public interface VagaRepository extends JpaRepository<Vaga, Long>, JpaSpecificat
     // RNF05: carrega funcoes (ManyToMany) e contratante junto, evitando N+1.
     // Usado APÓS a paginação (conjunto de IDs já delimitado) — nunca combine
     // fetch join de coleção com LIMIT/OFFSET na mesma query.
+    @EntityGraph(attributePaths = {"funcoes", "contratante", "contratante.usuario", "area"})
     List<Vaga> findByIdIn(List<Long> ids);
 
     // RF05: uma única vaga detalhada pode carregar funcoes e dados públicos do
     // contratante juntos; fotos permanecem em consulta própria dentro da transação.
+    @EntityGraph(attributePaths = {"contratante", "contratante.usuario", "area"})
     @Query("select v from Vaga v where v.id = :id")
     Optional<Vaga> findDetalhesById(@Param("id") Long id);
 

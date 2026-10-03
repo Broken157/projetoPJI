@@ -54,8 +54,7 @@ class VagaDetalhesRf05IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -487,7 +486,7 @@ class VagaDetalhesRf05IntegrationTest {
     }
 
     private Usuario novoUsuario(String email, TipoUsuario tipo, boolean completo) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome(tipo == TipoUsuario.ARTISTA ? "Artista RF05" : "Contratante RF05");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
@@ -495,6 +494,8 @@ class VagaDetalhesRf05IntegrationTest {
         usuario.setSenha("hash-privado");
         usuario.setTipoUsuario(tipo);
         usuario.setPerfilCompleto(completo);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }

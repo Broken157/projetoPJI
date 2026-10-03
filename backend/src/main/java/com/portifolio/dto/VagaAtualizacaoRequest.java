@@ -28,7 +28,7 @@ public class VagaAtualizacaoRequest {
     @NotBlank(message = "Descrição é obrigatória")
     private String descricao;
 
-    @NotBlank(message = "Requisitos são obrigatórios")
+    // RF04 não exige um campo separado; o serviço grava texto vazio quando omitido.
     private String requisitos;
 
     @DecimalMin(value = "0.00", message = "Remuneração não pode ser negativa")
@@ -40,9 +40,11 @@ public class VagaAtualizacaoRequest {
     @DecimalMin("0.00") @Digits(integer = 8, fraction = 2)
     private BigDecimal valorMaximo;
 
+    @NotNull(message = "Área artística é obrigatória")
     @Positive
     private Short areaId;
 
+    @NotNull(message = "Forma de remuneração é obrigatória")
     private com.portifolio.model.enums.FormaRemuneracao formaRemuneracao;
 
     @NotBlank(message = "Cidade é obrigatória")
@@ -57,7 +59,7 @@ public class VagaAtualizacaoRequest {
     private String enderecoCompleto;
     private String beneficios;
 
-    @NotNull(message = "Modelo de trabalho é obrigatório")
+    // Rascunho pode omitir modalidade; publicação valida este campo no serviço.
     private ModeloTrabalho modeloTrabalho;
 
     @NotBlank(message = "Tipo de contrato é obrigatório")
@@ -72,12 +74,14 @@ public class VagaAtualizacaoRequest {
     private Set<@NotNull @Positive Long> especializacaoIds;
 
     private Set<@NotNull @Positive Integer> categoriaAfirmativaIds;
+    private Boolean afirmativa;
 
     @Size(max = 100, message = "Experiência deve ter no máximo 100 caracteres")
     private String experiencia;
 
     private LocalDate dataLimiteCandidatura;
 
+    @NotNull(message = "Abrangência é obrigatória")
     private com.portifolio.model.enums.Abrangencia abrangencia;
 
     private List<@Size(max = 500, message = "URL da foto deve ter no máximo 500 caracteres") String> fotos;

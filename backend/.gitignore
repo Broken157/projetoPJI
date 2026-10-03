@@ -1,5 +1,8 @@
 HELP.md
 target/
+target-maven/
+.env.database02.local.ps1
+.env.database04.local.ps1
 /storage/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/

@@ -48,28 +48,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(OutputCaptureExtension.class)
 class RecuperacaoSenhaRf09IntegrationTest {
 
-    private static final String CONSTRAINT_ROLLBACK = "rf09_forcar_rollback_refresh";
     private static final String SENHA_ANTIGA = "Antiga@2026";
     private static final String SENHA_NOVA = "Nova@2026";
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
     @Autowired UsuarioRepository usuarioRepository;
     @Autowired BCryptPasswordEncoder passwordEncoder;
     @Autowired JdbcTemplate jdbcTemplate;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    com.portifolio.repository.RefreshTokenRepository refreshTokenRepository;
     @Autowired CapturingEmailSender emailSender;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @AfterEach
     void limparBanco() {
-        jdbcTemplate.execute("ALTER TABLE refresh_tokens DROP CONSTRAINT IF EXISTS "
-                + CONSTRAINT_ROLLBACK);
         jdbcTemplate.execute("TRUNCATE refresh_tokens, perfis_artistas, perfis_contratantes, "
                 + "usuarios RESTART IDENTITY CASCADE");
         emailSender.limpar();
@@ -281,13 +279,11 @@ class RecuperacaoSenhaRf09IntegrationTest {
         login(usuario.getEmail(), SENHA_ANTIGA, true).andExpect(status().isOk());
         solicitar(usuario.getEmail());
         String token = emailSender.ultimoToken;
-        jdbcTemplate.execute("ALTER TABLE refresh_tokens ADD CONSTRAINT "
-                + CONSTRAINT_ROLLBACK + " CHECK (ativo = true)");
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("Falha de revogacao simulada"))
+                .when(refreshTokenRepository).invalidarTodosPorUsuario(usuario.getId());
 
         redefinir(token, SENHA_NOVA).andExpect(status().isConflict());
 
-        jdbcTemplate.execute("ALTER TABLE refresh_tokens DROP CONSTRAINT "
-                + CONSTRAINT_ROLLBACK);
         Usuario persistido = usuarioRepository.findById(usuario.getId()).orElseThrow();
         assertThat(passwordEncoder.matches(SENHA_ANTIGA, persistido.getSenha())).isTrue();
         assertThat(persistido.getTokenRecuperacao()).isEqualTo(hash(token));
@@ -366,13 +362,15 @@ class RecuperacaoSenhaRf09IntegrationTest {
     }
 
     private Usuario usuarioBase(String email) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Usuário RF09");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
         usuario.setEmail(email);
         usuario.setTipoUsuario(TipoUsuario.ARTISTA);
         usuario.setPerfilCompleto(true);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuario;
     }

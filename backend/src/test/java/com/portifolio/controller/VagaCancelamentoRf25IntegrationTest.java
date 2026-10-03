@@ -79,8 +79,7 @@ class VagaCancelamentoRf25IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -130,6 +129,35 @@ class VagaCancelamentoRf25IntegrationTest {
         assertThat(candidaturaRepository.findById(candidatura.getId()).orElseThrow().getStatus())
                 .isEqualTo(StatusCandidatura.EM_ANALISE);
         assertThat(quantidadeLogs(vaga)).isZero();
+    }
+
+    @Test
+    void somenteRascunhoDoDonoPodeSerExcluidoFisicamenteSemMotivo() throws Exception {
+        PerfilContratante dono = novoContratante("dono-rascunho@rf28.test");
+        PerfilContratante outro = novoContratante("outro-rascunho@rf28.test");
+        Vaga rascunho = novaVaga(dono, StatusVaga.RASCUNHO);
+        mockMvc.perform(delete("/api/vagas/{id}", rascunho.getId())
+                        .header("Authorization", bearer(outro.getUsuario())))
+                .andExpect(status().isForbidden());
+        assertThat(vagaRepository.existsById(rascunho.getId())).isTrue();
+        mockMvc.perform(delete("/api/vagas/{id}", rascunho.getId())
+                        .header("Authorization", bearer(dono.getUsuario())))
+                .andExpect(status().isNoContent());
+        assertThat(vagaRepository.existsById(rascunho.getId())).isFalse();
+        assertThat(logRepository.count()).isZero();
+    }
+
+    @Test
+    void rascunhoNaoVazaMesmoSeHouverCandidaturaHistoricaInconsistente() throws Exception {
+        PerfilContratante dono = novoContratante("dono-privado@rf28.test");
+        PerfilArtista artista = novoArtista("artista-privado@rf28.test");
+        Vaga rascunho = novaVaga(dono, StatusVaga.RASCUNHO);
+        novaCandidatura(rascunho, artista, StatusCandidatura.PENDENTE);
+        detalhar(rascunho, artista.getUsuario()).andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/vagas/{id}", rascunho.getId())
+                        .header("Authorization", bearer(dono.getUsuario())))
+                .andExpect(status().isUnprocessableEntity());
+        assertThat(vagaRepository.existsById(rascunho.getId())).isTrue();
     }
 
     @ParameterizedTest
@@ -243,11 +271,12 @@ class VagaCancelamentoRf25IntegrationTest {
     }
 
     @Test
-    void todosOsStatusDeCandidaturaDevemVirarCanceladaPorVagaSemPerderHistorico()
+    void somenteCandidaturasAtivasViraramCanceladaPorVagaSemPerderHistorico()
             throws Exception {
         PerfilContratante dono = novoContratante("status-candidaturas@rf25.test");
         Vaga vaga = novaVaga(dono, StatusVaga.ABERTA);
         Map<Long, Long> vagasOriginais = new LinkedHashMap<>();
+        Map<Long, StatusCandidatura> statusOriginais = new LinkedHashMap<>();
         int indice = 0;
         for (StatusCandidatura statusInicial : StatusCandidatura.values()) {
             Candidatura candidatura = novaCandidatura(
@@ -255,6 +284,7 @@ class VagaCancelamentoRf25IntegrationTest {
                     novoArtista("status-" + indice++ + "@rf25.test"),
                     statusInicial);
             vagasOriginais.put(candidatura.getId(), vaga.getId());
+            statusOriginais.put(candidatura.getId(), statusInicial);
         }
 
         cancelar(vaga, dono.getUsuario()).andExpect(status().isNoContent());
@@ -264,7 +294,10 @@ class VagaCancelamentoRf25IntegrationTest {
         assertThat(persistidas).allSatisfy(candidatura -> {
             assertThat(candidatura.getId()).isIn(vagasOriginais.keySet());
             assertThat(candidatura.getVaga().getId()).isEqualTo(vagasOriginais.get(candidatura.getId()));
-            assertThat(candidatura.getStatus()).isEqualTo(StatusCandidatura.CANCELADA_POR_VAGA);
+            StatusCandidatura anterior = statusOriginais.get(candidatura.getId());
+            assertThat(candidatura.getStatus()).isEqualTo(
+                    anterior == StatusCandidatura.PENDENTE || anterior == StatusCandidatura.EM_ANALISE
+                            ? StatusCandidatura.CANCELADA_POR_VAGA : anterior);
         });
         assertThat(jdbcTemplate.queryForObject(
                 "select count(*) from candidaturas where vaga_id = ?",
@@ -569,6 +602,7 @@ class VagaCancelamentoRf25IntegrationTest {
     private PerfilContratante novoContratante(String email) {
         Usuario usuario = novoUsuario(email, TipoUsuario.CONTRATANTE, false);
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(usuario);
         perfil.setNomeEmpresa("Empresa RF25");
         return perfilContratanteRepository.save(perfil);
@@ -588,7 +622,7 @@ class VagaCancelamentoRf25IntegrationTest {
     }
 
     private Usuario novoUsuario(String email, TipoUsuario tipo, boolean perfilCompleto) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome(tipo == TipoUsuario.ARTISTA ? "Artista RF25" : "Contratante RF25");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
@@ -596,6 +630,8 @@ class VagaCancelamentoRf25IntegrationTest {
         usuario.setSenha("hash-teste");
         usuario.setTipoUsuario(tipo);
         usuario.setPerfilCompleto(perfilCompleto);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }

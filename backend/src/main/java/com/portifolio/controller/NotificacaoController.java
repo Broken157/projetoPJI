@@ -3,13 +3,13 @@ package com.portifolio.controller;
 import com.portifolio.dto.NotificacaoNaoLidaCountResponse;
 import com.portifolio.dto.NotificacaoPaginaResponse;
 import com.portifolio.exception.ResourceNotFoundException;
-import com.portifolio.model.Usuario;
 import com.portifolio.realtime.NotificacaoSseService;
-import com.portifolio.security.AuthenticatedUserResolver;
 import com.portifolio.service.NotificacaoService;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,7 +25,7 @@ public class NotificacaoController {
 
     private final NotificacaoService notificacaoService;
     private final NotificacaoSseService sseService;
-    private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final JdbcTemplate jdbcTemplate;
 
     @GetMapping
     public ResponseEntity<NotificacaoPaginaResponse> listar(
@@ -53,10 +53,16 @@ public class NotificacaoController {
     }
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream() {
-        Usuario usuario = authenticatedUserResolver.usuarioAtual()
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Usuario autenticado nao encontrado."));
-        return sseService.conectar(usuario.getId());
+    public SseEmitter stream(Principal principal) {
+        // A short scalar read avoids retaining an OSIV EntityManager/connection for the SSE lifetime.
+        // The principal is established by the unchanged JWT filter, never supplied in the request body.
+        Long usuarioId = principal == null ? null : jdbcTemplate.query(
+                "select id from usuarios where email = ?",
+                result -> result.next() ? result.getLong("id") : null,
+                principal.getName());
+        if (usuarioId == null) {
+            throw new ResourceNotFoundException("Usuario autenticado nao encontrado.");
+        }
+        return sseService.conectar(usuarioId);
     }
 }

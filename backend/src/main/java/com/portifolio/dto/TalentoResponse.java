@@ -13,6 +13,8 @@ public class TalentoResponse {
     private String avatarUrl;
     private String biografia;
     private String localizacao;
+    private String cidade;
+    private String estado;
     private String urlPortfolio;
     private String tipoPerfilArtistico;
     private String raioAtuacao;

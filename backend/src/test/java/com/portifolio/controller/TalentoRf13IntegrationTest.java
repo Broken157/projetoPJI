@@ -27,8 +27,7 @@ import org.testcontainers.junit.jupiter.*;
 @Testcontainers @SpringBootTest @AutoConfigureMockMvc
 class TalentoRf13IntegrationTest {
     @Container @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
     @Autowired MockMvc mvc;
     @MockitoSpyBean JdbcTemplate db;
@@ -40,7 +39,7 @@ class TalentoRf13IntegrationTest {
     @BeforeEach void dados() {
         dono = usuario("CONTRATANTE", "ATIVA", true);
         outro = usuario("CONTRATANTE", "ATIVA", true);
-        db.update("insert into perfis_contratantes(usuario_id) values (?),(?)", dono, outro);
+        db.update("insert into perfis_contratantes(usuario_id,tipo_contratante) values (?,'PESSOA_FISICA'),(?,'PESSOA_FISICA')", dono, outro);
         f1 = funcao(1, "Voz"); f2 = funcao(1, "Instrumento"); fOutra = funcao(2, "Desenho");
         e1 = especializacao("Jazz", f1); e2 = especializacao("Popular", f2);
         vaga = vaga(dono, 1, f1, f2);
@@ -81,7 +80,7 @@ class TalentoRf13IntegrationTest {
     }
     @Test void contratanteBloqueadoNaoAcessa() throws Exception {
         db.update("update usuarios set status_conta='BLOQUEADA' where id=?",dono);
-        mvc.perform(req()).andExpect(status().isForbidden());
+        mvc.perform(req()).andExpect(status().isUnauthorized());
     }
     @Test void menoresMesmoAtivosComConsentimentoNaoTemAutorizacaoDeExposicao() throws Exception {
         long id=artista(1,true,f1);
@@ -133,6 +132,7 @@ class TalentoRf13IntegrationTest {
         long doisSpecNovo=artista(1,true,f1,f2); spec(doisSpecNovo,1,e1);
         long empateId=artista(1,true,f1,f2); spec(empateId,1,e1);
         db.update("update perfis_artistas set ultima_atualizacao='2026-01-02' where usuario_id in (?,?)",doisSpecNovo,empateId);
+        marcarCompleto(true, doisSpecNovo, empateId);
         mvc.perform(req().param("vagaId",""+vaga)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[*].artistaId").value(org.hamcrest.Matchers.contains(
                         (int)doisSpecNovo,(int)empateId,(int)doisSpecAntigo,(int)doisSemSpec,(int)um)))
@@ -160,9 +160,11 @@ class TalentoRf13IntegrationTest {
         for(String nivel:List.of("SEM_EXPERIENCIA","INICIANTE","INTERMEDIARIO","EXPERIENTE","ESPECIALISTA")) {
             long id=artista(1,true,f1);
             db.update("update perfil_artista_area set nivel_experiencia=? where perfil_artista_id=?",nivel,id);
+            marcarCompleto(true, id);
         }
         long sem=artista(1,true,f1);
         db.update("update perfil_artista_area set nivel_experiencia=null where perfil_artista_id=?",sem);
+        marcarCompleto(true, sem);
         mvc.perform(req().param("areaId","1").param("experienciaMinima",minimo))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(total));
     }
@@ -178,6 +180,7 @@ class TalentoRf13IntegrationTest {
         long a=artista(1,true,f1),b=artista(1,true,f1); artista(1,true,f1);
         db.update("update perfis_artistas set disponivel_oportunidades=true where usuario_id=?",a);
         db.update("update perfis_artistas set disponivel_oportunidades=false where usuario_id=?",b);
+        marcarCompleto(true, a, b);
         mvc.perform(req().param("disponivel",valor)).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(total));
         mvc.perform(req()).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(3));
     }
@@ -186,13 +189,18 @@ class TalentoRf13IntegrationTest {
         db.update("update perfis_artistas set tipo_perfil_artistico='BANDA',raio_atuacao='REMOTO',disponivel_oportunidades=true where usuario_id=?",a);
         db.update("update perfis_artistas set tipo_perfil_artistico='GRUPO_ARTISTICO',raio_atuacao='NACIONAL',disponivel_oportunidades=true where usuario_id=?",b);
         db.update("update perfis_artistas set tipo_perfil_artistico='BANDA',raio_atuacao='LOCAL',disponivel_oportunidades=true where usuario_id=?",c);
+        marcarCompleto(true, a, b, c);
         mvc.perform(req().param("areaId","1").param("funcaoIds",f1+","+f2).param("tipos","BANDA,GRUPO_ARTISTICO")
                 .param("raios","REMOTO,NACIONAL").param("disponivel","true").param("localizacao","recife"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
     }
     @Test void especializacoesOrECompatibilidadeComFuncaoDoArtista() throws Exception {
         long a=artista(1,true,f1),b=artista(1,true,f2); spec(a,1,e1);spec(b,1,e2);
-        long invalido=artista(1,true,f1);spec(invalido,1,e2);
+        long invalido=artista(1,true,f1);
+        // Database04 nao tem o trigger historico; o filtro da API deve excluir a vinculacao incompativel.
+        spec(invalido,1,e2);
+        assertThat(db.queryForObject("select count(*) from perfil_artista_especializacao where perfil_artista_id=?",
+                Integer.class,invalido)).isEqualTo(1);
         mvc.perform(req().param("areaId","1").param("funcaoIds",f1+","+f2).param("especializacaoIds",e1+","+e2))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
     }
@@ -208,8 +216,40 @@ class TalentoRf13IntegrationTest {
     @Test void localizacaoTextualLiteralNaoInjetaNemInventaCidadeEstado() throws Exception {
         artista(1,true,f1);
         mvc.perform(req().param("localizacao","%' OR 1=1 --")).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
-        mvc.perform(req().param("cidade","Recife")).andExpect(status().isUnprocessableEntity());
-        mvc.perform(req().param("estado","PE")).andExpect(status().isUnprocessableEntity());
+        for (String texto : new String[]{"Recife", "Recife - PE", "Recife/PE", "Recife, PE"})
+            mvc.perform(req().param("localizacao",texto)).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
+        mvc.perform(req().param("cidade","Recife")).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
+        mvc.perform(req().param("estado","PE")).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
+    }
+    @Test void cidadeEstadoCombinadosLiteralmenteEComNormalizacao() throws Exception {
+        long recife = artista(1,true,f1), campinas = artista(1,true,f1), olinda = artista(1,true,f1);
+        db.update("update perfis_artistas set cidade='Campinas',estado='SP' where usuario_id=?",campinas);
+        db.update("update perfis_artistas set cidade='Olinda',estado='PE' where usuario_id=?",olinda);
+        marcarCompleto(true, campinas, olinda);
+        mvc.perform(req().param("cidade"," recife ").param("estado","pe"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].artistaId").value(recife))
+                .andExpect(jsonPath("$.content[0].cidade").value("Recife"))
+                .andExpect(jsonPath("$.content[0].estado").value("PE"))
+                .andExpect(jsonPath("$.content[0].localizacao").value("Recife, PE"));
+        mvc.perform(req().param("estado","PE")).andExpect(jsonPath("$.totalElements").value(2));
+        mvc.perform(req().param("cidade","Campinas").param("estado","PE")).andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(req().param("cidade","Rec")).andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(req().param("cidade","%' OR 1=1 --")).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(req().param("estado","PERNAMBUCO")).andExpect(status().isUnprocessableEntity());
+        mvc.perform(req().param("cidade","a".repeat(101))).andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test void matchingNaoAceitaPesoDeAreaMedalhaOuScoreDoCliente() throws Exception {
+        long secundario = artista(2,true,fOutra); area(secundario,1,false,"INICIANTE",f1,f2); spec(secundario,1,e1); spec(secundario,1,e2);
+        long principal = artista(1,true,f1,f2); spec(principal,1,e1);
+        db.update("update perfis_artistas set ultima_atualizacao='2026-03-01' where usuario_id=?",principal);
+        marcarCompleto(true, principal);
+        mvc.perform(req().param("vagaId",""+vaga).param("scoreEngajamento","999.99").param("nivelMedalha","5"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].artistaId").value(secundario))
+                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").value(2))
+                .andExpect(jsonPath("$.content[0].quantidadeEspecializacoesCoincidentes").value(2))
+                .andExpect(jsonPath("$.content[1].artistaId").value(principal));
     }
     @ParameterizedTest @CsvSource({"size,0","size,51","page,-1","ordenacao,id desc","raios,500","disponivel,talvez","vagaId,-1"})
     void parametrosInvalidos(String nome,String valor) throws Exception {
@@ -232,6 +272,7 @@ class TalentoRf13IntegrationTest {
     @Test void ordenarPorAtualizacaoPermitida() throws Exception {
         long a=artista(1,true,f1,f2),b=artista(1,true,f1);
         db.update("update perfis_artistas set ultima_atualizacao='2026-03-01' where usuario_id=?",b);
+        marcarCompleto(true, b);
         mvc.perform(req().param("vagaId",""+vaga).param("ordenacao","ATUALIZACAO"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].artistaId").value(b));
     }
@@ -242,7 +283,7 @@ class TalentoRf13IntegrationTest {
         mvc.perform(get("/api/perfis/publicos/ARTISTA/"+a)).andExpect(status().isOk());
     }
     @Test void catalogosPaginadosCompativeisESomenteLeitura() throws Exception {
-        mvc.perform(get("/api/talentos/areas").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(2));
+        mvc.perform(get("/api/talentos/areas").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(7));
         mvc.perform(get("/api/talentos/funcoes").param("areaId","1").header("Authorization",token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(2));
         mvc.perform(get("/api/talentos/especializacoes").param("areaId","1").param("funcaoIds",""+f1).header("Authorization",token))
@@ -309,23 +350,36 @@ class TalentoRf13IntegrationTest {
     String bearer(long id) { return "Bearer "+jwt.gerarToken(usuarios.findById(id).orElseThrow()); }
     long usuario(String tipo,String estado,boolean completo) {
         return db.queryForObject("""
-                insert into usuarios(nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta,perfil_completo)
-                values ('Artista profissional','1990-01-01','11999999999',?,'hash-teste',?,?,?) returning id
+                insert into usuarios(username,nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta,perfil_completo)
+                values (('fixture_' || substring(replace(gen_random_uuid()::text,'-','') for 22)),'Artista profissional','1990-01-01','11999999999',?,'hash-teste',?,?,?) returning id
                 """,Long.class,UUID.randomUUID()+"@rf13.test",tipo,estado,completo);
     }
     long artista(int area,boolean completo,long...funcoes) {
         long id=usuario("ARTISTA","ATIVA",completo);
         db.update("""
-                insert into perfis_artistas(usuario_id,biografia,localizacao,url_portfolio,tipo_perfil_artistico,raio_atuacao,ultima_atualizacao)
-                values (?,'Biografia profissional','Recife - PE','https://example.test/portfolio','ARTISTA_SOLO','LOCAL','2026-01-01')
+                insert into perfis_artistas(usuario_id,biografia,cidade,estado,url_portfolio,tipo_perfil_artistico,raio_atuacao,ultima_atualizacao)
+                values (?,'Biografia profissional','Recife','PE','https://example.test/portfolio','ARTISTA_SOLO','LOCAL','2026-01-01')
                 """,id);
-        area(id,area,true,"INICIANTE",funcoes); return id;
+        area(id,area,true,"INICIANTE",funcoes);
+        marcarCompleto(completo, id);
+        return id;
     }
     void area(long id,int area,boolean principal,String nivel,long...funcs) {
+        boolean completo = Boolean.TRUE.equals(db.queryForObject(
+                "select perfil_completo from usuarios where id=?", Boolean.class, id));
         db.update("insert into perfil_artista_area(perfil_artista_id,area_id,principal,nivel_experiencia) values (?,?,?,?)",id,area,principal,nivel);
         for(long f:funcs) db.update("insert into perfil_artista_funcao values (?,?,?)",id,area,f);
+        marcarCompleto(completo, id);
     }
-    void spec(long id,int area,long e) { db.update("insert into perfil_artista_especializacao values (?,?,?)",id,area,e); }
+    void spec(long id,int area,long e) {
+        boolean completo = Boolean.TRUE.equals(db.queryForObject(
+                "select perfil_completo from usuarios where id=?", Boolean.class, id));
+        db.update("insert into perfil_artista_especializacao values (?,?,?)",id,area,e);
+        marcarCompleto(completo, id);
+    }
+    void marcarCompleto(boolean completo,long...ids) {
+        for (long id : ids) db.update("update usuarios set perfil_completo=? where id=?",completo,id);
+    }
     long funcao(int area,String nome) { return db.queryForObject("insert into funcoes(area_id,nome) values (?,?) returning id",Long.class,area,nome); }
     long especializacao(String nome,long f) {
         long id=db.queryForObject("insert into especializacoes(nome) values (?) returning id",Long.class,nome);

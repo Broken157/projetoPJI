@@ -6,12 +6,14 @@ import com.portifolio.dto.CandidaturaResponse;
 import com.portifolio.dto.CandidaturaVagaPaginaResponse;
 import com.portifolio.dto.CandidaturaVagaResponse;
 import com.portifolio.event.NotificacaoEvento;
+import com.portifolio.event.AvisoResponsavelCandidaturaEvento;
 import com.portifolio.exception.ConflictException;
 import com.portifolio.exception.ForbiddenException;
 import com.portifolio.exception.ResourceNotFoundException;
 import com.portifolio.exception.UnprocessableEntityException;
 import com.portifolio.model.Candidatura;
 import com.portifolio.model.PerfilArtista;
+import com.portifolio.model.ResponsavelLegal;
 import com.portifolio.model.Funcao;
 import com.portifolio.model.Usuario;
 import com.portifolio.model.Vaga;
@@ -19,11 +21,13 @@ import com.portifolio.model.enums.StatusCandidatura;
 import com.portifolio.model.enums.StatusVaga;
 import com.portifolio.model.enums.TipoNotificacao;
 import com.portifolio.model.enums.TipoUsuario;
+import com.portifolio.model.enums.StatusConta;
 import com.portifolio.repository.CandidaturaRepository;
 import com.portifolio.repository.PerfilArtistaRepository;
 import com.portifolio.repository.VagaRepository;
 import com.portifolio.security.AuthenticatedUserResolver;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +42,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
 
 @Service
 @RequiredArgsConstructor
@@ -47,9 +52,8 @@ public class CandidaturaService {
 
     private static final int TAMANHO_PADRAO = 20;
     private static final int TAMANHO_MAXIMO = 50;
-    private static final Set<StatusCandidatura> STATUS_RETIRAVEIS =
-            EnumSet.of(StatusCandidatura.PENDENTE, StatusCandidatura.EM_ANALISE,
-                    StatusCandidatura.REJEITADA);
+    private static final Set<StatusCandidatura> STATUS_ATIVOS =
+            EnumSet.of(StatusCandidatura.PENDENTE, StatusCandidatura.EM_ANALISE);
 
     private final CandidaturaRepository candidaturaRepository;
     private final VagaRepository vagaRepository;
@@ -59,6 +63,7 @@ public class CandidaturaService {
     private final ApplicationEventPublisher eventPublisher;
     private final NotificacaoPersistenceService notificacaoPersistenceService;
     private final VagaPrazoPolicy vagaPrazoPolicy;
+    private final EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public List<CandidaturaResponse> listarDasMinhasVagas() {
@@ -164,6 +169,7 @@ public class CandidaturaService {
         Usuario usuario = exigirUsuarioAtual();
         exigirTipo(usuario, TipoUsuario.ARTISTA, "Somente artistas podem se candidatar.");
 
+        bloquearPar(request.getVagaId(), usuario.getId());
         Vaga vaga = vagaRepository.findByIdForUpdate(request.getVagaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
         if (vaga.getStatus() != StatusVaga.ABERTA) {
@@ -180,8 +186,16 @@ public class CandidaturaService {
 
         PerfilArtista artista = perfilArtistaRepository.findById(usuario.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Artista não encontrado."));
-        if (candidaturaRepository.existsByVagaIdAndArtistaUsuarioId(vaga.getId(), usuario.getId())) {
-            throw new ConflictException("Já existe candidatura para esta vaga e artista.");
+        List<Candidatura> historico = candidaturaRepository
+                .findByVagaIdAndArtistaUsuarioIdOrderByIdDesc(vaga.getId(), usuario.getId());
+        if (historico.stream().anyMatch(c -> STATUS_ATIVOS.contains(c.getStatus()))) {
+            throw new ConflictException("Você já possui uma candidatura ativa para esta vaga.");
+        }
+        if (historico.size() >= 2) {
+            throw new ConflictException("Limite de recandidatura atingido para esta vaga.");
+        }
+        if (!historico.isEmpty() && historico.getFirst().getStatus() != StatusCandidatura.RETIRADA) {
+            throw new ConflictException("Uma nova candidatura exige retirada anterior.");
         }
 
         Candidatura candidatura = new Candidatura();
@@ -191,23 +205,14 @@ public class CandidaturaService {
         candidatura.setLinkPortfolioCandidatura(request.getLinkPortfolioCandidatura());
         candidatura.setStatus(StatusCandidatura.PENDENTE);
         candidatura.setDataCandidatura(LocalDateTime.now());
-        Candidatura salva;
-        try {
-            salva = candidaturaRepository.saveAndFlush(candidatura);
-        } catch (org.springframework.dao.DataIntegrityViolationException erro) {
-            for (Throwable causa = erro; causa != null; causa = causa.getCause()) {
-                if (causa instanceof org.hibernate.exception.ConstraintViolationException constraint
-                        && "candidatura_unica".equals(constraint.getConstraintName())) {
-                    throw new ConflictException("Já existe candidatura para esta vaga e artista.");
-                }
-            }
-            throw erro;
-        }
-        eventPublisher.publishEvent(new NotificacaoEvento(
+        Candidatura salva = candidaturaRepository.saveAndFlush(candidatura);
+        NotificacaoEvento notificacao = new NotificacaoEvento(
                 Set.of(vaga.getContratante().getUsuarioId()),
                 TipoNotificacao.CANDIDATURA,
                 "Nova candidatura recebida para a vaga \"" + vaga.getTitulo() + "\".",
-                "dashboard-contratante.html"));
+                "dashboard-contratante.html");
+        eventPublisher.publishEvent(notificacao);
+        avisarResponsavelSeMenor(usuario, vaga);
         return toResponse(salva);
     }
 
@@ -224,6 +229,10 @@ public class CandidaturaService {
             if (!ehArtistaProprietario(candidatura, usuario)) {
                 throw new ResourceNotFoundException("Candidatura não encontrada.");
             }
+            bloquearPar(candidatura.getVaga().getId(), usuario.getId());
+            Vaga vaga = vagaRepository.findByIdForUpdate(candidatura.getVaga().getId()).orElseThrow();
+            entityManager.refresh(vaga);
+            entityManager.refresh(candidatura);
             validarVinculosImutaveis(candidatura, request);
             StatusCandidatura destino = exigirStatus(request);
             if (destino != StatusCandidatura.RETIRADA) {
@@ -234,10 +243,8 @@ public class CandidaturaService {
             if (!ehContratanteProprietario(candidatura, usuario)) {
                 throw new ForbiddenException("Somente o proprietário da vaga pode analisar esta candidatura.");
             }
-            validarVinculosImutaveis(candidatura, request);
-            StatusCandidatura destino = exigirStatus(request);
-            validarTransicaoDoContratante(candidatura.getStatus(), destino);
-            candidatura.setStatus(destino);
+            throw new UnprocessableEntityException(
+                    "O fluxo atual não permite análise, aceitação ou rejeição formal de candidatura.");
         }
 
         Candidatura salva = candidaturaRepository.save(candidatura);
@@ -265,6 +272,10 @@ public class CandidaturaService {
         if (!ehArtistaProprietario(candidatura, usuario)) {
             throw new ResourceNotFoundException("Candidatura não encontrada.");
         }
+        bloquearPar(candidatura.getVaga().getId(), usuario.getId());
+        Vaga vaga = vagaRepository.findByIdForUpdate(candidatura.getVaga().getId()).orElseThrow();
+        entityManager.refresh(vaga);
+        entityManager.refresh(candidatura);
         retirar(candidatura);
         candidaturaRepository.save(candidatura);
         notificarAlteracao(candidatura);
@@ -275,13 +286,7 @@ public class CandidaturaService {
         Long destinatario = retirada
                 ? candidatura.getVaga().getContratante().getUsuarioId()
                 : candidatura.getArtista().getUsuarioId();
-        String status = switch (candidatura.getStatus()) {
-            case EM_ANALISE -> "Em análise";
-            case ACEITA -> "Aprovada";
-            case REJEITADA -> "Rejeitada";
-            case RETIRADA -> "Retirada";
-            default -> candidatura.getStatus().name();
-        };
+        String status = "Retirada";
         NotificacaoEvento evento = new NotificacaoEvento(Set.of(destinatario),
                 TipoNotificacao.CANDIDATURA,
                 "Candidatura à vaga \"" + candidatura.getVaga().getTitulo()
@@ -292,23 +297,41 @@ public class CandidaturaService {
     }
 
     private void retirar(Candidatura candidatura) {
-        if (!STATUS_RETIRAVEIS.contains(candidatura.getStatus())) {
+        StatusVaga estadoVaga = candidatura.getVaga().getStatus();
+        if (estadoVaga != StatusVaga.ABERTA && estadoVaga != StatusVaga.PAUSADA) {
+            throw new UnprocessableEntityException(
+                    "A vaga no estado " + estadoVaga + " não permite retirada ativa.");
+        }
+        if (!STATUS_ATIVOS.contains(candidatura.getStatus())) {
             throw transicaoInvalida(candidatura.getStatus(), StatusCandidatura.RETIRADA);
         }
         candidatura.setStatus(StatusCandidatura.RETIRADA);
     }
 
-    private void validarTransicaoDoContratante(StatusCandidatura atual, StatusCandidatura destino) {
-        boolean permitida = switch (atual) {
-            case PENDENTE -> destino == StatusCandidatura.EM_ANALISE
-                    || destino == StatusCandidatura.ACEITA
-                    || destino == StatusCandidatura.REJEITADA;
-            case EM_ANALISE -> destino == StatusCandidatura.ACEITA
-                    || destino == StatusCandidatura.REJEITADA;
-            case ACEITA, REJEITADA, RETIRADA, CANCELADA_POR_VAGA -> false;
-        };
-        if (!permitida) {
-            throw transicaoInvalida(atual, destino);
+    private void bloquearPar(Long vagaId, Long artistaId) {
+        String chave = "rf06:" + vagaId + ":" + artistaId;
+        entityManager.createNativeQuery(
+                        "select pg_advisory_xact_lock(hashtextextended(cast(:chave as text), 0))")
+                .setParameter("chave", chave)
+                .getSingleResult();
+    }
+
+    private void avisarResponsavelSeMenor(Usuario usuario, Vaga vaga) {
+        if (usuario.getDataNascimento() == null
+                || usuario.getStatusConta() != StatusConta.ATIVA) {
+            return;
+        }
+        int idade = Period.between(usuario.getDataNascimento(), vagaPrazoPolicy.hoje()).getYears();
+        if (idade < 14 || idade >= 18) {
+            return;
+        }
+        ResponsavelLegal responsavel = usuario.getResponsavelLegal();
+        if (responsavel != null && responsavel.getDataConsentimento() != null
+                && !Boolean.TRUE.equals(responsavel.getConsentimentoRevogado())
+                && responsavel.getEmailResponsavel() != null
+                && !responsavel.getEmailResponsavel().isBlank()) {
+            eventPublisher.publishEvent(new AvisoResponsavelCandidaturaEvento(
+                    responsavel.getEmailResponsavel(), vaga.getId()));
         }
     }
 

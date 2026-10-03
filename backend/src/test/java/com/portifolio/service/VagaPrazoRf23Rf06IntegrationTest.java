@@ -63,8 +63,7 @@ class VagaPrazoRf23Rf06IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -79,6 +78,7 @@ class VagaPrazoRf23Rf06IntegrationTest {
     @Autowired JwtService jwtService;
 
     @AfterEach
+    @org.junit.jupiter.api.BeforeEach
     void limparBanco() {
         jdbcTemplate.execute("TRUNCATE notificacoes, candidaturas, vagas, perfis_artistas, "
                 + "perfis_contratantes, usuarios RESTART IDENTITY CASCADE");
@@ -265,32 +265,43 @@ class VagaPrazoRf23Rf06IntegrationTest {
     }
 
     private Usuario novoUsuario(String email, TipoUsuario tipo, boolean perfilCompleto) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Pessoa Prazo");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
         usuario.setEmail(email);
         usuario.setSenha("{noop}senha-teste");
         usuario.setTipoUsuario(tipo);
-        usuario.setPerfilCompleto(perfilCompleto);
+        usuario.setPerfilCompleto(false);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }
 
     private PerfilContratante novoContratante(String email) {
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(novoUsuario(email, TipoUsuario.CONTRATANTE, false));
         perfil.setNomeEmpresa("Empresa Prazo");
         return perfilContratanteRepository.save(perfil);
     }
 
     private PerfilArtista novoArtista(String email, boolean perfilCompleto) {
+        Usuario usuario = novoUsuario(email, TipoUsuario.ARTISTA, false);
         PerfilArtista perfil = new PerfilArtista();
         perfil.setTipoPerfilArtistico(com.portifolio.model.enums.TipoPerfilArtistico.ARTISTA_SOLO);
         perfil.setRaioAtuacao(com.portifolio.model.enums.Abrangencia.LOCAL);
-        perfil.setUsuario(novoUsuario(email, TipoUsuario.ARTISTA, perfilCompleto));
+        perfil.setUsuario(usuario);
         perfil.setBiografia("Biografia Prazo");
-        return perfilArtistaRepository.save(perfil);
+        perfil = perfilArtistaRepository.saveAndFlush(perfil);
+        perfil.setUsuario(usuario);
+        if (perfilCompleto) {
+            com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                    jdbcTemplate, perfil.getUsuarioId());
+            perfil.getUsuario().setPerfilCompleto(true);
+        }
+        return perfil;
     }
 
     private Vaga novaVaga(

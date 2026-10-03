@@ -16,6 +16,8 @@ public class PerfilArtistaResponse {
     private String biografia;
     private Boolean disponivelOportunidades;
     private String localizacao;
+    private String cidade;
+    private String estado;
     private String urlPortfolio;
     private Integer nivelMedalha;
     private BigDecimal scoreEngajamento;

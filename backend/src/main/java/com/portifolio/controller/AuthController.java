@@ -3,6 +3,8 @@ package com.portifolio.controller;
 import com.portifolio.dto.*;
 import com.portifolio.service.AuthService;
 import com.portifolio.service.PasswordRecoveryService;
+import com.portifolio.service.EmailVerificationService;
+import com.portifolio.service.GuardianConsentService;
 import com.portifolio.security.SessionCookiePolicy;
 import com.portifolio.security.JwtService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     private final AuthService authService;
     private final PasswordRecoveryService passwordRecoveryService;
+    private final EmailVerificationService emailVerificationService;
+    private final GuardianConsentService guardianConsentService;
     private final SessionCookiePolicy cookies;
     private final JwtService jwtService;
 
@@ -43,6 +47,16 @@ public class AuthController {
         cookies.gravar(response, result.getRefreshToken());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
     }
+    @PostMapping("/google/cadastro")
+    public ResponseEntity<GoogleAuthResponse> concluirCadastroGoogle(@Valid @RequestBody GoogleCadastroRequest request,
+            HttpServletRequest http, HttpServletResponse response) {
+        cookies.validarOrigem(http);
+        GoogleAuthResponse result = authService.concluirCadastroGoogle(request);
+        invalidarCookieAnterior(http);
+        cookies.gravar(response, result.getRefreshToken());
+        return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(result);
+    }
+
     @PostMapping("/refresh")
     public ResponseEntity<RefreshResponse> refresh(HttpServletRequest http, HttpServletResponse response) {
         cookies.validarOrigem(http);
@@ -78,5 +92,38 @@ public class AuthController {
     @PostMapping("/reset-password")
     public ResponseEntity<PasswordRecoveryResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         return ResponseEntity.ok(passwordRecoveryService.redefinir(request));
+    }
+
+    @PostMapping("/confirm-email")
+    public ResponseEntity<PasswordRecoveryResponse> confirmEmail(@Valid @RequestBody ConfirmEmailRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(emailVerificationService.confirmar(request));
+    }
+
+    @PostMapping("/resend-confirmation")
+    public ResponseEntity<PasswordRecoveryResponse> resendConfirmation(
+            @Valid @RequestBody ResendConfirmationRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(emailVerificationService.reenviar(request));
+    }
+
+    @PostMapping("/guardian-invite")
+    public ResponseEntity<GuardianInviteResponse> guardianInvite(@Valid @RequestBody ConfirmEmailRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(guardianConsentService.consultar(request.getToken()));
+    }
+
+    @PostMapping("/guardian-decision")
+    public ResponseEntity<PasswordRecoveryResponse> guardianDecision(
+            @Valid @RequestBody GuardianDecisionRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(guardianConsentService.decidir(request));
+    }
+
+    @PostMapping("/resend-guardian-invite")
+    public ResponseEntity<PasswordRecoveryResponse> resendGuardianInvite(
+            @Valid @RequestBody ResendConfirmationRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(guardianConsentService.reenviar(request));
     }
 }

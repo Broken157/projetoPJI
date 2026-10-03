@@ -27,6 +27,24 @@ public class ApiExceptionHandler {
                 .body(buildError(HttpStatus.NOT_FOUND, ex.getMessage(), List.of()));
     }
 
+    @ExceptionHandler(TokenExpiredException.class)
+    public ResponseEntity<ErroResposta> handleTokenExpired(TokenExpiredException ex) {
+        return ResponseEntity.status(HttpStatus.GONE)
+                .body(buildError(HttpStatus.GONE, ex.getMessage(), List.of()));
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErroResposta> handleTooManyRequests(TooManyRequestsException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(buildError(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), List.of()));
+    }
+
+    @ExceptionHandler(EmailDeliveryUnavailableException.class)
+    public ResponseEntity<ErroResposta> handleEmailDeliveryUnavailable(EmailDeliveryUnavailableException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(buildError(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), List.of()));
+    }
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErroResposta> handleConflict(ConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)

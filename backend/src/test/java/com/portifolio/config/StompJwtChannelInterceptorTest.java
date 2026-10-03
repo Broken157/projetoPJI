@@ -16,6 +16,7 @@ import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 class StompJwtChannelInterceptorTest {
 
@@ -124,6 +125,20 @@ class StompJwtChannelInterceptorTest {
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("revogada");
     }
 
+    @Test
+    void sessaoAbertaPerdeAcessoQuandoContaDeixaDeSerAtiva() {
+        Message<byte[]> mensagem = mensagemAutenticada(
+                StompCommand.SEND, "/app/chat/salas/42/mensagens");
+        interceptor.preSend(mensagem, mock(org.springframework.messaging.MessageChannel.class));
+
+        when(userDetailsService.loadUserByUsername("pessoa@rf24.test", 24L))
+                .thenThrow(new UsernameNotFoundException("Conta sem acesso normal."));
+        assertThatThrownBy(() -> interceptor.preSend(
+                mensagem, mock(org.springframework.messaging.MessageChannel.class)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("sem acesso normal");
+    }
+
     private Message<byte[]> mensagem(StompCommand comando, String authorization) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(comando);
         if (authorization != null) {
@@ -134,10 +149,18 @@ class StompJwtChannelInterceptorTest {
     }
 
     private Message<byte[]> mensagemAutenticada(StompCommand comando, String destino) {
+        when(jwtService.tokenValido("jwt-ativo")).thenReturn(true);
+        when(jwtService.extrairEmail("jwt-ativo")).thenReturn("pessoa@rf24.test");
+        when(jwtService.extrairUsuarioId("jwt-ativo")).thenReturn(24L);
+        when(userDetailsService.loadUserByUsername("pessoa@rf24.test", 24L)).thenReturn(
+                User.withUsername("pessoa@rf24.test").password("x")
+                        .authorities("ROLE_ARTISTA").build());
         StompHeaderAccessor accessor = StompHeaderAccessor.create(comando);
         accessor.setDestination(destino);
         accessor.setUser(new UsernamePasswordAuthenticationToken(
                 "pessoa@rf24.test", null, List.of()));
+        accessor.setSessionAttributes(new java.util.HashMap<>(
+                java.util.Map.of("palco.jwt", "jwt-ativo")));
         accessor.setLeaveMutable(true);
         return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }

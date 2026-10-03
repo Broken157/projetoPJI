@@ -54,8 +54,7 @@ class PerfilEdicaoRf08IntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired MockMvc mockMvc;
@@ -107,6 +106,7 @@ class PerfilEdicaoRf08IntegrationTest {
         perfilArtistaRepository.save(artista);
         LocalDateTime anterior = artista.getUltimaAtualizacao();
         Funcao funcao = novaFuncao("Música");
+        prepararTaxonomiaCompleta(artista, funcao);
 
         mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
                         .header("Authorization", bearer(artista.getUsuario()))
@@ -233,17 +233,29 @@ class PerfilEdicaoRf08IntegrationTest {
     }
 
     @Test
-    void contratanteSemBiografiaOuLocalizacaoFicaIncompleto() throws Exception {
-        PerfilContratante contratante = novoContratante("contratante-incompleto-rf08@teste.com");
+    void contratanteSemBiografiaComLocalizacaoValidaPermaneceCompleto() throws Exception {
+        PerfilContratante contratante = novoContratante("contratante-sem-bio-rf08@teste.com");
         Map<String, Object> payload = perfilContratantePayload(contratante.getUsuarioId(), null);
         payload.put("biografia", null);
         mockMvc.perform(put("/api/perfis-contratantes/{id}", contratante.getUsuarioId())
                         .header("Authorization", bearer(contratante.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
                 .andExpect(status().isOk());
-        assertThat(usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow().getPerfilCompleto()).isFalse();
+        assertThat(perfilContratanteRepository.findById(contratante.getUsuarioId()).orElseThrow().getBiografia()).isNull();
+        assertThat(usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow().getPerfilCompleto()).isTrue();
 
-        payload.put("biografia", "Biografia");
+        mockMvc.perform(put("/api/usuarios/me")
+                        .header("Authorization", bearer(contratante.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(dadosUsuario(contratante.getUsuario()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.perfilCompleto").value(true));
+        assertThat(usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow().getPerfilCompleto()).isTrue();
+    }
+
+    @Test
+    void contratanteSemLocalizacaoMinimaFicaIncompleto() throws Exception {
+        PerfilContratante contratante = novoContratante("contratante-sem-localizacao-rf08@teste.com");
+        Map<String, Object> payload = perfilContratantePayload(contratante.getUsuarioId(), null);
         payload.put("localizacao", "   ");
         mockMvc.perform(put("/api/perfis-contratantes/{id}", contratante.getUsuarioId())
                         .header("Authorization", bearer(contratante.getUsuario()))
@@ -589,17 +601,19 @@ class PerfilEdicaoRf08IntegrationTest {
     @Test
     void contaExclusivamenteGoogleNaoGanhaSenhaLocal() throws Exception {
         PerfilArtista artista = novoArtista("google-rf08@teste.com");
-        artista.getUsuario().setSenha(null);
-        artista.getUsuario().setGoogleId("google-rf08-id");
-        artista.getUsuario().setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
-        artista.getUsuario().setPerfilCompleto(true);
-        usuarioRepository.save(artista.getUsuario());
-        Map<String, Object> payload = dadosUsuario(artista.getUsuario());
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(
+                jdbcTemplate, artista.getUsuarioId());
+        Usuario usuarioGoogle = usuarioRepository.findById(artista.getUsuarioId()).orElseThrow();
+        usuarioGoogle.setSenha(null);
+        usuarioGoogle.setGoogleId("google-rf08-id");
+        usuarioGoogle.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuarioRepository.saveAndFlush(usuarioGoogle);
+        Map<String, Object> payload = dadosUsuario(usuarioGoogle);
         payload.put("senhaAtual", "qualquer");
         payload.put("novaSenha", "NovaSenha456!");
 
         mockMvc.perform(put("/api/usuarios/me")
-                        .header("Authorization", bearer(artista.getUsuario()))
+                        .header("Authorization", bearer(usuarioGoogle))
                         .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
                 .andExpect(status().isUnprocessableEntity());
         assertThat(usuarioRepository.findById(artista.getUsuarioId()).orElseThrow().getSenha()).isNull();
@@ -655,6 +669,7 @@ class PerfilEdicaoRf08IntegrationTest {
     private PerfilContratante novoContratante(String email) {
         Usuario usuario = novoUsuario(email, TipoUsuario.CONTRATANTE);
         PerfilContratante perfil = new PerfilContratante();
+        perfil.setTipoPerfil("PESSOA_FISICA");
         perfil.setUsuario(usuario);
         return perfilContratanteRepository.save(perfil);
     }
@@ -680,14 +695,17 @@ class PerfilEdicaoRf08IntegrationTest {
     }
 
     private Usuario novoUsuario(String email, TipoUsuario tipo) {
-        Usuario usuario = new Usuario();
+        Usuario usuario = com.portifolio.support.OfficialSchemaFixtures.usuario();
         usuario.setNome("Usuário RF08");
         usuario.setDataNascimento(LocalDate.of(1990, 1, 1));
         usuario.setTelefone("11999999999");
         usuario.setEmail(email);
         usuario.setSenha(passwordEncoder.encode("SenhaAtual123!"));
         usuario.setTipoUsuario(tipo);
+        usuario.setCpf(String.format("%011d", Integer.toUnsignedLong(email.hashCode())));
         usuario.setPerfilCompleto(false);
+        usuario.setStatusConta(com.portifolio.model.enums.StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
         usuario.setDataCriacao(LocalDateTime.now());
         return usuarioRepository.save(usuario);
     }
@@ -700,11 +718,40 @@ class PerfilEdicaoRf08IntegrationTest {
     }
 
     private void completarArtista(PerfilArtista artista, Funcao funcao) throws Exception {
+        prepararTaxonomiaCompleta(artista, funcao);
         mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId())
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(perfilArtistaPayload(artista.getUsuarioId(), funcao.getId()))))
                 .andExpect(status().isOk());
+    }
+
+    private void prepararTaxonomiaCompleta(PerfilArtista artista, Funcao funcao) {
+        jdbcTemplate.update("insert into perfil_artista_area(perfil_artista_id,area_id,principal,nivel_experiencia) values (?,1,true,'INICIANTE')", artista.getUsuarioId());
+        jdbcTemplate.update("insert into perfil_artista_funcao(perfil_artista_id,area_id,funcao_id) values (?,1,?)", artista.getUsuarioId(), funcao.getId());
+        Long spec = jdbcTemplate.queryForObject("insert into especializacoes(nome) values (?) returning id", Long.class, "Especialização RF08 " + java.util.UUID.randomUUID());
+        jdbcTemplate.update("insert into funcao_especializacao(funcao_id,especializacao_id) values (?,?)", funcao.getId(), spec);
+        jdbcTemplate.update("insert into perfil_artista_especializacao(perfil_artista_id,area_id,especializacao_id) values (?,1,?)", artista.getUsuarioId(), spec);
+    }
+
+    @Test void localizacaoEstruturadaEPreservacaoDoContratoTextual() throws Exception {
+        var artista = novoArtista("cidade-estado@teste.com"); var funcao = novaFuncao("Voz");
+        prepararTaxonomiaCompleta(artista, funcao);
+        var payload = perfilArtistaPayload(artista.getUsuarioId(), funcao.getId());
+        payload.remove("localizacao"); payload.put("cidade", " Recife "); payload.put("estado", "pe");
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId()).header("Authorization",bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.cidade").value("Recife"))
+                .andExpect(jsonPath("$.estado").value("PE")).andExpect(jsonPath("$.localizacao").value("Recife, PE"));
+        var relido = perfilArtistaRepository.findById(artista.getUsuarioId()).orElseThrow();
+        assertThat(relido.getCidade()).isEqualTo("Recife"); assertThat(relido.getEstado()).isEqualTo("PE");
+        payload.put("localizacao", "Campinas, SP");
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId()).header("Authorization",bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isUnprocessableEntity());
+        payload.remove("cidade"); payload.remove("estado"); payload.put("localizacao", "Recife");
+        mockMvc.perform(put("/api/perfis-artistas/{id}", artista.getUsuarioId()).header("Authorization",bearer(artista.getUsuario()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isUnprocessableEntity());
+        assertThat(perfilArtistaRepository.findById(artista.getUsuarioId()).orElseThrow().getLocalizacao()).isEqualTo("Recife, PE");
     }
 
     private void completarContratante(PerfilContratante contratante, String nomeEmpresa) throws Exception {

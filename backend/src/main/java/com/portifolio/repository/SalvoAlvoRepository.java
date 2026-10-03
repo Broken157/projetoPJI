@@ -19,7 +19,8 @@ public class SalvoAlvoRepository {
         if (legacySchema) return mapear(jdbc.query("select u.id,u.nome,u.foto_perfil,p.localizacao from perfis_artistas p join usuarios u on u.id=p.usuario_id where u.id in (:ids) and u.tipo_usuario='artista' and u.data_nascimento+interval '18 years'<=cast(:hoje as date)",Map.of("ids",ids,"hoje",LocalDate.now()),(r,n)->new Alvo(r.getLong("id"),r.getString("nome"),r.getString("foto_perfil"),r.getString("localizacao"),null,null,true,null)));
         // Mesma política pública do RF10: tipo ARTISTA e maioridade; sem dados privados no DTO.
         var rows = jdbc.query("""
-            select u.id,u.nome,u.foto_perfil_url,p.localizacao,
+            select u.id,u.nome,u.foto_perfil_url,
+                   nullif(concat_ws(', ',nullif(trim(p.cidade),''),nullif(trim(p.estado),'')),'') as localizacao,
                    (select string_agg(f.nome, ', ' order by f.nome,f.id)
                     from perfil_artista_funcao af join funcoes f on f.id=af.funcao_id
                     where af.perfil_artista_id=p.usuario_id) as funcoes
@@ -38,7 +39,8 @@ public class SalvoAlvoRepository {
             select v.id,v.titulo,v.cidade,v.estado,v.status,
                    coalesce(nullif(p.nome_empresa,''),u.nome) as contratante,
                    (upper(v.status::text)='ABERTA' or v.contratante_id=:usuarioId
-                    or exists(select 1 from candidaturas c where c.vaga_id=v.id and c.artista_id=:usuarioId)) as disponivel
+                    or (upper(v.status::text)<>'RASCUNHO'
+                        and exists(select 1 from candidaturas c where c.vaga_id=v.id and c.artista_id=:usuarioId))) as disponivel
             from vagas v join perfis_contratantes p on p.usuario_id=v.contratante_id
             join usuarios u on u.id=p.usuario_id where v.id in (:ids)
             """, Map.of("ids",ids,"usuarioId",usuarioId),

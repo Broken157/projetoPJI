@@ -13,6 +13,7 @@ import com.portifolio.exception.ResourceNotFoundException;
 import com.portifolio.exception.ForbiddenException;
 import com.portifolio.exception.UnprocessableEntityException;
 import com.portifolio.model.Candidatura;
+import com.portifolio.model.Especializacao;
 import com.portifolio.model.LogVagaCancelada;
 import com.portifolio.model.PerfilContratante;
 import com.portifolio.model.Funcao;
@@ -30,6 +31,7 @@ import com.portifolio.repository.VagaRepository;
 import com.portifolio.repository.specification.VagaSpecifications;
 import com.portifolio.security.AuthenticatedUserResolver;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -72,6 +74,7 @@ public class VagaService {
     private final AvatarService avatarService;
     private final ApplicationEventPublisher eventPublisher;
     private final NotificacaoPersistenceService notificacaoPersistenceService;
+    private final VagaPrazoPolicy vagaPrazoPolicy;
 
     // RF03 — Listagem e busca paginada (cursor-based) de vagas ABERTAS. Endpoint público.
     // RF03 Fase 2 — se o artista autenticado tiver candidaturas em vagas CANCELADA,
@@ -81,11 +84,11 @@ public class VagaService {
         validarFiltros(filtro);
         int tamanho = normalizarTamanho(filtro.getSize());
         Usuario usuarioAtual = authenticatedUserResolver.usuarioAtual().orElse(null);
-        Long contratanteAtualId = contratanteAtualId(usuarioAtual);
 
-        Specification<Vaga> spec = Specification
+        Specification<Vaga> filtrosPublicos = Specification
                 .where(VagaSpecifications.comStatus(StatusVaga.ABERTA))
-                .and(VagaSpecifications.idMaiorQue(filtro.getCursor()))
+                .and(VagaSpecifications.prazoAindaValido(vagaPrazoPolicy.hoje()))
+                .and(VagaSpecifications.buscaTituloOuContratante(filtro.getBusca()))
                 .and(VagaSpecifications.tituloContem(filtro.getTitulo()))
                 .and(VagaSpecifications.empresaContem(filtro.getEmpresa()))
                 .and(VagaSpecifications.cidadeIgual(filtro.getCidade()))
@@ -95,15 +98,28 @@ public class VagaService {
                 .and(VagaSpecifications.remuneracaoMinima(filtro.getFaixaSalarialMin()))
                 .and(VagaSpecifications.remuneracaoMaxima(filtro.getFaixaSalarialMax()))
                 .and(VagaSpecifications.areaAtuacaoContem(filtro.getAreaAtuacao()))
-                .and(VagaSpecifications.comAlgumaFuncao(filtro.getFuncaoIds()));
+                .and(VagaSpecifications.areaIgual(filtro.getAreaId()))
+                .and(VagaSpecifications.comAlgumaFuncao(filtro.getFuncaoIds()))
+                .and(VagaSpecifications.comAlgumaEspecializacao(filtro.getEspecializacaoIds()))
+                .and(VagaSpecifications.experienciaIgual(filtro.getExperiencia()))
+                .and(VagaSpecifications.abrangenciaIgual(filtro.getAbrangencia()))
+                .and(VagaSpecifications.formaRemuneracaoIgual(filtro.getFormaRemuneracao()))
+                .and(VagaSpecifications.afirmativa(filtro.getAfirmativa()))
+                .and(VagaSpecifications.comAlgumaCategoriaAfirmativa(
+                        filtro.getCategoriaAfirmativaIds()));
+        Specification<Vaga> spec = filtrosPublicos.and(
+                VagaSpecifications.idMaiorQue(filtro.getCursor()));
 
         Pageable pageable = PageRequest.of(0, tamanho + 1, Sort.by(Sort.Direction.ASC, "id"));
         List<Vaga> bruto = vagaRepository.findAll(spec, pageable).getContent();
+        long totalElements = vagaRepository.count(filtrosPublicos);
 
         boolean hasMore = bruto.size() > tamanho;
         List<Vaga> pagina = hasMore ? bruto.subList(0, tamanho) : bruto;
 
-        List<VagaResponse> content = carregarComFuncoesEContratante(pagina, contratanteAtualId);
+        // O feed e publico mesmo quando o proprietario esta autenticado.
+        // Dados administrativos permanecem no detalhe/gerenciamento da propria vaga.
+        List<VagaResponse> content = carregarComFuncoesEContratante(pagina, null);
         Long nextCursor = hasMore ? pagina.get(pagina.size() - 1).getId() : null;
 
         PaginaCanceladas canceladas = buscarVagasCanceladasParaArtistaLogado(
@@ -111,6 +127,7 @@ public class VagaService {
 
         return VagaListagemResponse.builder()
                 .content(content)
+                .totalElements(totalElements)
                 .nextCursor(nextCursor)
                 .hasMore(hasMore)
                 .vagasCanceladasComCandidatura(canceladas.content())
@@ -150,6 +167,9 @@ public class VagaService {
         int tamanho = normalizarTamanho(size);
         Vaga origem = vagaRepository.findById(vagaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
+        if (origem.getStatus() == StatusVaga.RASCUNHO) {
+            throw new ResourceNotFoundException("Vaga não encontrada.");
+        }
 
         Set<Long> funcaoIds = origem.getFuncoes().stream().map(Funcao::getId).collect(Collectors.toSet());
         if (funcaoIds.isEmpty()) {
@@ -158,6 +178,7 @@ public class VagaService {
 
         Specification<Vaga> spec = Specification
                 .where(VagaSpecifications.comStatus(StatusVaga.ABERTA))
+                .and(VagaSpecifications.prazoAindaValido(vagaPrazoPolicy.hoje()))
                 .and(VagaSpecifications.idMaiorQue(cursor))
                 .and(VagaSpecifications.idDiferente(vagaId))
                 .and(VagaSpecifications.comAlgumaFuncao(funcaoIds));
@@ -166,12 +187,9 @@ public class VagaService {
         List<Vaga> bruto = vagaRepository.findAll(spec, pageable).getContent();
         boolean hasMore = bruto.size() > tamanho;
         List<Vaga> pagina = hasMore ? bruto.subList(0, tamanho) : bruto;
-        Long contratanteAtualId = authenticatedUserResolver.usuarioAtual()
-                .map(this::contratanteAtualId)
-                .orElse(null);
 
         return VagaListagemResponse.builder()
-                .content(carregarComFuncoesEContratante(pagina, contratanteAtualId))
+                .content(carregarComFuncoesEContratante(pagina, null))
                 .nextCursor(hasMore ? pagina.get(pagina.size() - 1).getId() : null)
                 .hasMore(hasMore)
                 .vagasCanceladasComCandidatura(List.of())
@@ -230,7 +248,14 @@ public class VagaService {
     }
 
     private void validarFiltros(VagaBuscaFiltro filtro) {
-        if (legacySchema && ((filtro.getAreaAtuacao()!=null && !filtro.getAreaAtuacao().isBlank()) || (filtro.getFuncaoIds()!=null && !filtro.getFuncaoIds().isEmpty()))) throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: filtros de taxonomia indisponíveis.");
+        if (legacySchema && ((filtro.getAreaAtuacao()!=null && !filtro.getAreaAtuacao().isBlank())
+                || filtro.getAreaId() != null
+                || (filtro.getFuncaoIds()!=null && !filtro.getFuncaoIds().isEmpty())
+                || (filtro.getEspecializacaoIds()!=null && !filtro.getEspecializacaoIds().isEmpty())
+                || filtro.getFormaRemuneracao() != null || filtro.getAbrangencia() != null
+                || filtro.getAfirmativa() != null
+                || (filtro.getCategoriaAfirmativaIds()!=null && !filtro.getCategoriaAfirmativaIds().isEmpty())))
+            throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: filtros de taxonomia indisponíveis.");
         validarCursor(filtro.getCursor(), "Cursor");
         validarCursor(filtro.getCursorCanceladas(), "Cursor de vagas canceladas");
         if (filtro.getFaixaSalarialMin() != null
@@ -253,6 +278,50 @@ public class VagaService {
         if (filtro.getFuncaoIds() != null
                 && filtro.getFuncaoIds().stream().anyMatch(id -> id == null || id <= 0)) {
             throw new IllegalArgumentException("IDs de funcoes devem ser positivos.");
+        }
+        if (filtro.getAreaId() != null && filtro.getAreaId() <= 0) {
+            throw new IllegalArgumentException("ID da área deve ser positivo.");
+        }
+        Set<Long> funcoes = filtro.getFuncaoIds() == null ? Set.of() : filtro.getFuncaoIds();
+        Set<Long> especializacoes = filtro.getEspecializacaoIds() == null
+                ? Set.of() : filtro.getEspecializacaoIds();
+        Set<Integer> categorias = filtro.getCategoriaAfirmativaIds() == null
+                ? Set.of() : filtro.getCategoriaAfirmativaIds();
+        if (especializacoes.stream().anyMatch(id -> id == null || id <= 0)
+                || categorias.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new IllegalArgumentException("IDs de catálogo devem ser positivos.");
+        }
+        if (funcoes.size() > 50 || especializacoes.size() > 50 || categorias.size() > 50) {
+            throw new IllegalArgumentException("Cada filtro de catálogo aceita até 50 IDs.");
+        }
+        Short area = filtro.getAreaId();
+        if (area != null && !areaArtisticaRepository.existsById(area)) {
+            throw new UnprocessableEntityException("Área artística inexistente.");
+        }
+        if (!funcoes.isEmpty()) {
+            long validas = area == null ? funcaoRepository.countByIdIn(funcoes)
+                    : funcaoRepository.countByAreaIdAndIdIn(area, funcoes);
+            if (validas != funcoes.size()) {
+                throw new UnprocessableEntityException(
+                        "Função inexistente ou incompatível com a área.");
+            }
+        }
+        if (!especializacoes.isEmpty()) {
+            long validas = area != null && !funcoes.isEmpty()
+                    ? especializacaoRepository.contarCompativeis(area, funcoes, especializacoes)
+                    : area != null ? especializacaoRepository.contarDaArea(area, especializacoes)
+                    : !funcoes.isEmpty()
+                    ? especializacaoRepository.contarDasFuncoes(funcoes, especializacoes)
+                    : especializacaoRepository.countByIdIn(especializacoes);
+            if (validas != especializacoes.size()) {
+                throw new UnprocessableEntityException(
+                        "Especialização inexistente ou incompatível com área/função.");
+            }
+        }
+        if (!categorias.isEmpty() && (Boolean.FALSE.equals(filtro.getAfirmativa())
+                || categoriaAfirmativaRepository.findAllById(categorias).size() != categorias.size())) {
+            throw new UnprocessableEntityException(
+                    "Categoria afirmativa inexistente ou incompatível com o filtro.");
         }
     }
 
@@ -279,9 +348,13 @@ public class VagaService {
                 && vaga.getContratante().getUsuarioId().equals(usuario.getId());
         Optional<Candidatura> candidaturaDoArtista = usuario != null
                 && usuario.getTipoUsuario() == TipoUsuario.ARTISTA
-                ? candidaturaRepository.findByVagaIdAndArtistaUsuarioId(vaga.getId(), usuario.getId())
+                ? candidaturaRepository.findByVagaIdAndArtistaUsuarioIdOrderByIdDesc(vaga.getId(), usuario.getId())
+                        .stream().findFirst()
                 : Optional.empty();
 
+        if (vaga.getStatus() == StatusVaga.RASCUNHO && !proprietario) {
+            throw new ResourceNotFoundException("Vaga não encontrada.");
+        }
         if (vaga.getStatus() != StatusVaga.ABERTA
                 && !proprietario
                 && candidaturaDoArtista.isEmpty()) {
@@ -302,35 +375,60 @@ public class VagaService {
     @Transactional
     public VagaResponse criar(VagaRequest request) {
         Usuario usuario = exigirContratanteAtual();
-        if (request.getStatus() == StatusVaga.RASCUNHO)
-            throw new UnprocessableEntityException(legacySchema
-                ? "BLOQUEADA POR SCHEMA DO BANCO: o enum instalado não suporta RASCUNHO."
-                : "Rascunhos de vagas ainda não estão habilitados.");
+        StatusVaga statusSolicitado = request.getStatus() == null ? StatusVaga.ABERTA : request.getStatus();
+        if (statusSolicitado != StatusVaga.ABERTA && statusSolicitado != StatusVaga.RASCUNHO) {
+            throw new UnprocessableEntityException("Criação aceita somente ABERTA ou RASCUNHO.");
+        }
+        if (legacySchema && statusSolicitado == StatusVaga.RASCUNHO) {
+            throw new UnprocessableEntityException(
+                    "BLOQUEADA POR SCHEMA DO BANCO: o enum instalado não suporta RASCUNHO.");
+        }
         PerfilContratante contratante = perfilContratanteRepository.findById(usuario.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Contratante não encontrado."));
         Vaga vaga = new Vaga();
         vaga.setContratante(contratante);
         preencherVaga(vaga, request);
         normalizarPublicacao(vaga);
-        vaga.setStatus(StatusVaga.ABERTA);
-        vaga.setDataPublicacao(LocalDateTime.now());
+        validarPrazoInformado(vaga.getDataLimiteCandidatura());
+        if (statusSolicitado == StatusVaga.ABERTA) {
+            validarPublicacao(vaga);
+            vaga.setDataPublicacao(LocalDateTime.now());
+        }
+        vaga.setStatus(statusSolicitado);
         if (legacySchema) {
             Long id = officialLocalVagas.inserir(vaga);
             Vaga persistida = vagaRepository.findById(id).orElseThrow();
             persistida.setFotos(vaga.getFotos());
             return toResponse(vagaRepository.saveAndFlush(persistida));
         }
-        return toResponse(vagaRepository.save(vaga));
+        // O schema oficial valida vaga_especializacao contra vaga_funcao em um
+        // trigger BEFORE INSERT. Hibernate não garante a ordem entre as duas
+        // coleções, então materializamos primeiro a vaga e suas funções e só
+        // depois as especializações, ainda dentro da mesma transação.
+        Set<Especializacao> especializacoes = new HashSet<>(vaga.getEspecializacoes());
+        vaga.setEspecializacoes(new HashSet<>());
+        Vaga salva = vagaRepository.saveAndFlush(vaga);
+        if (!especializacoes.isEmpty()) {
+            salva.setEspecializacoes(especializacoes);
+            vagaRepository.flush();
+        }
+        return toResponse(salva);
     }
 
     @Transactional
     public VagaResponse atualizar(Long id, VagaAtualizacaoRequest request) {
-        Vaga vaga = vagaRepository.findById(id)
+        Vaga vaga = vagaRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
         exigirProprietario(vaga);
         StatusVaga statusAtual = vaga.getStatus();
-        if (statusAtual==StatusVaga.ENCERRADA || statusAtual==StatusVaga.CANCELADA) throw new UnprocessableEntityException("Vagas finalizadas não podem ser editadas.");
+        if (statusAtual != StatusVaga.RASCUNHO && statusAtual != StatusVaga.ABERTA
+                && statusAtual != StatusVaga.PAUSADA) {
+            throw new UnprocessableEntityException("Vaga " + statusAtual + " não pode ser editada.");
+        }
         preencherVaga(vaga, request);
+        normalizarPublicacao(vaga);
+        validarPrazoInformado(vaga.getDataLimiteCandidatura());
+        if (statusAtual != StatusVaga.RASCUNHO) validarPublicacao(vaga);
         vaga.setStatus(statusAtual);
         if (legacySchema) officialLocalVagas.atualizarCampos(vaga);
         return toResponse(vagaRepository.save(vaga));
@@ -338,26 +436,47 @@ public class VagaService {
 
     @Transactional
     public VagaResponse gerenciarStatus(Long id, VagaStatusAcaoRequest request) {
-        Vaga vaga = vagaRepository.findById(id)
+        Vaga vaga = vagaRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
         exigirProprietario(vaga);
 
         String acao = request.getAcao().trim().toUpperCase(Locale.ROOT);
         StatusVaga novoStatus = switch (acao) {
+            case "PUBLICAR" -> exigirTransicao(
+                    vaga.getStatus(), acao, StatusVaga.ABERTA, StatusVaga.RASCUNHO);
             case "SUSPENDER" -> exigirTransicao(
                     vaga.getStatus(), acao, StatusVaga.PAUSADA, StatusVaga.ABERTA);
             case "REABRIR" -> exigirTransicao(
-                    vaga.getStatus(), acao, StatusVaga.ABERTA, StatusVaga.PAUSADA);
+                    vaga.getStatus(), acao, StatusVaga.ABERTA,
+                    StatusVaga.PAUSADA, StatusVaga.ENCERRADA);
             case "ENCERRAR" -> exigirTransicao(
                     vaga.getStatus(), acao, StatusVaga.ENCERRADA,
                     StatusVaga.ABERTA, StatusVaga.PAUSADA);
             default -> throw new IllegalArgumentException(
                     "Ação de gerenciamento inválida: " + acao
-                            + ". Ações aceitas: SUSPENDER, REABRIR e ENCERRAR.");
+                            + ". Ações aceitas: PUBLICAR, SUSPENDER, REABRIR e ENCERRAR.");
         };
 
+        if (novoStatus == StatusVaga.ABERTA) {
+            LocalDate novoPrazo = request.getDataLimiteCandidatura();
+            if (novoPrazo != null) {
+                validarPrazoInformado(novoPrazo);
+                vaga.setDataLimiteCandidatura(novoPrazo);
+            } else if (vagaPrazoPolicy.estaVencida(vaga)) {
+                throw new UnprocessableEntityException(
+                        "Informe nova data limite futura para reabrir ou publicar a vaga.");
+            }
+            normalizarPublicacao(vaga);
+            validarPublicacao(vaga);
+            if (vaga.getStatus() == StatusVaga.RASCUNHO) {
+                vaga.setDataPublicacao(LocalDateTime.now());
+            }
+        } else if (request.getDataLimiteCandidatura() != null) {
+            throw new UnprocessableEntityException("A nova data limite é aceita somente ao publicar ou reabrir.");
+        }
         vaga.setStatus(novoStatus);
         Vaga salva = vagaRepository.save(vaga);
+        if (acao.equals("PUBLICAR")) return toResponse(salva);
         publicarMudancaDeStatus(salva, novoStatus);
         return toResponse(salva);
     }
@@ -365,10 +484,17 @@ public class VagaService {
     @Transactional
     public void deletar(Long id, VagaCancelamentoRequest request) {
         Usuario usuario = exigirContratanteAtual();
-        Vaga vaga = vagaRepository.findById(id)
+        Vaga vaga = vagaRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
         if (!vaga.getContratante().getUsuarioId().equals(usuario.getId())) {
             throw new ForbiddenException("Somente o proprietário pode alterar esta vaga.");
+        }
+        if (vaga.getStatus() == StatusVaga.RASCUNHO) {
+            if (!candidaturaRepository.findByVagaId(id).isEmpty()) {
+                throw new UnprocessableEntityException("Rascunho com candidatura não pode ser excluído.");
+            }
+            vagaRepository.delete(vaga);
+            return;
         }
         if (vaga.getStatus() != StatusVaga.ABERTA && vaga.getStatus() != StatusVaga.PAUSADA) {
             throw new UnprocessableEntityException(
@@ -381,8 +507,12 @@ public class VagaService {
         vagaRepository.save(vaga);
 
         List<Candidatura> candidaturas = candidaturaRepository.findByVagaId(id);
-        candidaturas.forEach(c -> c.setStatus(StatusCandidatura.CANCELADA_POR_VAGA));
-        candidaturaRepository.saveAll(candidaturas);
+        List<Candidatura> ativas = candidaturas.stream()
+                .filter(c -> c.getStatus() == StatusCandidatura.PENDENTE
+                        || c.getStatus() == StatusCandidatura.EM_ANALISE)
+                .toList();
+        ativas.forEach(c -> c.setStatus(StatusCandidatura.CANCELADA_POR_VAGA));
+        candidaturaRepository.saveAll(ativas);
 
         LogVagaCancelada log = new LogVagaCancelada();
         log.setVaga(vaga);
@@ -477,23 +607,44 @@ public class VagaService {
         if (legacySchema) { preencherVagaLocal(vaga,request); return; }
         vaga.setTitulo(request.getTitulo());
         vaga.setDescricao(request.getDescricao());
-        vaga.setRequisitos(request.getRequisitos());
+        vaga.setRequisitos(request.getRequisitos() == null ? "" : request.getRequisitos());
         if (request.getAreaId() == null || request.getAbrangencia() == null || request.getFormaRemuneracao() == null) {
             throw new IllegalArgumentException("Informe areaId, abrangencia e formaRemuneracao do catálogo oficial.");
         }
         boolean mudouArea = vaga.getArea() != null && !vaga.getArea().getId().equals(request.getAreaId());
         vaga.setArea(areaArtisticaRepository.findById(request.getAreaId())
                 .orElseThrow(() -> new ResourceNotFoundException("Área artística não encontrada.")));
-        vaga.setValorMinimo(request.getValorMinimo());
-        vaga.setValorMaximo(request.getValorMaximo());
-        vaga.setFormaRemuneracao(request.getFormaRemuneracao());
-        if (request.getFormaRemuneracao() != com.portifolio.model.enums.FormaRemuneracao.A_COMBINAR
-                && (request.getValorMinimo() == null || request.getValorMaximo() == null
-                || request.getValorMinimo().compareTo(request.getValorMaximo()) > 0)) {
-            throw new IllegalArgumentException("Remuneração exige faixa mínima e máxima válida.");
+        var valorMinimo = request.getValorMinimo();
+        var valorMaximo = request.getValorMaximo();
+
+        if (request.getFormaRemuneracao()
+                != com.portifolio.model.enums.FormaRemuneracao.A_COMBINAR) {
+
+            if (valorMinimo == null) {
+                throw new IllegalArgumentException("Informe o valor da remuneração.");
+            }
+
+            if (valorMaximo == null) {
+                valorMaximo = valorMinimo;
+            }
+
+            if (valorMinimo.compareTo(valorMaximo) > 0) {
+                throw new IllegalArgumentException(
+                        "Remuneração exige faixa mínima e máxima válida.");
+            }
         }
-        vaga.setCidade(request.getCidade());
-        vaga.setEstado(request.getEstado());
+
+        vaga.setValorMinimo(valorMinimo);
+        vaga.setValorMaximo(valorMaximo);
+        vaga.setFormaRemuneracao(request.getFormaRemuneracao());
+
+        if (request.getCidade() == null || request.getCidade().isBlank()
+                || request.getEstado() == null || request.getEstado().isBlank()) {
+            throw new IllegalArgumentException("Cidade e estado são obrigatórios.");
+        }
+
+        vaga.setCidade(request.getCidade().trim());
+        vaga.setEstado(request.getEstado().trim().toUpperCase());
         vaga.setEnderecoCompleto(request.getEnderecoCompleto());
         vaga.setBeneficios(request.getBeneficios());
         vaga.setModeloTrabalho(request.getModeloTrabalho());
@@ -506,32 +657,58 @@ public class VagaService {
                     .filter(url -> url != null && !url.isBlank())
                     .toList()));
         }
-        if (request.getFuncaoIds() != null) {
-            vaga.setFuncoes(resolverFuncoes(request.getFuncaoIds()));
-        } else if (mudouArea) {
-            vaga.setFuncoes(new HashSet<>());
-        }
-        if (vaga.getFuncoes().stream().anyMatch(funcao -> !funcao.getArea().getId().equals(vaga.getArea().getId()))) {
+        Set<Funcao> funcoesDesejadas = request.getFuncaoIds() != null
+                ? resolverFuncoes(request.getFuncaoIds())
+                : mudouArea ? new HashSet<>() : new HashSet<>(vaga.getFuncoes());
+        if (funcoesDesejadas.stream().anyMatch(
+                funcao -> !funcao.getArea().getId().equals(vaga.getArea().getId()))) {
             throw new IllegalArgumentException("As funções devem pertencer à área da vaga.");
         }
-        Set<Long> compativeis = vaga.getFuncoes().stream()
+        Set<Long> compativeis = funcoesDesejadas.stream()
                 .flatMap(funcao -> funcao.getEspecializacoes().stream())
                 .map(com.portifolio.model.Especializacao::getId).collect(Collectors.toSet());
+        Set<Especializacao> especializacoesDesejadas;
         if (request.getEspecializacaoIds() != null) {
             if (!compativeis.containsAll(request.getEspecializacaoIds())) {
                 throw new IllegalArgumentException("As especializações devem pertencer às funções selecionadas da vaga.");
             }
-            vaga.setEspecializacoes(new HashSet<>(especializacaoRepository.findAllById(request.getEspecializacaoIds())));
+            especializacoesDesejadas = new HashSet<>(
+                    especializacaoRepository.findAllById(request.getEspecializacaoIds()));
         } else {
             // Edição legada preserva seleções válidas e remove apenas as que ficaram órfãs.
-            vaga.getEspecializacoes().removeIf(especializacao -> !compativeis.contains(especializacao.getId()));
+            especializacoesDesejadas = vaga.getEspecializacoes().stream()
+                    .filter(especializacao -> compativeis.contains(especializacao.getId()))
+                    .collect(Collectors.toSet());
+        }
+        if (vaga.getId() == null) {
+            vaga.setFuncoes(funcoesDesejadas);
+            vaga.setEspecializacoes(especializacoesDesejadas);
+        } else {
+            sincronizarTaxonomiaIncremental(vaga, funcoesDesejadas, especializacoesDesejadas);
         }
         if (request.getCategoriaAfirmativaIds() != null) {
+            if (request.getCategoriaAfirmativaIds().size() > 1) {
+                throw new UnprocessableEntityException(
+                        "Limitação estrutural do database04 frente ao RF04 revisado: "
+                        + "a vaga aceita somente uma categoria afirmativa; nenhuma seleção foi descartada.");
+            }
             var categorias = categoriaAfirmativaRepository.findAllById(request.getCategoriaAfirmativaIds());
             if (categorias.size() != request.getCategoriaAfirmativaIds().size()) {
-                throw new ResourceNotFoundException("Categoria afirmativa não encontrada.");
+                throw new UnprocessableEntityException(
+                        "Categoria afirmativa não representável no enum oficial do database04. "
+                        + "Consulte o catálogo atual; 50+ depende de evolução do banco.");
             }
             vaga.setCategoriasAfirmativas(new HashSet<>(categorias));
+        }
+        if (Boolean.TRUE.equals(request.getAfirmativa())
+                && vaga.getCategoriasAfirmativas().isEmpty()) {
+            throw new UnprocessableEntityException(
+                    "Selecione ao menos uma categoria para a vaga afirmativa.");
+        }
+        if (Boolean.FALSE.equals(request.getAfirmativa())
+                && !vaga.getCategoriasAfirmativas().isEmpty()) {
+            throw new UnprocessableEntityException(
+                    "Vaga não afirmativa não pode ter categorias afirmativas.");
         }
     }
 
@@ -541,6 +718,56 @@ public class VagaService {
             throw new ResourceNotFoundException("Uma ou mais funcoes não foram encontradas.");
         }
         return new HashSet<>(funcoes);
+    }
+
+    private void sincronizarTaxonomiaIncremental(
+            Vaga vaga,
+            Set<Funcao> funcoesDesejadas,
+            Set<Especializacao> especializacoesDesejadas) {
+        Set<Long> funcaoIdsAtuais = vaga.getFuncoes().stream()
+                .map(Funcao::getId)
+                .collect(Collectors.toSet());
+        List<Funcao> funcoesAdicionadas = funcoesDesejadas.stream()
+                .filter(funcao -> !funcaoIdsAtuais.contains(funcao.getId()))
+                .toList();
+        if (!funcoesAdicionadas.isEmpty()) {
+            vaga.getFuncoes().addAll(funcoesAdicionadas);
+            // O trigger de compatibilidade das especializações precisa enxergar
+            // as novas funções antes da próxima etapa.
+            vagaRepository.flush();
+        }
+
+        Set<Long> especializacaoIdsDesejadas = especializacoesDesejadas.stream()
+                .map(Especializacao::getId)
+                .collect(Collectors.toSet());
+        boolean alterouEspecializacoes = vaga.getEspecializacoes().removeIf(
+                especializacao -> !especializacaoIdsDesejadas.contains(especializacao.getId()));
+        Set<Long> especializacaoIdsAtuais = vaga.getEspecializacoes().stream()
+                .map(Especializacao::getId)
+                .collect(Collectors.toSet());
+        List<Especializacao> especializacoesAdicionadas = especializacoesDesejadas.stream()
+                .filter(especializacao -> !especializacaoIdsAtuais.contains(especializacao.getId()))
+                .toList();
+        if (!especializacoesAdicionadas.isEmpty()) {
+            vaga.getEspecializacoes().addAll(especializacoesAdicionadas);
+            alterouEspecializacoes = true;
+        }
+        if (alterouEspecializacoes) {
+            // Remove as especializações realmente órfãs e materializa as novas
+            // antes de retirar qualquer função antiga.
+            vagaRepository.flush();
+        }
+
+        Set<Long> funcaoIdsDesejadas = funcoesDesejadas.stream()
+                .map(Funcao::getId)
+                .collect(Collectors.toSet());
+        boolean removeuFuncoes = vaga.getFuncoes().removeIf(
+                funcao -> !funcaoIdsDesejadas.contains(funcao.getId()));
+        if (removeuFuncoes) {
+            // Como a coleção gerenciada é alterada por diferença, vínculos
+            // mantidos nunca desaparecem no estado intermediário visto pelo trigger.
+            vagaRepository.flush();
+        }
     }
 
     private StatusVaga exigirTransicao(
@@ -559,17 +786,29 @@ public class VagaService {
         return switch (status) {
             case ABERTA -> "SUSPENDER ou ENCERRAR";
             case PAUSADA -> "REABRIR ou ENCERRAR";
-            case RASCUNHO -> "nenhuma neste fluxo; publicação de rascunhos pendente de RF04";
-            case ENCERRADA, CANCELADA -> "nenhuma; este é um estado final";
+            case RASCUNHO -> "PUBLICAR";
+            case ENCERRADA -> "REABRIR";
+            case CANCELADA -> "nenhuma; este é um estado final";
         };
+    }
+
+    private void validarPublicacao(Vaga vaga) {
+        if (vaga.getModeloTrabalho() == null) {
+            throw new UnprocessableEntityException("Modelo de trabalho é obrigatório para publicar.");
+        }
+        validarPrazoInformado(vaga.getDataLimiteCandidatura());
+    }
+
+    private void validarPrazoInformado(LocalDate prazo) {
+        if (vagaPrazoPolicy.estaVencida(prazo)) {
+            throw new UnprocessableEntityException("Data limite deve ser futura.");
+        }
     }
 
     private void normalizarPublicacao(Vaga vaga) {
         vaga.setTitulo(vaga.getTitulo().trim());
         vaga.setDescricao(vaga.getDescricao().trim());
         vaga.setRequisitos(vaga.getRequisitos().trim());
-        vaga.setCidade(vaga.getCidade().trim());
-        vaga.setEstado(vaga.getEstado().trim().toUpperCase(Locale.ROOT));
         vaga.setTipoContrato(vaga.getTipoContrato().trim());
         vaga.setEnderecoCompleto(normalizarOpcional(vaga.getEnderecoCompleto()));
         vaga.setBeneficios(normalizarOpcional(vaga.getBeneficios()));
@@ -653,7 +892,11 @@ public class VagaService {
                 .experiencia(vaga.getExperiencia())
                 .dataLimiteCandidatura(vaga.getDataLimiteCandidatura())
                 .abrangencia(legacySchema?vaga.getLegacyAbrangencia():vaga.getAbrangencia() == null ? null : vaga.getAbrangencia().name())
-                .fotos(List.copyOf(vaga.getFotos()))
+                .fotos(vaga.getFotos() == null
+                     ? List.of()
+                      : vaga.getFotos().stream()
+                .filter(java.util.Objects::nonNull)
+                .toList())
                 .propriaDoContratante(contratanteAtualId != null
                         && contratanteAtualId.equals(vaga.getContratante().getUsuarioId()))
                 .cancelada(cancelada)
@@ -705,7 +948,7 @@ public class VagaService {
         if (r.getValorMaximo()!=null && r.getValorMinimo().compareTo(r.getValorMaximo())!=0) throw new UnprocessableEntityException("O banco suporta remuneração única, sem faixa.");
         vaga.setTitulo(r.getTitulo()); vaga.setDescricao(r.getDescricao()); vaga.setRequisitos(r.getRequisitos());
         vaga.setValorMinimo(r.getValorMinimo()); vaga.setLegacyFormaPagamento(r.getFormaPagamento()); vaga.setLegacyCategoria(r.getCategoria());
-        vaga.setCidade(r.getCidade()); vaga.setEstado(r.getEstado().toUpperCase(java.util.Locale.ROOT)); vaga.setEnderecoCompleto(r.getEnderecoCompleto());
+        vaga.setCidade(r.getCidade()); vaga.setEstado(r.getEstado()); vaga.setEnderecoCompleto(r.getEnderecoCompleto());
         vaga.setBeneficios(r.getBeneficios()); vaga.setModeloTrabalho(r.getModeloTrabalho()); vaga.setTipoContrato(r.getTipoContrato());
         vaga.setExperiencia(r.getExperiencia()); vaga.setDataLimiteCandidatura(r.getDataLimiteCandidatura());
         if(r.getAbrangencia()!=null) vaga.setLegacyAbrangencia(r.getAbrangencia().name());

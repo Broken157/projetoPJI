@@ -22,10 +22,10 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
     boolean existsByVagaIdAndArtistaUsuarioId(Long vagaId, Long usuarioId);
     boolean existsByArtistaUsuarioIdAndVagaContratanteUsuarioId(
             Long artistaId, Long contratanteId);
-    Optional<Candidatura> findByVagaIdAndArtistaUsuarioId(Long vagaId, Long usuarioId);
+    List<Candidatura> findByVagaIdAndArtistaUsuarioIdOrderByIdDesc(Long vagaId, Long usuarioId);
 
     @Query("""
-            select c.artista.usuarioId
+            select distinct c.artista.usuarioId
             from Candidatura c
             where c.vaga.id = :vagaId
               and (:cursor is null or c.artista.usuarioId > :cursor)
@@ -48,6 +48,9 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
             @Param("funcaoIds") Set<Long> funcaoIds,
             Pageable pageable);
 
+    @EntityGraph(attributePaths = {
+            "artista", "artista.usuario", "artista.areas", "artista.areas.funcoes"
+    })
     @Query("select distinct c from Candidatura c where c.id in :ids")
     List<Candidatura> findDetalhadasByIdIn(@Param("ids") List<Long> ids);
 
@@ -56,7 +59,7 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
     List<Candidatura> findByArtista_UsuarioIdAndVaga_Status(Long usuarioId, StatusVaga status);
 
     @Query("""
-            select c.vaga.id
+            select distinct c.vaga.id
             from Candidatura c
             where c.artista.usuarioId = :artistaId
               and c.vaga.status = :status

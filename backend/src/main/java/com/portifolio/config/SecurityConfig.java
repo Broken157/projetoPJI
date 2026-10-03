@@ -44,14 +44,23 @@ public class SecurityConfig {
                                 "/api/auth/cadastro",
                                 "/api/auth/login",
                                 "/api/auth/google",
+                                "/api/auth/google/cadastro",
                                 "/api/auth/refresh",
                                 "/api/auth/logout",
                                 "/api/auth/forgot-password",
-                                "/api/auth/reset-password").permitAll()
+                                "/api/auth/reset-password",
+                                "/api/auth/confirm-email",
+                                "/api/auth/resend-confirmation",
+                                "/api/auth/guardian-invite",
+                                "/api/auth/guardian-decision",
+                                "/api/auth/resend-guardian-invite").permitAll()
                         // RF03: listagem/busca de vagas e publica (feed tipo LinkedIn).
                         // Candidatura (RF06) e criacao/edicao continuam exigindo autenticacao.
                         .requestMatchers(HttpMethod.GET, "/api/vagas").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/areas", "/api/capacidades").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/areas", "/api/capacidades", "/api/funcoes",
+                                "/api/vagas/categorias-afirmativas",
+                                "/api/talentos/especializacoes").permitAll()
                         .requestMatchers("/api/areas", "/api/areas/**").denyAll()
                         .requestMatchers(HttpMethod.GET, "/api/talentos", "/api/talentos/**").hasRole("CONTRATANTE")
                         .requestMatchers("/api/talentos", "/api/talentos/**").denyAll()

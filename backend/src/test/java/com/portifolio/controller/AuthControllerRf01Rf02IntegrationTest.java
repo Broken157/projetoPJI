@@ -2,6 +2,7 @@ package com.portifolio.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portifolio.model.Usuario;
+import com.portifolio.model.enums.StatusConta;
 import com.portifolio.repository.PerfilArtistaRepository;
 import com.portifolio.repository.PerfilContratanteRepository;
 import com.portifolio.repository.UsuarioRepository;
@@ -18,26 +19,28 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Testcontainers
 @SpringBootTest
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(com.portifolio.support.EmailVerificationTestConfig.class)
 class AuthControllerRf01Rf02IntegrationTest {
 
     private static final String SENHA_VALIDA = "Palco@2026";
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18-alpine")
-            .withInitScripts("db/schema-test.sql", "db/catalogo-test.sql")
+    static PostgreSQLContainer<?> postgres = new com.portifolio.support.OfficialPostgreSQLContainer()
             .withUrlParam("stringtype", "unspecified");
 
     @Autowired
@@ -61,13 +64,14 @@ class AuthControllerRf01Rf02IntegrationTest {
     org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Test
-    void artistaNasceComUmaAreaPrincipalSemRaioFuncoesOuEspecializacoes() throws Exception {
+    void artistaNasceSemRaioEUmaAreaPrincipalSemFuncoesOuEspecializacoes() throws Exception {
         Map<String, Object> payload = cadastroBase("ARTISTA", LocalDate.now().minusYears(25));
         cadastrar(payload);
         Usuario salvo = usuarioRepository.findByEmail((String) payload.get("email")).orElseThrow();
         assertThat(salvo.getStatusConta()).isEqualTo(com.portifolio.model.enums.StatusConta.PENDENTE_VERIFICACAO_EMAIL);
         assertThat(salvo.getEmailVerificado()).isFalse();
         assertThat(perfilArtistaRepository.findById(salvo.getId()).orElseThrow().getRaioAtuacao()).isNull();
+        assertThat(salvo.getPerfilCompleto()).isFalse();
         assertThat(jdbc.queryForObject("select count(*) from perfil_artista_area where perfil_artista_id=?", Integer.class, salvo.getId())).isOne();
         assertThat(jdbc.queryForObject("select area_id from perfil_artista_area where perfil_artista_id=? and principal", Short.class, salvo.getId())).isEqualTo((short) 1);
         assertThat(jdbc.queryForObject("select count(*) from perfil_artista_funcao where perfil_artista_id=?", Integer.class, salvo.getId())).isZero();
@@ -174,24 +178,125 @@ class AuthControllerRf01Rf02IntegrationTest {
     }
 
     @Test
-    void loginCorretoDevolveJwtESenhaPermaneceBcrypt() throws Exception {
+    void cadastroPendenteNaoRecebeSessaoESenhaPermaneceBcrypt() throws Exception {
         Map<String, Object> cadastro = cadastroBase("ARTISTA", LocalDate.now().minusYears(30));
         cadastrar(cadastro);
 
-        mockMvc.perform(post("/api/auth/login")
+        MvcResult tentativa = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "email", cadastro.get("email"),
                                 "senha", SENHA_VALIDA,
+                                "rememberMe", true))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensagem").value("Confirme seu e-mail antes de entrar."))
+                .andExpect(jsonPath("$.token").doesNotExist())
+                .andReturn();
+
+        Usuario salvo = usuarioRepository.findByEmail((String) cadastro.get("email")).orElseThrow();
+        assertThat(tentativa.getResponse().getHeader("Set-Cookie")).isNull();
+        assertThat(jdbc.queryForObject("select count(*) from refresh_tokens where usuario_id = ?",
+                Integer.class, salvo.getId())).isZero();
+        assertThat(salvo.getSenha()).isNotEqualTo(SENHA_VALIDA);
+        assertThat(passwordEncoder.matches(SENHA_VALIDA, salvo.getSenha())).isTrue();
+    }
+
+    @Test
+    void contaAtivaPodeEntrarEUsarJwtSemRememberMe() throws Exception {
+        Usuario ativo = contaAtiva();
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "email", ativo.getEmail(), "senha", SENHA_VALIDA,
                                 "rememberMe", false))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isEmpty())
-                .andExpect(jsonPath("$.tipoUsuario").value("ARTISTA"));
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andReturn();
+        String token = objectMapper.readTree(login.getResponse().getContentAsString()).get("token").asText();
+        assertThat(jdbc.queryForObject("select count(*) from refresh_tokens where usuario_id = ?",
+                Integer.class, ativo.getId())).isZero();
+        mockMvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(ativo.getId()));
+    }
 
-        Usuario salvo = usuarioRepository.findByEmail((String) cadastro.get("email")).orElseThrow();
-        assertThat(salvo.getSenha()).isNotEqualTo(SENHA_VALIDA);
-        assertThat(passwordEncoder.matches(SENHA_VALIDA, salvo.getSenha())).isTrue();
+    @Test
+    void estadosNaoAtivosBloqueiamLoginRefreshEJwtJaEmitido() throws Exception {
+        for (StatusConta estado : new StatusConta[]{StatusConta.PENDENTE_VERIFICACAO_EMAIL,
+                StatusConta.PENDENTE_TIPO_PERFIL, StatusConta.PENDENTE_CONSENTIMENTO,
+                StatusConta.BLOQUEADA}) {
+            Usuario usuario = contaAtiva();
+            MvcResult loginAtivo = mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of(
+                                    "email", usuario.getEmail(), "senha", SENHA_VALIDA,
+                                    "rememberMe", true))))
+                    .andExpect(status().isOk()).andReturn();
+            String token = objectMapper.readTree(loginAtivo.getResponse().getContentAsString())
+                    .get("token").asText();
+            String cookie = loginAtivo.getResponse().getHeader("Set-Cookie").split(";", 2)[0]
+                    .substring("palco_refresh=".length());
+
+            usuario.setStatusConta(estado);
+            usuarioRepository.saveAndFlush(usuario);
+
+            MvcResult novoLogin = mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of(
+                                    "email", usuario.getEmail(), "senha", SENHA_VALIDA,
+                                    "rememberMe", true))))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.token").doesNotExist())
+                    .andReturn();
+            assertThat(novoLogin.getResponse().getHeader("Set-Cookie")).isNull();
+            mockMvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + token))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(get("/api/notificacoes/stream")
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(post("/api/auth/refresh")
+                            .cookie(new jakarta.servlet.http.Cookie("palco_refresh", cookie)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.token").doesNotExist());
+        }
+    }
+
+    @Test
+    void contaAtivaComRememberMeRenovaERespeitaLogout() throws Exception {
+        Usuario ativo = contaAtiva();
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "email", ativo.getEmail(), "senha", SENHA_VALIDA,
+                                "rememberMe", true))))
+                .andExpect(status().isOk()).andReturn();
+        String antigo = login.getResponse().getHeader("Set-Cookie").split(";", 2)[0]
+                .substring("palco_refresh=".length());
+        MvcResult renovado = mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new jakarta.servlet.http.Cookie("palco_refresh", antigo)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andReturn();
+        String novo = renovado.getResponse().getHeader("Set-Cookie").split(";", 2)[0]
+                .substring("palco_refresh=".length());
+        String jwtRenovado = objectMapper.readTree(renovado.getResponse().getContentAsString())
+                .get("token").asText();
+        assertThat(novo).isNotEqualTo(antigo);
+        mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new jakarta.servlet.http.Cookie("palco_refresh", antigo)))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + jwtRenovado))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/logout")
+                        .cookie(new jakarta.servlet.http.Cookie("palco_refresh", novo))
+                        .header("Authorization", "Bearer " + jwtRenovado))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(post("/api/auth/refresh")
+                        .cookie(new jakarta.servlet.http.Cookie("palco_refresh", novo)))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + jwtRenovado))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -256,9 +361,17 @@ class AuthControllerRf01Rf02IntegrationTest {
     void emailInexistenteESenhaIncorretaRetornamMesmo401Generico() throws Exception {
         Map<String, Object> cadastro = cadastroBase("CONTRATANTE", LocalDate.now().minusYears(30));
         cadastrar(cadastro);
+        Map<String, Object> cadastroGoogle = cadastroBase("ARTISTA", LocalDate.now().minusYears(30));
+        cadastrar(cadastroGoogle);
+        Usuario usuarioGoogle = usuarioRepository.findByEmail((String) cadastroGoogle.get("email"))
+                .orElseThrow();
+        usuarioGoogle.setGoogleId("google-" + UUID.randomUUID());
+        usuarioGoogle.setSenha(null);
+        usuarioRepository.saveAndFlush(usuarioGoogle);
 
         for (Map<String, Object> login : new Map[]{
                 Map.of("email", cadastro.get("email"), "senha", "incorreta", "rememberMe", false),
+                Map.of("email", cadastroGoogle.get("email"), "senha", "incorreta", "rememberMe", false),
                 Map.of("email", "inexistente-" + UUID.randomUUID() + "@palco.test",
                         "senha", "incorreta", "rememberMe", false)}) {
             mockMvc.perform(post("/api/auth/login")
@@ -272,6 +385,7 @@ class AuthControllerRf01Rf02IntegrationTest {
     private Map<String, Object> cadastroBase(String tipoUsuario, LocalDate nascimento) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("nome", "Pessoa RF01 " + tipoUsuario);
+        com.portifolio.support.CadastroFixtures.identificar(payload);
         payload.put("dataNascimento", nascimento.toString());
         payload.put("telefone", "11999999999");
         payload.put("email", tipoUsuario.toLowerCase() + "-" + UUID.randomUUID() + "@palco.test");
@@ -279,6 +393,7 @@ class AuthControllerRf01Rf02IntegrationTest {
         payload.put("tipoUsuario", tipoUsuario);
         payload.put("tipoPerfilArtistico", "ARTISTA_SOLO");
         if ("ARTISTA".equals(tipoUsuario)) payload.put("areaPrincipalId", 1);
+        if ("CONTRATANTE".equals(tipoUsuario)) payload.put("tipoPerfilContratante", "Pessoa Física");
         return payload;
     }
 
@@ -287,5 +402,26 @@ class AuthControllerRf01Rf02IntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(payload)))
                 .andExpect(status().isCreated());
+    }
+
+    private Usuario contaAtiva() throws Exception {
+        Map<String, Object> cadastro = cadastroBase("ARTISTA", LocalDate.now().minusYears(30));
+        cadastrar(cadastro);
+        Usuario usuario = usuarioRepository.findByEmail((String) cadastro.get("email")).orElseThrow();
+        usuario.setStatusConta(StatusConta.ATIVA);
+        usuario.setEmailVerificado(true);
+        return usuarioRepository.saveAndFlush(usuario);
+    }
+
+    @Test void camposObrigatoriosDoSchemaNaoRecebemClassificacaoInventada() throws Exception {
+        for (String tipo : new String[]{"ARTISTA", "CONTRATANTE"}) {
+            var payload = cadastroBase(tipo, LocalDate.now().minusYears(25));
+            payload.remove(tipo.equals("ARTISTA") ? "tipoPerfilArtistico" : "tipoPerfilContratante");
+            long antes = usuarioRepository.count();
+            mockMvc.perform(post("/api/auth/cadastro").contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(payload)))
+                    .andExpect(status().is(tipo.equals("ARTISTA") ? 400 : 422));
+            assertThat(usuarioRepository.count()).isEqualTo(antes);
+        }
     }
 }

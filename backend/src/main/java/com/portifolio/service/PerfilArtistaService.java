@@ -106,7 +106,10 @@ public class PerfilArtistaService {
 
     private void preencherPerfil(PerfilArtista perfil, PerfilArtistaRequest request) {
         perfil.setBiografia(request.getBiografia());
-        perfil.setLocalizacao(request.getLocalizacao());
+        var local = com.portifolio.validation.LocalizacaoArtista.deRequest(
+                request.getCidade(), request.getEstado(), request.getLocalizacao());
+        perfil.setCidade(local.cidade());
+        perfil.setEstado(local.estado());
         perfil.setUrlPortfolio(request.getUrlPortfolio());
         if (legacySchema) {
             if (request.getAreaPrincipalId()!=null || (request.getFuncaoIds()!=null && !request.getFuncaoIds().isEmpty()) || request.getTipoPerfilArtistico()!=null || request.getRaioAtuacao()!=null)
@@ -118,6 +121,8 @@ public class PerfilArtistaService {
         if (perfil.getTipoPerfilArtistico() == null) {
             throw new IllegalArgumentException("Informe tipoPerfilArtistico.");
         }
+        if (perfil.getRaioAtuacao() == null)
+            throw new com.portifolio.exception.UnprocessableEntityException("Informe raioAtuacao do catálogo oficial.");
         perfil.setBannerUrl(request.getBannerUrl());
         if (request.getDisponivelOportunidades()!=null) perfil.setDisponivelOportunidades(request.getDisponivelOportunidades());
         if (request.getFuncaoIds() != null) {
@@ -144,7 +149,10 @@ public class PerfilArtistaService {
                 vinculo.setPrincipal(true);
                 perfil.getAreas().add(vinculo);
             }
-            vinculo.setFuncoes(funcoes);
+            // Preserva a coleção gerenciada: reinserir vínculos inalterados aciona a limpeza
+            // oficial de especializações órfãs e pode rebaixar um perfil ainda completo.
+            vinculo.getFuncoes().retainAll(funcoes);
+            vinculo.getFuncoes().addAll(funcoes);
             vinculo.setUltimaAtualizacao(LocalDateTime.now());
         }
     }
@@ -178,6 +186,7 @@ public class PerfilArtistaService {
                 .disponivelOportunidades(perfil.getDisponivelOportunidades())
                 .biografia(perfil.getBiografia())
                 .localizacao(perfil.getLocalizacao())
+                .cidade(perfil.getCidade()).estado(perfil.getEstado())
                 .urlPortfolio(perfil.getUrlPortfolio())
                 .nivelMedalha(null)
                 .scoreEngajamento(null)

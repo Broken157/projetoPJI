@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 public class UserDetailsServiceImpl implements UserDetailsService {
 
     private final UsuarioRepository usuarioRepository;
+    private final GoogleAccountAccessPolicy accountAccessPolicy;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
@@ -30,8 +31,8 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     }
 
     private UserDetails toUserDetails(Usuario usuario) {
-        if (!GoogleAccountAccessPolicy.acessoNormalPermitido(usuario)) {
-            throw new UsernameNotFoundException("Conta Google sem acesso normal.");
+        if (!accountAccessPolicy.acessoNormalPermitido(usuario)) {
+            throw new UsernameNotFoundException("Conta sem acesso normal.");
         }
         // RF32: usuarios Google nao possuem senha local (campo e null no banco).
         // O placeholder {noop}GOOGLE_USER satisfaz a validacao interna do Spring Security

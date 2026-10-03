@@ -12,6 +12,7 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -79,8 +80,24 @@ public class StompJwtChannelInterceptor implements ChannelInterceptor {
     }
 
     private void exigirSessaoValida(StompHeaderAccessor accessor) {
+        if (accessor.getUser() == null) {
+            return;
+        }
         var attributes = accessor.getSessionAttributes();
-        if (attributes != null && attributes.get("palco.jwt") instanceof String token && !jwtService.tokenValido(token))
+        if (attributes == null || !(attributes.get("palco.jwt") instanceof String token)
+                || !jwtService.tokenValido(token)) {
             throw new IllegalArgumentException("Sessão STOMP expirada ou revogada.");
+        }
+        String email = jwtService.extrairEmail(token);
+        Long usuarioId = jwtService.extrairUsuarioId(token);
+        if (email == null || usuarioId == null || usuarioId < 1
+                || !email.equals(accessor.getUser().getName())) {
+            throw new IllegalArgumentException("Sessão STOMP sem identidade válida.");
+        }
+        try {
+            userDetailsService.loadUserByUsername(email, usuarioId);
+        } catch (UsernameNotFoundException erro) {
+            throw new IllegalArgumentException("Sessão STOMP sem acesso normal.");
+        }
     }
 }

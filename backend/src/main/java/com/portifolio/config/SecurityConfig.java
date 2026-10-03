@@ -62,6 +62,8 @@ public class SecurityConfig {
                                 "/api/vagas/categorias-afirmativas",
                                 "/api/talentos/especializacoes").permitAll()
                         .requestMatchers("/api/areas", "/api/areas/**").denyAll()
+                        .requestMatchers(HttpMethod.GET, "/api/talentos/contratantes/*/participacao").hasRole("ARTISTA")
+                        .requestMatchers(HttpMethod.POST, "/api/talentos/contratantes/*/participacao").hasRole("ARTISTA")
                         .requestMatchers(HttpMethod.GET, "/api/talentos", "/api/talentos/**").hasRole("CONTRATANTE")
                         .requestMatchers("/api/talentos", "/api/talentos/**").denyAll()
                         .requestMatchers(new RegexRequestMatcher("^/api/vagas/\\d+$", "GET")).permitAll()

@@ -6,7 +6,7 @@ import java.util.Set;
 public record FiltroTalentos(Short areaId, Set<Long> funcaoIds, Set<Long> especializacaoIds,
         String localizacao, Set<Abrangencia> raios, NivelExperiencia experienciaMinima,
         Boolean disponivel, Set<TipoPerfilArtistico> tipos, Long vagaId, boolean recomendados,
-        Ordenacao ordenacao, int page, int size, String cidade, String estado) {
+        Ordenacao ordenacao, int page, int size, String cidade, String estado, String q) {
     public enum Ordenacao { RELEVANCIA, ATUALIZACAO }
     public FiltroTalentos {
         funcaoIds = funcaoIds == null ? Set.of() : Set.copyOf(funcaoIds);
@@ -16,6 +16,14 @@ public record FiltroTalentos(Short areaId, Set<Long> funcaoIds, Set<Long> especi
         ordenacao = ordenacao == null ? Ordenacao.RELEVANCIA : ordenacao;
         if (page < 0 || size < 1 || size > 50) throw new IllegalArgumentException("page deve ser não negativo e size entre 1 e 50.");
         if (funcaoIds.size() > 50 || especializacaoIds.size() > 50) throw new IllegalArgumentException("Selecione no máximo 50 opções por filtro.");
+        if ((long) page * size > Integer.MAX_VALUE) throw new IllegalArgumentException("Página excede o limite permitido.");
+        if (areaId != null && areaId < 1 || funcaoIds.stream().anyMatch(id -> id < 1)
+                || especializacaoIds.stream().anyMatch(id -> id < 1))
+            throw new IllegalArgumentException("IDs taxonômicos devem ser positivos.");
+        if (!raios.isEmpty()) throw new IllegalArgumentException("Raio não integra a busca RF17; use cidade e estado.");
+        q = q == null || q.isBlank() ? null : q.trim();
+        if (q != null && (q.length() > 150 || q.codePoints().anyMatch(Character::isISOControl)))
+            throw new IllegalArgumentException("Busca por nome deve ter até 150 caracteres sem controles.");
         if (localizacao != null && localizacao.length() > 150) throw new IllegalArgumentException("Localização deve ter até 150 caracteres.");
         localizacao = com.portifolio.validation.LocalizacaoArtista.normalizarFiltro(localizacao);
         if (vagaId != null && vagaId < 1) throw new IllegalArgumentException("vagaId inválido.");
@@ -25,6 +33,13 @@ public record FiltroTalentos(Short areaId, Set<Long> funcaoIds, Set<Long> especi
             throw new com.portifolio.exception.UnprocessableEntityException("Cidade deve ter até 100 caracteres.");
         if (estado != null && !estado.matches("[A-Z]{2}"))
             throw new com.portifolio.exception.UnprocessableEntityException("Estado deve conter duas letras.");
+    }
+    public FiltroTalentos(Short areaId, Set<Long> funcaoIds, Set<Long> especializacaoIds,
+            String localizacao, Set<Abrangencia> raios, NivelExperiencia experienciaMinima,
+            Boolean disponivel, Set<TipoPerfilArtistico> tipos, Long vagaId, boolean recomendados,
+            Ordenacao ordenacao, int page, int size, String cidade, String estado) {
+        this(areaId, funcaoIds, especializacaoIds, localizacao, raios, experienciaMinima,
+                disponivel, tipos, vagaId, recomendados, ordenacao, page, size, cidade, estado, null);
     }
     public FiltroTalentos(Short areaId, Set<Long> funcaoIds, Set<Long> especializacaoIds,
             String localizacao, Set<Abrangencia> raios, NivelExperiencia experienciaMinima,

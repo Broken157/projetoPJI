@@ -30,9 +30,10 @@ public class TalentoController {
             @RequestParam(defaultValue="0") int page,
             @RequestParam(defaultValue="20") int size,
             @RequestParam(required=false) String cidade,
-            @RequestParam(required=false) String estado) {
+            @RequestParam(required=false) String estado,
+            @RequestParam(required=false) String q) {
         return service.buscar(new FiltroTalentos(areaId, funcaoIds, especializacaoIds, localizacao,
-                raios, experienciaMinima, disponivel, tipos, vagaId, recomendados, ordenacao, page, size, cidade, estado));
+                raios, experienciaMinima, disponivel, tipos, vagaId, recomendados, ordenacao, page, size, cidade, estado, q));
     }
 
     @GetMapping("/contextos")

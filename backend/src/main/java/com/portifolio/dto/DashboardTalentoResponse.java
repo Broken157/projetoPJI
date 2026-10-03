@@ -14,6 +14,8 @@ public class DashboardTalentoResponse {
     private String urlPortfolio;
     private String avatarUrl;
     private Set<FuncaoResponse> funcoes;
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private long quantidadeFuncoesCoincidentes;
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private long quantidadeEspecializacoesCoincidentes;
 }

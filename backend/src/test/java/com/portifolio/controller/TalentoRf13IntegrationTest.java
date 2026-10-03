@@ -71,26 +71,27 @@ class TalentoRf13IntegrationTest {
         db.update("update usuarios set status_conta=? where id=?",estado,id);
         mvc.perform(req()).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
     }
-    @Test void somenteArtistaCompleto() throws Exception {
+    @Test void membrosHistoricosIncompletosContinuamMasPapelIncorretoNaoApareceRf17() throws Exception {
         long id=artista(1,true,f1);
         artista(1,false,f1);
         long impostor=artista(1,true,f1);
         db.update("update usuarios set tipo_usuario='CONTRATANTE' where id=?",impostor);
-        mvc.perform(req()).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+        mvc.perform(req()).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].artistaId").value(id));
     }
     @Test void contratanteBloqueadoNaoAcessa() throws Exception {
         db.update("update usuarios set status_conta='BLOQUEADA' where id=?",dono);
         mvc.perform(req()).andExpect(status().isUnauthorized());
     }
-    @Test void menorAutorizadoPermaneceForaDosTalentosMasTemPerfilPublicoRestritoRf10() throws Exception {
+    @Test void menorAutorizadoParticipanteApareceComExperienciaPrivadaRf17ERf10() throws Exception {
         long id=artista(1,true,f1);
         db.update("update usuarios set data_nascimento=? where id=?",LocalDate.now().minusYears(17),id);
         db.update("""
                 insert into responsaveis_legais(usuario_id,nome_responsavel,telefone_responsavel,email_responsavel,
                    versao_termo,consentimento_revogado,data_consentimento) values (?,'Privado','11999999999','privado@test','v1',false,current_timestamp)
                 """,id);
-        mvc.perform(req()).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(req()).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].areas[0].nivelExperiencia").doesNotExist());
         mvc.perform(get("/api/perfis/publicos/ARTISTA/"+id)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.experiencia").doesNotExist())
                 .andExpect(jsonPath("$.dataNascimento").doesNotExist())
@@ -126,8 +127,8 @@ class TalentoRf13IntegrationTest {
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].artistaId").value(a))
                 .andExpect(jsonPath("$.content[1].artistaId").value(b))
-                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").value(1))
-                .andExpect(jsonPath("$.content[1].quantidadeFuncoesCoincidentes").value(1));
+                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").doesNotExist())
+                .andExpect(jsonPath("$.content[1].quantidadeFuncoesCoincidentes").doesNotExist());
     }
     @Test void matchingHierarquicoAtualizacaoEId() throws Exception {
         long um=artista(1,true,f1);
@@ -140,8 +141,8 @@ class TalentoRf13IntegrationTest {
         mvc.perform(req().param("vagaId",""+vaga)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[*].artistaId").value(org.hamcrest.Matchers.contains(
                         (int)doisSpecNovo,(int)empateId,(int)doisSpecAntigo,(int)doisSemSpec,(int)um)))
-                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").value(2))
-                .andExpect(jsonPath("$.content[0].quantidadeEspecializacoesCoincidentes").value(1));
+                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").doesNotExist())
+                .andExpect(jsonPath("$.content[0].quantidadeEspecializacoesCoincidentes").doesNotExist());
     }
     @Test void ausenciaDeFuncoesEEspecializacoesNaVagaNaoExcluiArtista() throws Exception {
         long sem=vaga(dono,1);
@@ -149,15 +150,15 @@ class TalentoRf13IntegrationTest {
         artista(1,true,f1);
         mvc.perform(req().param("vagaId",""+sem)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").value(0))
-                .andExpect(jsonPath("$.content[1].quantidadeEspecializacoesCoincidentes").value(0));
+                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").doesNotExist())
+                .andExpect(jsonPath("$.content[1].quantidadeEspecializacoesCoincidentes").doesNotExist());
     }
     @Test void vagaSemEspecializacoesUsaFuncoes() throws Exception {
         long sem=vaga(dono,1,f1);
         artista(1,true,f1);
         mvc.perform(req().param("vagaId",""+sem)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").value(1))
-                .andExpect(jsonPath("$.content[0].quantidadeEspecializacoesCoincidentes").value(0));
+                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").doesNotExist())
+                .andExpect(jsonPath("$.content[0].quantidadeEspecializacoesCoincidentes").doesNotExist());
     }
     @ParameterizedTest @CsvSource({"SEM_EXPERIENCIA,6","INICIANTE,4","INTERMEDIARIO,3","EXPERIENTE,2","ESPECIALISTA,1"})
     void experienciaMinimaOrdinal(String minimo,int total) throws Exception {
@@ -188,15 +189,16 @@ class TalentoRf13IntegrationTest {
         mvc.perform(req().param("disponivel",valor)).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(total));
         mvc.perform(req()).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(3));
     }
-    @Test void filtrosOrDentroEAndEntreTipos() throws Exception {
+    @Test void filtrosOrDentroEAndEntreTiposERaioRejeitadoNoRf17() throws Exception {
         long a=artista(1,true,f1),b=artista(1,true,f2),c=artista(1,true,f1);
         db.update("update perfis_artistas set tipo_perfil_artistico='BANDA',raio_atuacao='REMOTO',disponivel_oportunidades=true where usuario_id=?",a);
         db.update("update perfis_artistas set tipo_perfil_artistico='GRUPO_ARTISTICO',raio_atuacao='NACIONAL',disponivel_oportunidades=true where usuario_id=?",b);
         db.update("update perfis_artistas set tipo_perfil_artistico='BANDA',raio_atuacao='LOCAL',disponivel_oportunidades=true where usuario_id=?",c);
         marcarCompleto(true, a, b, c);
         mvc.perform(req().param("areaId","1").param("funcaoIds",f1+","+f2).param("tipos","BANDA,GRUPO_ARTISTICO")
-                .param("raios","REMOTO,NACIONAL").param("disponivel","true").param("localizacao","recife"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
+                .param("disponivel","true").param("localizacao","recife"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(3));
+        mvc.perform(req().param("raios","REMOTO,NACIONAL")).andExpect(status().isBadRequest());
     }
     @Test void especializacoesOrECompatibilidadeComFuncaoDoArtista() throws Exception {
         long a=artista(1,true,f1),b=artista(1,true,f2); spec(a,1,e1);spec(b,1,e2);
@@ -251,8 +253,8 @@ class TalentoRf13IntegrationTest {
         marcarCompleto(true, principal);
         mvc.perform(req().param("vagaId",""+vaga).param("scoreEngajamento","999.99").param("nivelMedalha","5"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].artistaId").value(secundario))
-                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").value(2))
-                .andExpect(jsonPath("$.content[0].quantidadeEspecializacoesCoincidentes").value(2))
+                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").doesNotExist())
+                .andExpect(jsonPath("$.content[0].quantidadeEspecializacoesCoincidentes").doesNotExist())
                 .andExpect(jsonPath("$.content[1].artistaId").value(principal));
     }
     @ParameterizedTest @CsvSource({"size,0","size,51","page,-1","ordenacao,id desc","raios,500","disponivel,talvez","vagaId,-1"})
@@ -301,7 +303,7 @@ class TalentoRf13IntegrationTest {
         vaga(outro,2,fOutra);
         mvc.perform(req().param("recomendados","true")).andExpect(status().isOk()).andExpect(jsonPath("$.contexto.id").value(recente));
         mvc.perform(get("/api/dashboard").header("Authorization",token)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.talentosSugeridos.content[0].quantidadeFuncoesCoincidentes").value(1));
+                .andExpect(jsonPath("$.talentosSugeridos.content[0].quantidadeFuncoesCoincidentes").doesNotExist());
         mvc.perform(get("/api/talentos/contextos").header("Authorization",token)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(2));
         db.update("update vagas set status='ENCERRADA' where contratante_id=?",dono);
@@ -366,6 +368,8 @@ class TalentoRf13IntegrationTest {
                 """,id);
         area(id,area,true,"INICIANTE",funcoes);
         marcarCompleto(completo, id);
+        // RF17 revisado consulta participantes; estas fixtures representam membros já vinculados.
+        db.update("insert into banco_talentos(contratante_id,artista_id) values (?,?)",dono,id);
         return id;
     }
     void area(long id,int area,boolean principal,String nivel,long...funcs) {

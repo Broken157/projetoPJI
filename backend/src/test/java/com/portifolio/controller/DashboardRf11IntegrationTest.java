@@ -197,7 +197,7 @@ class DashboardRf11IntegrationTest {
     }
 
     @Test
-    void talentosUsamFuncoesDasVagasAtivasEExcluemPerfilIncompletoEMenor() throws Exception {
+    void talentosSugeridosUsamBancoProprioSemReativarPremissaGlobalRf13() throws Exception {
         PerfilContratante dono = criarContratante("matching@rf11.test", true);
         Funcao teatro = criarFuncao("Teatro RF11");
         Funcao cinema = criarFuncao("Cinema RF11");
@@ -207,15 +207,17 @@ class DashboardRf11IntegrationTest {
         PerfilArtista compativel = criarArtista("compativel@rf11.test", true, LocalDate.of(1990, 1, 1), teatro, cinema);
         criarArtista("incompleto@rf11.test", false, LocalDate.of(1990, 1, 1), teatro, cinema);
         criarArtista("menor@rf11.test", true, LocalDate.now().minusYears(17), teatro, cinema);
-        criarArtista("funcao-cancelada@rf11.test", true, LocalDate.of(1990, 1, 1), circo);
+        PerfilArtista outroMembro = criarArtista("funcao-cancelada@rf11.test", true, LocalDate.of(1990, 1, 1), circo);
+        jdbcTemplate.update("insert into banco_talentos(contratante_id,artista_id) values (?,?),(?,?)",
+                dono.getUsuarioId(), compativel.getUsuarioId(), dono.getUsuarioId(), outroMembro.getUsuarioId());
 
         mockMvc.perform(get("/api/dashboard")
                         .header("Authorization", bearer(dono.getUsuario())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.talentosSugeridos.content.length()").value(2))
                 .andExpect(jsonPath("$.talentosSugeridos.content[0].artistaId").value(compativel.getUsuarioId()))
-                .andExpect(jsonPath("$.talentosSugeridos.content[0].quantidadeFuncoesCoincidentes").value(2))
-                .andExpect(jsonPath("$.talentosSugeridos.content[1].quantidadeFuncoesCoincidentes").value(0))
+                .andExpect(jsonPath("$.talentosSugeridos.content[0].quantidadeFuncoesCoincidentes").doesNotExist())
+                .andExpect(jsonPath("$.talentosSugeridos.content[1].quantidadeFuncoesCoincidentes").doesNotExist())
                 .andExpect(jsonPath("$.talentosSugeridos.content[0].email").doesNotExist())
                 .andExpect(jsonPath("$.talentosSugeridos.content[0].dataNascimento").doesNotExist());
     }
@@ -246,6 +248,9 @@ class DashboardRf11IntegrationTest {
                 "duas-novo@rf11.test", true, LocalDate.of(1990, 1, 1), teatro, musica);
         PerfilArtista umaFuncao = criarArtista(
                 "uma@rf11.test", true, LocalDate.of(1990, 1, 1), teatro);
+        jdbcTemplate.update("insert into banco_talentos(contratante_id,artista_id) values (?,?),(?,?),(?,?)",
+                dono.getUsuarioId(), duasFuncoesAntigo.getUsuarioId(), dono.getUsuarioId(), duasFuncoesNovo.getUsuarioId(),
+                dono.getUsuarioId(), umaFuncao.getUsuarioId());
         jdbcTemplate.update("update perfis_artistas set ultima_atualizacao=? where usuario_id=?",
                 LocalDateTime.now().minusDays(2), duasFuncoesAntigo.getUsuarioId());
         jdbcTemplate.update("update perfis_artistas set ultima_atualizacao=? where usuario_id=?",
@@ -326,6 +331,8 @@ class DashboardRf11IntegrationTest {
                     LocalDate.of(1990, 1, 1),
                     funcao);
             criarCandidatura(vaga, artista, LocalDateTime.now().minusMinutes(i));
+            jdbcTemplate.update("insert into banco_talentos(contratante_id,artista_id) values (?,?)",
+                    dono.getUsuarioId(), artista.getUsuarioId());
         });
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         statistics.clear();

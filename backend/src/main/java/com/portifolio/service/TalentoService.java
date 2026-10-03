@@ -61,13 +61,13 @@ public class TalentoService {
             throw new UnprocessableEntityException("Selecione a área para filtrar a experiência.");
         if (f.recomendados() && contexto == null)
             return new Pagina<>(List.of(), f.page(), f.size(), 0, false, null);
-        var pagina = talentos.buscar(f, area, contexto);
+        var pagina = talentos.buscar(dono, f, area, contexto);
         var content = pagina.content().stream().map(t -> TalentoResponse.builder()
-                .artistaId(t.getArtistaId()).nomeExibicao(t.getNomeExibicao())
+                .artistaId(t.getArtistaId()).username(t.getUsername()).nomeExibicao(t.getNomeExibicao())
                 .avatarUrl(avatars.resolverUrl(t.getArtistaId(), t.getAvatarUrl(), null))
                 .biografia(t.getBiografia()).localizacao(t.getLocalizacao()).urlPortfolio(t.getUrlPortfolio())
                 .cidade(t.getCidade()).estado(t.getEstado())
-                .tipoPerfilArtistico(t.getTipoPerfilArtistico()).raioAtuacao(t.getRaioAtuacao())
+                .tipoPerfilArtistico(t.getTipoPerfilArtistico()).salvo(t.isSalvo())
                 .disponivelOportunidades(t.getDisponivelOportunidades()).areas(t.getAreas())
                 .quantidadeFuncoesCoincidentes(t.getQuantidadeFuncoesCoincidentes())
                 .quantidadeEspecializacoesCoincidentes(t.getQuantidadeEspecializacoesCoincidentes())

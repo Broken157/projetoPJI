@@ -221,9 +221,12 @@ class BancoTalentosParticipacaoRf13IntegrationTest {
     }
 
     @Test
-    void naoFabricaTipoSemanticoDeNotificacaoParaContornarDatabase04() throws Exception {
+    void database05DisponibilizaTipoMasParticipacaoAindaNaoNotifica() throws Exception {
         assertThat(db.queryForList("select enumlabel::text from pg_enum join pg_type on pg_type.oid=enumtypid where typname='tipo_notificacao_enum'", String.class))
-                .containsExactlyInAnyOrder("CANDIDATURA", "MENSAGEM", "CONVITE", "EDITAL", "SALVO");
+                .containsExactlyInAnyOrder("CANDIDATURA", "MENSAGEM", "CONVITE", "EDITAL", "SALVO", "BANCO_DE_TALENTOS");
+        assertThat(java.util.Arrays.stream(com.portifolio.model.enums.TipoNotificacao.values())
+                .map(com.portifolio.model.enums.TipoNotificacao::getDatabaseValue).toList())
+                .doesNotContain("BANCO_DE_TALENTOS");
         mvc.perform(entrada(contratante)).andExpect(status().isCreated());
         assertThat(quantidade("notificacoes")).isZero();
         // Critério RF13 de notificação na primeira entrada permanece pendente, não é dado como aprovado.

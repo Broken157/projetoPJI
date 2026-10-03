@@ -17,14 +17,14 @@ import java.util.concurrent.TimeUnit;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
 
-/** PostgreSQL descartavel inicializado pelo database04 completo, sem SQL historico. */
+/** PostgreSQL descartavel inicializado pelo database05 completo, sem SQL historico. */
 public class OfficialPostgreSQLContainer extends PostgreSQLContainer<OfficialPostgreSQLContainer> {
     public static final String SOURCE_ZIP_SHA256 =
-            "52b1c4af06d79a7efae47e6fa320b4a0a32359efaae1d40e2a73d06129c6df2b";
+            "6158c813929ac0db9b3b12030e8b9d84c3b647611986dd6d60b2fc50d0f97ebf";
     public static final String WORKING_TREE_SHA256 =
-            "db8f05cabadfd3935b7c703b7b21252f170fa529c0d30e7e61755b46d7fd5f39";
+            "c68460169fcd2538fefd34a109ee3ea7640e553ce1882dd225d88d655229c134";
     private static final String TEMP_DATABASE_PREFIX = "palco_test_";
-    private static final String CONTAINER_SQL_ROOT = "/opt/palco/database04";
+    private static final String CONTAINER_SQL_ROOT = "/opt/palco/database05";
     private static final long INIT_TIMEOUT_SECONDS = 120;
     private final String localAdminUrl;
     private final String localDatabaseName;
@@ -35,7 +35,7 @@ public class OfficialPostgreSQLContainer extends PostgreSQLContainer<OfficialPos
         localAdminUrl = configuredValue("palco.test.local-postgres-url", "PALCO_TEST_LOCAL_POSTGRES_URL");
         localDatabaseName = localAdminUrl == null ? null
                 : TEMP_DATABASE_PREFIX + UUID.randomUUID().toString().replace("-", "");
-        withDatabaseName("palco_test_manu04");
+        withDatabaseName("palco_test_manu05");
         withUrlParam("stringtype", "unspecified");
     }
 
@@ -54,14 +54,14 @@ public class OfficialPostgreSQLContainer extends PostgreSQLContainer<OfficialPos
             statement.execute("create database " + quoteIdentifier(localDatabaseName)
                     + " template template0 encoding 'UTF8'");
             localStarted = true;
-            initializeDatabase04();
+            initializeDatabase05();
         } catch (Exception error) {
             try {
                 dropLocalDatabase();
             } catch (RuntimeException cleanupError) {
                 error.addSuppressed(cleanupError);
             }
-            throw new IllegalStateException("Falha ao iniciar database04 no PostgreSQL local descartavel", error);
+            throw new IllegalStateException("Falha ao iniciar database05 no PostgreSQL local descartavel", error);
         }
     }
 
@@ -99,15 +99,17 @@ public class OfficialPostgreSQLContainer extends PostgreSQLContainer<OfficialPos
     }
 
     /** Nenhum fallback para database/, dump ou migration de outro snapshot. */
-    public static Path database04Path() {
-        String configured = configuredValue("palco.test.database04-path", "PALCO_TEST_DATABASE04_PATH");
+    public static Path database05Path() {
+        if (configuredValue("palco.test.database04-path", "PALCO_TEST_DATABASE04_PATH") != null)
+            throw new IllegalStateException("Configuracao legada database04 recusada; use PALCO_TEST_DATABASE05_PATH ou -Dpalco.test.database05-path.");
+        String configured = configuredValue("palco.test.database05-path", "PALCO_TEST_DATABASE05_PATH");
         if (configured != null) return requireSnapshotDirectory(Path.of(configured));
         for (Path root : workingDirectoryAncestors()) {
-            Path candidate = root.resolve("database04/palco-database");
+            Path candidate = root.resolve("database05/palco-database");
             if (Files.isDirectory(candidate)) return requireSnapshotDirectory(candidate);
         }
-        throw new IllegalStateException("Pacote database04 completo nao encontrado. Informe "
-                + "PALCO_TEST_DATABASE04_PATH ou -Dpalco.test.database04-path.");
+        throw new IllegalStateException("Pacote database05 completo nao encontrado. Informe "
+                + "PALCO_TEST_DATABASE05_PATH ou -Dpalco.test.database05-path.");
     }
 
     /** Fingerprint de nomes e bytes dos 46 arquivos; sem alteracao de nenhum arquivo oficial. */
@@ -120,7 +122,7 @@ public class OfficialPostgreSQLContainer extends PostgreSQLContainer<OfficialPos
                     .toList();
         }
         if (files.size() != 46)
-            throw new IllegalStateException("database04 deve conter 46 arquivos; encontrados " + files.size());
+            throw new IllegalStateException("database05 deve conter 46 arquivos; encontrados " + files.size());
         StringBuilder manifest = new StringBuilder();
         for (Path file : files) {
             String relative = root.relativize(file).toString().replace('\\', '/');
@@ -135,29 +137,29 @@ public class OfficialPostgreSQLContainer extends PostgreSQLContainer<OfficialPos
     public static void validateSnapshot(Path root) throws Exception {
         String actual = workingTreeSha256(root);
         if (!WORKING_TREE_SHA256.equals(actual))
-            throw new IllegalStateException("Integridade do database04 diverge: " + actual);
+            throw new IllegalStateException("Integridade do database05 diverge: " + actual);
     }
 
     @Override protected void runInitScriptIfRequired() {
         try {
-            initializeDatabase04();
+            initializeDatabase05();
         } catch (Exception error) {
-            throw new IllegalStateException("init.sql completo do database04 falhou; nenhum patch SQL aplicado", error);
+            throw new IllegalStateException("init.sql completo do database05 falhou; nenhum patch SQL aplicado", error);
         }
     }
 
-    private void initializeDatabase04() throws Exception {
-        Path root = database04Path();
+    private void initializeDatabase05() throws Exception {
+        Path root = database05Path();
         validateSnapshot(root);
         Path logDirectory = Path.of(System.getProperty(
-                "palco.test.init-log-directory", "target-maven/database04-init"));
+                "palco.test.init-log-directory", "target-maven/database05-init"));
         Files.createDirectories(logDirectory);
         Path log = logDirectory.resolve(getDatabaseName() + "_" + UUID.randomUUID() + ".log");
         if (localAdminUrl == null) initializeInsideContainer(root, log);
         else initializeWithLocalPsql(root, log);
 
         // init.sql ja inclui seed.sql oficial. Nenhum seed/patch historico e executado.
-        System.out.println("[database04] init.sql e seed.sql oficiais OK; log: " + log.toAbsolutePath());
+        System.out.println("[database05] init.sql e seed.sql oficiais OK; log: " + log.toAbsolutePath());
     }
 
     private void initializeWithLocalPsql(Path root, Path log) throws Exception {
@@ -260,7 +262,7 @@ public class OfficialPostgreSQLContainer extends PostgreSQLContainer<OfficialPos
     private static Path requireSnapshotDirectory(Path path) {
         Path normalized = path.toAbsolutePath().normalize();
         if (!Files.isDirectory(normalized) || !Files.isRegularFile(normalized.resolve("init.sql")))
-            throw new IllegalStateException("Pacote database04 ilegivel: " + normalized);
+            throw new IllegalStateException("Pacote database05 ilegivel: " + normalized);
         return normalized;
     }
 

@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'scripts/database05/environment.ps1') -RequireDatabaseCredentials -RequireJwtSecret
 if ([string]::IsNullOrWhiteSpace($env:JWT_SECRET)) {
     throw 'Defina JWT_SECRET no ambiente com pelo menos 32 caracteres antes de iniciar.'
 }

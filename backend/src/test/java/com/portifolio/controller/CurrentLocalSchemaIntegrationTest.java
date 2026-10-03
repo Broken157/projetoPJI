@@ -22,7 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Integração adicional no banco descartável instalado; todas as linhas de teste são revertidas. */
-@SpringBootTest(properties={"spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/palco_dev_manu04}?stringtype=unspecified",
+@SpringBootTest(properties={"spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/palco_dev_manu05}?stringtype=unspecified",
         "app.vagas.auto-close.enabled=false"})
 @ActiveProfiles("banco-oficial-local")
 @AutoConfigureMockMvc @Transactional
@@ -36,7 +36,7 @@ class CurrentLocalSchemaIntegrationTest {
     @Autowired Environment env;
 
     @BeforeEach void exigeBancoDescartavel() {
-        assertThat(db.queryForObject("select current_database()", String.class)).isEqualTo("palco_dev_manu04");
+        assertThat(db.queryForObject("select current_database()", String.class)).isEqualTo("palco_dev_manu05");
     }
 
     @Test void schemaRealCriaEntityManagerComValidateETaxonomiaDisponivel() throws Exception {

@@ -16,7 +16,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-/** Nome historico mantido; a unica fonte ativa desta classe agora e o database04. */
+/** Nome historico mantido; a unica fonte ativa desta classe agora e o database05. */
 @Testcontainers
 @SpringBootTest
 class ManuDumpSchemaIntegrationTest {
@@ -26,11 +26,11 @@ class ManuDumpSchemaIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired Environment environment;
 
-    @Test void database04CompletoTemIntegridadeVerificada() throws Exception {
-        assertThat(OfficialPostgreSQLContainer.database04Path().resolve("init.sql")).isRegularFile();
-        OfficialPostgreSQLContainer.validateSnapshot(OfficialPostgreSQLContainer.database04Path());
+    @Test void database05CompletoTemIntegridadeVerificada() throws Exception {
+        assertThat(OfficialPostgreSQLContainer.database05Path().resolve("init.sql")).isRegularFile();
+        OfficialPostgreSQLContainer.validateSnapshot(OfficialPostgreSQLContainer.database05Path());
         assertThat(OfficialPostgreSQLContainer.SOURCE_ZIP_SHA256)
-                .isEqualTo("52b1c4af06d79a7efae47e6fa320b4a0a32359efaae1d40e2a73d06129c6df2b");
+                .isEqualTo("6158c813929ac0db9b3b12030e8b9d84c3b647611986dd6d60b2fc50d0f97ebf");
     }
 
     @Test void entityManagerFactorySobeComValidateEQuarentaETresTabelas() throws Exception {
@@ -45,19 +45,19 @@ class ManuDumpSchemaIntegrationTest {
                 .isEqualTo(43);
     }
 
-    @Test void perfisArtistasMantemEstruturaDoDatabase04() {
+    @Test void perfisArtistasMantemEstruturaDoDatabase05() {
         assertThat(columns("perfis_artistas")).contains("usuario_id", "cidade", "estado", "url_portfolio",
                 "tipo_perfil_artistico", "raio_atuacao", "banner_url", "ultima_atualizacao")
                 .doesNotContain("localizacao");
     }
 
-    @Test void contratantesEUsuariosMantemEstruturaDoDatabase04() {
+    @Test void contratantesEUsuariosMantemEstruturaDoDatabase05() {
         assertThat(columns("perfis_contratantes")).contains("usuario_id", "tipo_contratante", "cidade", "estado")
                 .doesNotContain("localizacao", "cpf", "cnpj", "tipo_perfil");
         assertThat(columns("usuarios")).contains("username", "foto_perfil_url", "status_conta", "cpf", "cnpj");
     }
 
-    @Test void initCompletoCarregaObjetosDoDatabase04() {
+    @Test void initCompletoCarregaObjetosDoDatabase05() {
         assertThat(jdbc.queryForObject("select count(*) from pg_type t join pg_namespace n on n.oid=t.typnamespace "
                 + "where n.nspname='public' and t.typtype='e'", Integer.class)).isEqualTo(24);
         assertThat(jdbc.queryForObject("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "

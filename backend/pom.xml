@@ -19,7 +19,7 @@
     <properties>
         <java.version>21</java.version>
         <!-- Evita concorrencia com o JDT, que escreve no target do editor. -->
-        <palco.build.directory>${project.basedir}/target-maven/database04</palco.build.directory>
+        <palco.build.directory>${project.basedir}/target-maven/database05</palco.build.directory>
     </properties>
 
     <dependencies>

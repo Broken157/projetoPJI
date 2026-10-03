@@ -36,7 +36,7 @@ class OfficialSchemaMappingIntegrationTest {
     void contextoValidaDdlOficialSemDivergenciaDoSchemaDeTeste() throws Exception {
         assertThat(environment.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(em.getEntityManagerFactory().isOpen()).isTrue();
-        assertThat(com.portifolio.support.OfficialPostgreSQLContainer.database04Path().resolve("init.sql")).isRegularFile();
+        assertThat(com.portifolio.support.OfficialPostgreSQLContainer.database05Path().resolve("init.sql")).isRegularFile();
         assertThat(jdbc.queryForList("select tablename from pg_tables where schemaname='public'", String.class))
                 .hasSize(43).doesNotContain("tags", "tags_artista", "tags_vaga");
         assertThat(jdbc.queryForObject("select is_nullable from information_schema.columns where table_schema='public' and table_name='perfis_artistas' and column_name='raio_atuacao'", String.class))
@@ -188,7 +188,10 @@ class OfficialSchemaMappingIntegrationTest {
         conferirEnum("modelo_trabalho_enum", ModeloTrabalho.values());
         conferirEnum("status_vaga_enum", StatusVaga.values());
         conferirEnum("status_candidatura_enum", StatusCandidatura.values());
-        conferirEnum("tipo_notificacao_enum", TipoNotificacao.values());
+        // Label oficial novo, ainda sem uso funcional Java/RF13 nesta sincronizacao.
+        conferirEnum("tipo_notificacao_enum", TipoNotificacao.values(), "BANCO_DE_TALENTOS");
+        assertThat(java.util.Arrays.stream(TipoNotificacao.values()).map(DatabaseEnum::getDatabaseValue).toList())
+                .doesNotContain("BANCO_DE_TALENTOS");
         conferirEnum("status_conta_enum", StatusConta.values());
         conferirEnum("nivel_experiencia_enum", NivelExperiencia.values());
         conferirEnum("abrangencia_enum", Abrangencia.values());
@@ -217,11 +220,12 @@ class OfficialSchemaMappingIntegrationTest {
                 .containsEntry("cpf", "12345678901").containsEntry("cnpj", "12345678000199");
     }
 
-    private void conferirEnum(String tipo, DatabaseEnum[] valores) {
+    private void conferirEnum(String tipo, DatabaseEnum[] valores, String... apenasSnapshot) {
         var oficiais = jdbc.queryForList("select e.enumlabel from pg_enum e join pg_type t on t.oid=e.enumtypid "
                 + "where t.typname=? order by e.enumsortorder", String.class, tipo);
-        assertThat(java.util.Arrays.stream(valores).map(DatabaseEnum::getDatabaseValue).toList())
-                .containsExactlyElementsOf(oficiais);
+        var esperados = new java.util.ArrayList<>(java.util.Arrays.stream(valores).map(DatabaseEnum::getDatabaseValue).toList());
+        esperados.addAll(java.util.List.of(apenasSnapshot));
+        assertThat(esperados).containsExactlyElementsOf(oficiais);
     }
 
     @Test void bancoTalentosPersisteChaveCompostaPorContratante() {

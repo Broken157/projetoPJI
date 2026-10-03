@@ -13,12 +13,41 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 /** Valida bootstrap e contratos reais do pacote, independentemente do contexto JPA. */
 @Testcontainers
-class Database04BootstrapIntegrationTest {
+class Database05BootstrapIntegrationTest {
     @Container static OfficialPostgreSQLContainer postgres = new OfficialPostgreSQLContainer();
 
     @Test void pacoteCompletoOficialNaoFoiAlterado() throws Exception {
-        assertThat(OfficialPostgreSQLContainer.workingTreeSha256(OfficialPostgreSQLContainer.database04Path()))
+        assertThat(OfficialPostgreSQLContainer.workingTreeSha256(OfficialPostgreSQLContainer.database05Path()))
                 .isEqualTo(OfficialPostgreSQLContainer.WORKING_TREE_SHA256);
+    }
+
+    @Test void enumOficialIncluiBancoDeTalentosSemImplementarNotificacaoRf13() throws Exception {
+        try (var connection = connection(); var statement = connection.createStatement();
+                var result = statement.executeQuery("select e.enumlabel from pg_enum e "
+                        + "join pg_type t on t.oid=e.enumtypid join pg_namespace n on n.oid=t.typnamespace "
+                        + "where n.nspname='public' and t.typname='tipo_notificacao_enum' order by e.enumsortorder")) {
+            var labels = new java.util.ArrayList<String>();
+            while (result.next()) labels.add(result.getString(1));
+            assertThat(labels).containsExactly("CANDIDATURA", "MENSAGEM", "CONVITE", "EDITAL", "SALVO", "BANCO_DE_TALENTOS");
+        }
+    }
+
+    @Test void snapshotAnteriorNaoEhAceitoPelaValidacaoAtiva() {
+        var antigo = OfficialPostgreSQLContainer.database05Path().getParent().getParent()
+                .resolve("database04/palco-database");
+        assertThatThrownBy(() -> OfficialPostgreSQLContainer.validateSnapshot(antigo))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Integridade do database05 diverge");
+    }
+
+    @Test void configuracaoLegadaDatabase04EhRejeitada() {
+        String key = "palco.test.database04-path", previous = System.getProperty(key);
+        try {
+            System.setProperty(key, "snapshot-antigo");
+            assertThatThrownBy(OfficialPostgreSQLContainer::database05Path)
+                    .isInstanceOf(IllegalStateException.class).hasMessageContaining("Configuracao legada database04 recusada");
+        } finally {
+            if (previous == null) System.clearProperty(key); else System.setProperty(key, previous);
+        }
     }
 
     @Test void initCompletoCriaObjetosDoSnapshot() throws Exception {
@@ -47,7 +76,7 @@ class Database04BootstrapIntegrationTest {
         try (var connection = connection(); var statement = connection.createStatement()) {
             assertThatThrownBy(() -> statement.executeUpdate("insert into usuarios "
                     + "(nome,data_nascimento,telefone,email,senha,tipo_usuario,status_conta) values "
-                    + "('Bootstrap','1990-01-01','11999999999','bootstrap@database04.test',"
+                    + "('Bootstrap','1990-01-01','11999999999','bootstrap@database05.test',"
                     + "'hash','ARTISTA','PENDENTE_VERIFICACAO_EMAIL')"))
                     .isInstanceOf(SQLException.class)
                     .extracting(error -> ((SQLException) error).getSQLState()).isEqualTo("23502");

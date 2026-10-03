@@ -4,6 +4,8 @@ import com.portifolio.dto.ArtistaPublicoResponse;
 import com.portifolio.dto.ContratantePublicoResponse;
 import com.portifolio.dto.PerfilPublicoResponse;
 import com.portifolio.dto.FuncaoResponse;
+import com.portifolio.dto.FiltroDescobertaPublica;
+import com.portifolio.dto.PerfilDescobertaResponse;
 import com.portifolio.exception.ResourceNotFoundException;
 import com.portifolio.model.PerfilArtista;
 import com.portifolio.model.PerfilContratante;
@@ -11,6 +13,7 @@ import com.portifolio.model.Usuario;
 import com.portifolio.model.enums.TipoUsuario;
 import com.portifolio.repository.PerfilArtistaRepository;
 import com.portifolio.repository.PerfilContratanteRepository;
+import com.portifolio.repository.PerfilDescobertaRepository;
 import com.portifolio.security.MenorAutorizadoPolicy;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -29,6 +32,18 @@ public class PerfilPublicoService {
     private final AvatarService avatarService;
     private final MenorAutorizadoPolicy menorAutorizadoPolicy;
     private final com.portifolio.repository.ItemSalvoRepository itemSalvoRepository;
+    private final PerfilDescobertaRepository descobertaRepository;
+
+    @Transactional(readOnly = true)
+    public PerfilDescobertaResponse.Pagina descobrir(FiltroDescobertaPublica filtro) {
+        var pagina = descobertaRepository.buscar(filtro);
+        var content = pagina.getContent().stream().map(item -> new PerfilDescobertaResponse(
+                item.usuarioId(), item.tipo(), item.username(), item.nomeExibicao(),
+                avatarService.resolverUrl(item.usuarioId(), item.fotoPerfil(), null), item.cidade(), item.estado())).toList();
+        return new PerfilDescobertaResponse.Pagina(content, pagina.getNumber(), pagina.getSize(),
+                pagina.getTotalElements(), pagina.getTotalPages(), pagina.isFirst(), pagina.isLast(),
+                pagina.hasNext(), pagina.hasPrevious());
+    }
 
     @Transactional(readOnly = true)
     public PerfilPublicoResponse buscar(TipoUsuario tipo, Long usuarioId) {
@@ -40,9 +55,10 @@ public class PerfilPublicoService {
     }
 
     private ArtistaPublicoResponse buscarArtista(Long usuarioId) {
-        PerfilArtista perfil = perfilArtistaRepository.buscarPublicoPorUsuarioId(usuarioId)
+        PerfilArtista perfil = perfilArtistaRepository.findOne(
+                menorAutorizadoPolicy.perfilPublicavel(TipoUsuario.ARTISTA, usuarioId))
                 .orElseThrow(this::perfilNaoEncontrado);
-        Usuario usuario = exigirPublicavel(perfil.getUsuario(), TipoUsuario.ARTISTA);
+        Usuario usuario = perfil.getUsuario();
 
         Set<FuncaoResponse> funcoes = perfil.getFuncoes().stream()
                 .sorted(Comparator.comparing(funcao -> funcao.getNome(), String.CASE_INSENSITIVE_ORDER))
@@ -65,9 +81,10 @@ public class PerfilPublicoService {
     }
 
     private ContratantePublicoResponse buscarContratante(Long usuarioId) {
-        PerfilContratante perfil = perfilContratanteRepository.buscarPublicoPorUsuarioId(usuarioId)
+        PerfilContratante perfil = perfilContratanteRepository.findOne(
+                menorAutorizadoPolicy.perfilPublicavel(TipoUsuario.CONTRATANTE, usuarioId))
                 .orElseThrow(this::perfilNaoEncontrado);
-        Usuario usuario = exigirPublicavel(perfil.getUsuario(), TipoUsuario.CONTRATANTE);
+        Usuario usuario = perfil.getUsuario();
         String nomeEmpresa = perfil.getNomeEmpresa();
         String nomeExibicao = nomeEmpresa == null || nomeEmpresa.isBlank()
                 ? usuario.getNome()
@@ -84,15 +101,6 @@ public class PerfilPublicoService {
                 .avatarUrl(avatarService.resolverUrl(
                         perfil.getUsuarioId(), usuario.getFotoPerfil(), null))
                 .build();
-    }
-
-    private Usuario exigirPublicavel(Usuario usuario, TipoUsuario tipoEsperado) {
-        if (usuario == null || usuario.getTipoUsuario() != tipoEsperado
-                || (menorAutorizadoPolicy.exigeProtecao(usuario)
-                    && !menorAutorizadoPolicy.autorizado(usuario))) {
-            throw perfilNaoEncontrado();
-        }
-        return usuario;
     }
 
     private ResourceNotFoundException perfilNaoEncontrado() {

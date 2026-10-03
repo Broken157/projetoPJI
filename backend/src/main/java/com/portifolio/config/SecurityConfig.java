@@ -67,7 +67,7 @@ public class SecurityConfig {
                         .requestMatchers(new RegexRequestMatcher("^/api/vagas/\\d+$", "GET")).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/vagas/*/similares").permitAll()
                         // RF10: somente a consulta publica por tipo e ID dispensa JWT.
-                        .requestMatchers(HttpMethod.GET, "/api/perfis/publicos/*/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/perfis/publicos", "/api/perfis/publicos/*/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/portfolio/publico/**").permitAll()
                         .requestMatchers("/api/portfolio/**").hasRole("ARTISTA")
                         // O handshake nao carrega JWT. A autenticacao ocorre no frame STOMP CONNECT.

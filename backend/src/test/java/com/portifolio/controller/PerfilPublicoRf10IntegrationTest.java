@@ -24,6 +24,9 @@ import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import com.portifolio.model.enums.StatusConta;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -281,6 +284,7 @@ class PerfilPublicoRf10IntegrationTest {
         usuario.setEmail(email);
         usuario.setSenha("hash-nao-publico");
         usuario.setTipoUsuario(tipo);
+        usuario.setStatusConta(StatusConta.ATIVA);
         usuario.setPerfilCompleto(completo);
         usuario.setGoogleId("google-" + email);
         return usuarioRepository.save(usuario);
@@ -291,5 +295,17 @@ class PerfilPublicoRf10IntegrationTest {
         funcao.setArea(com.portifolio.support.OfficialSchemaFixtures.area());
         funcao.setNome(nome);
         return funcaoRepository.save(funcao);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StatusConta.class, names = "ATIVA", mode = EnumSource.Mode.EXCLUDE)
+    void adultosNaoAptosNaoPodemSerExpostosPeloDetalhe(StatusConta estado) throws Exception {
+        var artista = novoArtista("inapto-artista@rf37.test", LocalDate.of(1990, 1, 1), false);
+        var contratante = novoContratante("inapto-contratante@rf37.test", LocalDate.of(1990, 1, 1), false);
+        jdbcTemplate.update("update usuarios set status_conta = ?::status_conta_enum", estado.name());
+        mockMvc.perform(get("/api/perfis/publicos/ARTISTA/{id}", artista.getUsuarioId()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/perfis/publicos/CONTRATANTE/{id}", contratante.getUsuarioId()))
+                .andExpect(status().isNotFound());
     }
 }

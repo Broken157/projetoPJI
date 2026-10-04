@@ -82,7 +82,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
         jdbcTemplate.execute("TRUNCATE notificacoes, usuarios RESTART IDENTITY CASCADE");
     }
 
-    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS", "CONVITE"})
+    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS", "CONVITE", "MENSAGEM"})
     void jwtValidoEntregaNaFilaPrivadaCorretaEmMenosDeCincoSegundos(TipoNotificacao tipo) throws Exception {
         Usuario destino = novoUsuario("destino-ws@rf23.test");
         Usuario isolado = novoUsuario("isolado-ws@rf23.test");
@@ -126,7 +126,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
         cliente.stop();
     }
 
-    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS", "CONVITE"})
+    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS", "CONVITE", "MENSAGEM"})
     void sseComAuthorizationEntregaSomenteAoUsuarioCorreto(TipoNotificacao tipo) throws Exception {
         Usuario destino = novoUsuario("destino-sse@rf23.test");
         Usuario isolado = novoUsuario("isolado-sse@rf23.test");
@@ -170,6 +170,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
     }
 
     private NotificacaoResponse entregarOuParticipar(Usuario destino, NotificacaoResponse alerta) throws Exception {
+        if (alerta.getTipo() == TipoNotificacao.MENSAGEM) return mensagemPorHttp(destino);
         if (alerta.getTipo() == TipoNotificacao.CONVITE) {
             return convidarPorHttp(destino);
         }
@@ -199,6 +200,44 @@ class NotificacaoWebSocketRf23IntegrationTest {
         return NotificacaoResponse.builder().id(((Number) registro.get("id")).longValue())
                 .tipo(TipoNotificacao.BANCO_DE_TALENTOS).mensagem((String) registro.get("mensagem_alerta"))
                 .link((String) registro.get("link_contexto")).build();
+    }
+
+    private NotificacaoResponse mensagemPorHttp(Usuario artista) throws Exception {
+        Usuario contratante = novoUsuario("contratante-chat@rf35.test");
+        contratante.setTipoUsuario(TipoUsuario.CONTRATANTE);
+        usuarioRepository.saveAndFlush(contratante);
+        HttpClient cliente = HttpClient.newHttpClient();
+        String autorizacao = "Bearer " + jwtService.gerarToken(contratante);
+        var sala = cliente.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/chat/salas"))
+                .header("Authorization", autorizacao).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"usuarioDestinoId\":" + artista.getId() + "}")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(sala.statusCode()).isEqualTo(201);
+        long id = new ObjectMapper().readTree(sala.body()).path("salaId").asLong();
+        var mensagem = cliente.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/chat/salas/" + id + "/mensagens"))
+                .header("Authorization", autorizacao).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"texto\":\"Contato profissional\"}")).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(mensagem.statusCode()).isEqualTo(201);
+        var registro = jdbcTemplate.queryForMap("select id,tipo_notificacao::text as tipo,mensagem_alerta,link_contexto,usuario_destino_id from notificacoes");
+        assertThat(registro).containsEntry("tipo", "MENSAGEM").containsEntry("usuario_destino_id", artista.getId())
+                .containsEntry("link_contexto", "/mensagens?sala=" + id);
+        return NotificacaoResponse.builder().id(((Number) registro.get("id")).longValue()).tipo(TipoNotificacao.MENSAGEM)
+                .mensagem((String) registro.get("mensagem_alerta")).link((String) registro.get("link_contexto")).build();
+    }
+
+    @Test
+    void handshakeNaoAceitaQueryMesmoComJwtValidoNoConnect() {
+        Usuario usuario = novoUsuario("query@rf35.test");
+        var cliente = cliente();
+        StompHeaders headers = new StompHeaders();
+        headers.add("Authorization", "Bearer " + jwtService.gerarToken(usuario));
+        WebSocketHttpHeaders http = new WebSocketHttpHeaders();
+        http.setOrigin("http://localhost:3000");
+        try {
+            assertThatThrownBy(() -> cliente.connectAsync("ws://localhost:" + port + "/ws?token=nao-e-credencial",
+                    http, headers, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class);
+        } finally { cliente.stop(); }
     }
 
     private NotificacaoResponse convidarPorHttp(Usuario artista) throws Exception {

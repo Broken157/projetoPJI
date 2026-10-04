@@ -17,6 +17,13 @@ import org.springframework.stereotype.Repository;
 public class DenunciaRepository {
     private final JdbcTemplate jdbc;
 
+    public boolean existeReporteMensagem(Long mensagemId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists (select 1 from reportes_usuario
+                    where tipo_conteudo = 'MENSAGEM' and conteudo_id = ?)
+                """, Boolean.class, mensagemId));
+    }
+
     // O filtro de denunciante está nas duas partes da consulta, inclusive no detalhe.
     // reportes_usuario não possui status: null é intencional, nunca um estado inventado.
     private static final String PROPRIAS = """

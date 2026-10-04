@@ -9,6 +9,7 @@ import com.portifolio.dto.ChatSalaResponse;
 import com.portifolio.event.ChatEventoPosCommit;
 import com.portifolio.event.NotificacaoEvento;
 import com.portifolio.exception.ResourceNotFoundException;
+import com.portifolio.exception.ForbiddenException;
 import com.portifolio.exception.UnprocessableEntityException;
 import com.portifolio.model.MensagemChat;
 import com.portifolio.model.ParticipanteChat;
@@ -22,22 +23,31 @@ import com.portifolio.repository.MensagemChatRepository;
 import com.portifolio.repository.ParticipanteChatRepository;
 import com.portifolio.repository.SalaChatRepository;
 import com.portifolio.repository.UsuarioRepository;
+import com.portifolio.repository.DenunciaRepository;
 import com.portifolio.repository.projection.ChatMensagemProjection;
 import com.portifolio.repository.projection.ChatSalaResumoProjection;
 import com.portifolio.security.MenorAutorizadoPolicy;
+import com.portifolio.security.GoogleAccountAccessPolicy;
+import com.portifolio.validation.ArquivoPortfolioValidator;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ChatService {
     @org.springframework.beans.factory.annotation.Value("${app.database.legacy:false}") private boolean legacySchema;
 
@@ -54,6 +64,12 @@ public class ChatService {
     private final EntityManager entityManager;
     private final MenorAutorizadoPolicy menorAutorizadoPolicy;
     private final ConviteVagaService conviteVagaService;
+    private final GoogleAccountAccessPolicy accountAccessPolicy;
+    private final NotificacaoPersistenceService notificacaoPersistenceService;
+    private final DenunciaRepository denuncias;
+    private final ArquivoPortfolioValidator arquivoValidator;
+    private final ChatAnexoStorage anexoStorage;
+    private final Clock clock;
 
     @Transactional
     public ChatSalaResponse criarOuReutilizarSala(String emailAutenticado, Long usuarioDestinoId) {
@@ -111,24 +127,56 @@ public class ChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("Sala nao encontrada."));
         List<Long> participantes = exigirParticipante(salaId, atual.getId());
         String textoValidado = validarTexto(texto);
+        return persistirMensagem(atual, sala, participantes, textoValidado, null);
+    }
+
+    @Transactional
+    public ChatMensagemResponse enviarAnexo(String emailAutenticado, Long salaId, String texto, MultipartFile arquivo) {
+        if (legacySchema) throw new UnprocessableEntityException("Anexos exigem o schema oficial atual.");
+        Usuario atual = usuarioPorEmail(emailAutenticado);
+        List<Long> participantes = exigirParticipante(salaId, atual.getId());
+        outroParticipante(participantes, atual.getId());
+        var validado = arquivoValidator.validar(arquivo);
+        String conteudo = texto == null || texto.isBlank() ? null : validarTexto(texto);
+        String referencia = anexoStorage.novaReferencia(salaId, validado.extensao());
+        sincronizarLimpeza(salaId, referencia, false);
+        anexoStorage.gravar(salaId, referencia, validado.bytes());
+        SalaChat sala = salaChatRepository.findById(salaId).orElseThrow(() -> new ResourceNotFoundException("Sala nao encontrada."));
+        return persistirMensagem(atual, sala, participantes, conteudo, referencia);
+    }
+
+    @Transactional(readOnly = true)
+    public ChatAnexoStorage.Conteudo anexo(String emailAutenticado, Long mensagemId) {
+        Usuario atual = usuarioPorEmail(emailAutenticado);
+        MensagemChat mensagem = mensagemDetalhada(mensagemId);
+        exigirParticipante(mensagem.getSala().getId(), atual.getId());
+        if (mensagemExcluida(mensagem) || mensagem.getUrlAnexo() == null) {
+            throw new ResourceNotFoundException("Anexo nao encontrado.");
+        }
+        return anexoStorage.ler(mensagem.getSala().getId(), mensagem.getUrlAnexo());
+    }
+
+    private ChatMensagemResponse persistirMensagem(Usuario atual, SalaChat sala, List<Long> participantes,
+            String textoValidado, String referencia) {
+        Long destinatarioId = outroParticipante(participantes, atual.getId());
 
         MensagemChat mensagem = new MensagemChat();
         mensagem.setSala(sala);
         mensagem.setRemetente(atual);
         mensagem.setTexto(textoValidado);
-        mensagem.setUrlAnexo(null);
+        mensagem.setUrlAnexo(referencia);
         mensagem.setLida(false);
-        mensagem.setDataEnvio(LocalDateTime.now());
+        mensagem.setDataEnvio(LocalDateTime.now(clock));
         mensagem = mensagemChatRepository.saveAndFlush(mensagem);
 
         ChatMensagemResponse resposta = toMensagemResponse(mensagem);
-        publicarChat(participantes, ChatEventoTipo.NOVA_MENSAGEM, salaId, resposta, List.of());
-        Long destinatarioId = outroParticipante(participantes, atual.getId());
-        eventPublisher.publishEvent(new NotificacaoEvento(
+        var notificacao = notificacaoPersistenceService.persistirNaTransacaoAtual(new NotificacaoEvento(
                 Set.of(destinatarioId),
                 TipoNotificacao.MENSAGEM,
                 "Você recebeu uma nova mensagem.",
-                "/mensagens?sala=" + salaId));
+                "/mensagens?sala=" + sala.getId())).getFirst();
+        publicarChat(participantes, ChatEventoTipo.NOVA_MENSAGEM, sala.getId(), resposta, List.of());
+        eventPublisher.publishEvent(notificacao);
         return resposta;
     }
 
@@ -137,16 +185,22 @@ public class ChatService {
             String emailAutenticado, Long mensagemId, String texto) {
         if (legacySchema) throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: edição sem trilha persistida indisponível.");
         Usuario atual = usuarioPorEmail(emailAutenticado);
-        MensagemChat mensagem = mensagemDetalhada(mensagemId);
+        MensagemChat mensagem = mensagemParaAlterar(mensagemId);
         exigirAutor(mensagem, atual.getId());
         if (mensagemExcluida(mensagem)) {
             throw new UnprocessableEntityException("Mensagem excluida nao pode ser editada.");
         }
         if (mensagem.getDataEnvio() == null
-                || mensagem.getDataEnvio().plusMinutes(15).isBefore(LocalDateTime.now())) {
+                || mensagem.getDataEnvio().plusMinutes(15).isBefore(LocalDateTime.now(clock))) {
             throw new UnprocessableEntityException("Prazo de 15 minutos para edicao encerrado.");
         }
-        mensagem.setTexto(validarTexto(texto));
+        String validado = validarTexto(texto);
+        if (mensagem.getTextoOriginal() == null && denuncias.existeReporteMensagem(mensagemId)) {
+            mensagem.setTextoOriginal(mensagem.getTexto());
+        }
+        mensagem.setTexto(validado);
+        mensagem.setEditada(true);
+        mensagem.setDataEdicao(LocalDateTime.now(clock));
         mensagem = mensagemChatRepository.saveAndFlush(mensagem);
         ChatMensagemResponse resposta = toMensagemResponse(mensagem);
         publicarChat(
@@ -162,11 +216,16 @@ public class ChatService {
     public void excluirMensagem(String emailAutenticado, Long mensagemId) {
         if (legacySchema) throw new UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: exclusão sem preservação do histórico indisponível.");
         Usuario atual = usuarioPorEmail(emailAutenticado);
-        MensagemChat mensagem = mensagemDetalhada(mensagemId);
+        MensagemChat mensagem = mensagemParaAlterar(mensagemId);
         exigirAutor(mensagem, atual.getId());
         if (!mensagemExcluida(mensagem)) {
-            mensagem.setTexto(MENSAGEM_EXCLUIDA);
-            mensagem.setUrlAnexo(null);
+            mensagem.setExcluida(true);
+            mensagem.setDataExclusao(LocalDateTime.now(clock));
+            if (!denuncias.existeReporteMensagem(mensagemId)) {
+                mensagem.setTexto(MENSAGEM_EXCLUIDA);
+                if (mensagem.getUrlAnexo() != null) sincronizarLimpeza(mensagem.getSala().getId(), mensagem.getUrlAnexo(), true);
+                mensagem.setUrlAnexo(null);
+            }
             mensagem = mensagemChatRepository.saveAndFlush(mensagem);
         }
         ChatMensagemResponse resposta = toMensagemResponse(mensagem);
@@ -183,12 +242,12 @@ public class ChatService {
         Usuario atual = usuarioPorEmail(emailAutenticado);
         List<Long> participantes = exigirParticipante(salaId, atual.getId());
         List<Long> mensagemIds = mensagemChatRepository.findIdsNaoLidasRecebidas(
-                salaId, atual.getId());
+                salaId, atual.getId(), PageRequest.of(0, TAMANHO_MAXIMO));
         if (mensagemIds.isEmpty()) {
             return 0;
         }
-        int atualizadas = mensagemChatRepository.marcarRecebidasComoLidas(salaId, atual.getId());
-        publicarChat(
+        int atualizadas = mensagemChatRepository.marcarRecebidasComoLidas(salaId, atual.getId(), mensagemIds);
+        if (participantes.size() == 2) publicarChat(
                 List.of(outroParticipante(participantes, atual.getId())),
                 ChatEventoTipo.LEITURA,
                 salaId,
@@ -206,7 +265,7 @@ public class ChatService {
 
     private ChatSalaResponse criarSala(Usuario atual, Usuario destino) {
         SalaChat sala = new SalaChat();
-        sala.setDataCriacao(LocalDateTime.now());
+        sala.setDataCriacao(LocalDateTime.now(clock));
         sala = salaChatRepository.saveAndFlush(sala);
         participanteChatRepository.saveAllAndFlush(List.of(
                 new ParticipanteChat(sala, atual),
@@ -218,9 +277,13 @@ public class ChatService {
         if (atual.getId().equals(destino.getId())) {
             throw new UnprocessableEntityException("Nao e permitido criar conversa consigo mesmo.");
         }
-        if (atual.getTipoUsuario() == destino.getTipoUsuario()) {
+        if (!((atual.getTipoUsuario() == TipoUsuario.ARTISTA && destino.getTipoUsuario() == TipoUsuario.CONTRATANTE)
+                || (atual.getTipoUsuario() == TipoUsuario.CONTRATANTE && destino.getTipoUsuario() == TipoUsuario.ARTISTA))) {
             throw new UnprocessableEntityException(
                     "O chat privado exige um ARTISTA e um CONTRATANTE.");
+        }
+        if (!accountAccessPolicy.acessoNormalPermitido(atual) || !accountAccessPolicy.acessoNormalPermitido(destino)) {
+            throw new UnprocessableEntityException("Conversa exige contas aptas.");
         }
         validarAutorizacaoDoMenor(atual);
         validarAutorizacaoDoMenor(destino);
@@ -261,9 +324,15 @@ public class ChatService {
         if (email == null || email.isBlank()) {
             throw new ResourceNotFoundException("Usuario autenticado nao encontrado.");
         }
-        return usuarioRepository.findByEmail(email)
+        Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario autenticado nao encontrado."));
+        if ((usuario.getTipoUsuario() != TipoUsuario.ARTISTA && usuario.getTipoUsuario() != TipoUsuario.CONTRATANTE)
+                || !accountAccessPolicy.acessoNormalPermitido(usuario)) {
+            throw new ForbiddenException("Chat exige uma conta apta de ARTISTA ou CONTRATANTE.");
+        }
+        validarAutorizacaoDoMenor(usuario);
+        return usuario;
     }
 
     private List<Long> exigirParticipante(Long salaId, Long usuarioId) {
@@ -271,8 +340,13 @@ public class ChatService {
             throw new ResourceNotFoundException("Sala nao encontrada.");
         }
         List<Long> participantes = participanteChatRepository.findUsuarioIdsBySalaId(salaId);
-        if (participantes.size() != 2) {
+        if (participantes.size() != 1 && participantes.size() != 2) {
             throw new UnprocessableEntityException("Sala nao representa uma conversa direta valida.");
+        }
+        if (participantes.size() == 2) {
+            Usuario atual = usuarioRepository.findById(usuarioId).orElseThrow();
+            Usuario destino = usuarioRepository.findById(outroParticipante(participantes, usuarioId)).orElseThrow();
+            validarDupla(atual, destino);
         }
         return participantes;
     }
@@ -290,9 +364,14 @@ public class ChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("Mensagem nao encontrada."));
     }
 
+    private MensagemChat mensagemParaAlterar(Long mensagemId) {
+        return mensagemChatRepository.findByIdForUpdate(mensagemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mensagem nao encontrada."));
+    }
+
     private void exigirAutor(MensagemChat mensagem, Long usuarioId) {
         exigirParticipante(mensagem.getSala().getId(), usuarioId);
-        if (!mensagem.getRemetente().getId().equals(usuarioId)) {
+        if (mensagem.getRemetente() == null || !mensagem.getRemetente().getId().equals(usuarioId)) {
             throw new ResourceNotFoundException("Mensagem nao encontrada.");
         }
     }
@@ -344,8 +423,8 @@ public class ChatService {
         return ChatSalaResponse.builder()
                 .salaId(item.getSalaId())
                 .participanteId(item.getParticipanteId())
-                .participanteNome(item.getParticipanteNome())
-                .participanteAvatar(item.getParticipanteAvatar())
+                .participanteNome(item.getParticipanteId() == null ? "Usuário Removido" : item.getParticipanteNome())
+                .participanteAvatar(item.getParticipanteId() == null ? null : item.getParticipanteAvatar())
                 .ultimaMensagem(item.getUltimaMensagem())
                 .ultimaMensagemData(item.getUltimaMensagemData())
                 .naoLidas(item.getNaoLidas() == null ? 0 : item.getNaoLidas())
@@ -357,12 +436,14 @@ public class ChatService {
                 .id(item.getId())
                 .salaId(item.getSalaId())
                 .remetenteId(item.getRemetenteId())
-                .remetenteNome(item.getRemetenteNome())
-                .remetenteAvatar(item.getRemetenteAvatar())
-                .texto(item.getTexto())
-                .urlAnexo(item.getUrlAnexo())
+                .remetenteNome(item.getRemetenteId() == null ? "Usuário Removido" : item.getRemetenteNome())
+                .remetenteAvatar(item.getRemetenteId() == null ? null : item.getRemetenteAvatar())
+                .texto(excluida(item.getExcluida(), item.getTexto()) ? MENSAGEM_EXCLUIDA : item.getTexto())
+                .urlAnexo(urlAnexo(item.getId(), item.getUrlAnexo(), excluida(item.getExcluida(), item.getTexto())))
                 .lida(Boolean.TRUE.equals(item.getLida()))
-                .excluida(MENSAGEM_EXCLUIDA.equals(item.getTexto()))
+                .excluida(excluida(item.getExcluida(), item.getTexto()))
+                .editada(Boolean.TRUE.equals(item.getEditada()))
+                .dataEdicao(item.getDataEdicao())
                 .dataEnvio(item.getDataEnvio())
                 .build();
     }
@@ -372,19 +453,38 @@ public class ChatService {
         return ChatMensagemResponse.builder()
                 .id(mensagem.getId())
                 .salaId(mensagem.getSala().getId())
-                .remetenteId(remetente.getId())
-                .remetenteNome(remetente.getNome())
-                .remetenteAvatar(remetente.getFotoPerfil())
-                .texto(mensagem.getTexto())
-                .urlAnexo(mensagem.getUrlAnexo())
+                .remetenteId(remetente == null ? null : remetente.getId())
+                .remetenteNome(remetente == null ? "Usuário Removido" : remetente.getNome())
+                .remetenteAvatar(remetente == null ? null : remetente.getFotoPerfil())
+                .texto(mensagemExcluida(mensagem) ? MENSAGEM_EXCLUIDA : mensagem.getTexto())
+                .urlAnexo(urlAnexo(mensagem.getId(), mensagem.getUrlAnexo(), mensagemExcluida(mensagem)))
                 .lida(Boolean.TRUE.equals(mensagem.getLida()))
                 .excluida(mensagemExcluida(mensagem))
+                .editada(Boolean.TRUE.equals(mensagem.getEditada()))
+                .dataEdicao(mensagem.getDataEdicao())
                 .dataEnvio(mensagem.getDataEnvio())
                 .build();
     }
 
     private boolean mensagemExcluida(MensagemChat mensagem) {
-        return MENSAGEM_EXCLUIDA.equals(mensagem.getTexto());
+        return excluida(mensagem.getExcluida(), mensagem.getTexto());
+    }
+
+    private boolean excluida(Boolean flag, String texto) { return Boolean.TRUE.equals(flag) || MENSAGEM_EXCLUIDA.equals(texto); }
+
+    private String urlAnexo(Long id, String referencia, boolean excluida) {
+        return excluida || referencia == null ? null : "/api/chat/mensagens/" + id + "/anexo";
+    }
+
+    private void sincronizarLimpeza(Long salaId, String referencia, boolean noCommit) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCompletion(int status) {
+                if ((status == STATUS_COMMITTED) == noCommit) {
+                    try { anexoStorage.limpar(salaId, referencia); }
+                    catch (RuntimeException erro) { log.warn("Falha isolada na limpeza de anexo do chat."); }
+                }
+            }
+        });
     }
 
     private int validarPagina(Integer page) {

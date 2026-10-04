@@ -38,16 +38,17 @@ public interface ParticipanteChatRepository
                    outro.usuario_id as "participanteId",
                    u.nome as "participanteNome",
                    coalesce(to_jsonb(u)->>'foto_perfil_url',to_jsonb(u)->>'foto_perfil') as "participanteAvatar",
-                   ultima.texto_mensagem as "ultimaMensagem",
+                   case when coalesce(ultima.excluida,false) then 'Mensagem excluída pelo autor'
+                        else ultima.texto_mensagem end as "ultimaMensagem",
                    ultima.data_envio as "ultimaMensagemData",
                    count(nao_lida.id) as "naoLidas"
             from participantes_chat eu
             join salas_chat s on s.id = eu.sala_id
-            join participantes_chat outro
+            left join participantes_chat outro
               on outro.sala_id = s.id and outro.usuario_id <> :usuarioId
-            join usuarios u on u.id = outro.usuario_id
+            left join usuarios u on u.id = outro.usuario_id
             left join lateral (
-                select m.texto_mensagem, m.data_envio
+                select m.texto_mensagem, m.data_envio, m.excluida
                 from mensagens_chat m
                 where m.sala_id = s.id
                 order by m.data_envio desc nulls last, m.id desc
@@ -55,11 +56,11 @@ public interface ParticipanteChatRepository
             ) ultima on true
             left join mensagens_chat nao_lida
               on nao_lida.sala_id = s.id
-             and nao_lida.remetente_id <> :usuarioId
+             and (nao_lida.remetente_id is null or nao_lida.remetente_id <> :usuarioId)
              and coalesce(nao_lida.lida, false) = false
             where eu.usuario_id = :usuarioId
             group by s.id, s.data_criacao, outro.usuario_id, u.nome, coalesce(to_jsonb(u)->>'foto_perfil_url',to_jsonb(u)->>'foto_perfil'),
-                     ultima.texto_mensagem, ultima.data_envio
+                     ultima.texto_mensagem, ultima.data_envio, ultima.excluida
             order by coalesce(ultima.data_envio, s.data_criacao) desc nulls last, s.id desc
             """, countQuery = """
             select count(*)

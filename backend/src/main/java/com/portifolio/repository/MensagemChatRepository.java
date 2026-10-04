@@ -8,6 +8,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,14 +19,18 @@ public interface MensagemChatRepository extends JpaRepository<MensagemChat, Long
     @Query(value = """
             select m.id as id,
                    m.sala.id as salaId,
-                   m.remetente.id as remetenteId,
-                   m.remetente.nome as remetenteNome,
-                   m.remetente.fotoPerfil as remetenteAvatar,
+                   r.id as remetenteId,
+                   r.nome as remetenteNome,
+                   r.fotoPerfil as remetenteAvatar,
                    m.texto as texto,
                    m.urlAnexo as urlAnexo,
                    m.lida as lida,
+                   m.excluida as excluida,
+                   m.editada as editada,
+                   m.dataEdicao as dataEdicao,
                    m.dataEnvio as dataEnvio
             from MensagemChat m
+            left join m.remetente r
             where m.sala.id = :salaId
             order by m.dataEnvio desc, m.id desc
             """, countQuery = "select count(m) from MensagemChat m where m.sala.id = :salaId")
@@ -35,31 +41,39 @@ public interface MensagemChatRepository extends JpaRepository<MensagemChat, Long
     @EntityGraph(attributePaths = {"sala", "remetente"})
     Optional<MensagemChat> findDetalhadaById(Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"sala"})
+    @Query("select m from MensagemChat m where m.id = :id")
+    Optional<MensagemChat> findByIdForUpdate(@Param("id") Long id);
+
     @Query("""
             select m.id from MensagemChat m
             where m.sala.id = :salaId
-              and m.remetente.id <> :usuarioId
+              and (m.remetente is null or m.remetente.id <> :usuarioId)
               and coalesce(m.lida, false) = false
-            order by m.id
+            order by m.dataEnvio desc, m.id desc
             """)
     List<Long> findIdsNaoLidasRecebidas(
             @Param("salaId") Long salaId,
-            @Param("usuarioId") Long usuarioId);
+            @Param("usuarioId") Long usuarioId,
+            Pageable pageable);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update MensagemChat m set m.lida = true
             where m.sala.id = :salaId
-              and m.remetente.id <> :usuarioId
+              and (m.remetente is null or m.remetente.id <> :usuarioId)
+              and m.id in :ids
               and coalesce(m.lida, false) = false
             """)
     int marcarRecebidasComoLidas(
             @Param("salaId") Long salaId,
-            @Param("usuarioId") Long usuarioId);
+            @Param("usuarioId") Long usuarioId,
+            @Param("ids") List<Long> ids);
 
     @Query("""
             select count(m) from MensagemChat m
-            where m.remetente.id <> :usuarioId
+            where (m.remetente is null or m.remetente.id <> :usuarioId)
               and coalesce(m.lida, false) = false
               and exists (
                   select p.id from ParticipanteChat p

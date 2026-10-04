@@ -20,5 +20,7 @@ public class ChatMensagemResponse {
     private String urlAnexo;
     private Boolean lida;
     private Boolean excluida;
+    private Boolean editada;
+    private LocalDateTime dataEdicao;
     private LocalDateTime dataEnvio;
 }

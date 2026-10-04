@@ -30,6 +30,21 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
+                .addInterceptors(new org.springframework.web.socket.server.HandshakeInterceptor() {
+                    @Override
+                    public boolean beforeHandshake(org.springframework.http.server.ServerHttpRequest request,
+                            org.springframework.http.server.ServerHttpResponse response,
+                            org.springframework.web.socket.WebSocketHandler handler,
+                            java.util.Map<String, Object> attributes) {
+                        // O endpoint nativo não necessita query; credencial pertence ao CONNECT.
+                        return request.getURI().getRawQuery() == null;
+                    }
+
+                    @Override
+                    public void afterHandshake(org.springframework.http.server.ServerHttpRequest request,
+                            org.springframework.http.server.ServerHttpResponse response,
+                            org.springframework.web.socket.WebSocketHandler handler, Exception exception) {}
+                })
                 .setAllowedOrigins(allowedOrigins.toArray(String[]::new));
     }
 

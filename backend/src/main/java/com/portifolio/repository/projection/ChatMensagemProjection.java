@@ -11,5 +11,8 @@ public interface ChatMensagemProjection {
     String getTexto();
     String getUrlAnexo();
     Boolean getLida();
+    Boolean getExcluida();
+    Boolean getEditada();
+    LocalDateTime getDataEdicao();
     LocalDateTime getDataEnvio();
 }

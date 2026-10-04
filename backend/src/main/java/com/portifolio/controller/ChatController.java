@@ -13,6 +13,13 @@ import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.CacheControl;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -71,6 +78,24 @@ public class ChatController {
             Principal principal) {
         chatService.marcarRecebidasComoLidas(principal.getName(), salaId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/salas/{salaId}/anexos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ChatMensagemResponse> enviarAnexo(@PathVariable Long salaId,
+            @RequestPart(value = "arquivo", required = false) MultipartFile arquivo,
+            @RequestParam(required = false) String texto, Principal principal) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(chatService.enviarAnexo(principal.getName(), salaId, texto, arquivo));
+    }
+
+    @GetMapping("/mensagens/{mensagemId}/anexo")
+    public ResponseEntity<ByteArrayResource> anexo(@PathVariable Long mensagemId, Principal principal) {
+        var item = chatService.anexo(principal.getName(), mensagemId);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(item.mime()))
+                .contentLength(item.bytes().length)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(item.nome()).build().toString())
+                .header("X-Content-Type-Options", "nosniff").header("Content-Security-Policy", "sandbox")
+                .cacheControl(CacheControl.noStore()).body(new ByteArrayResource(item.bytes()));
     }
 
     @GetMapping("/nao-lidas/count")

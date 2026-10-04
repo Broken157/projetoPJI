@@ -56,6 +56,7 @@ public class MenorAutorizadoPolicy {
                 cb.isNotNull(responsavel.get("dataConsentimento")),
                 cb.isFalse(cb.coalesce(responsavel.<Boolean>get("consentimentoRevogado"), false)));
         return cb.and(
+                cb.greaterThan(usuario.<Long>get("id"), 0L),
                 cb.equal(usuario.get("statusConta"), StatusConta.ATIVA),
                 usuario.get("tipoUsuario").in(TipoUsuario.ARTISTA, TipoUsuario.CONTRATANTE),
                 cb.or(cb.lessThanOrEqualTo(nascimento, hoje.minusYears(MAIORIDADE)),

@@ -23,6 +23,7 @@ public final class GoogleAccountAccessPolicy {
     private final Clock clock;
 
     public boolean acessoNormalPermitido(Usuario usuario) {
+        if (usuario.getId() != null && usuario.getId() <= 0) return false;
         if (usuario.getStatusConta() != StatusConta.ATIVA) return false;
         if (usuario.getGoogleId() == null || Boolean.TRUE.equals(usuario.getPerfilCompleto())) return true;
         ResponsavelLegal responsavel = usuario.getResponsavelLegal();

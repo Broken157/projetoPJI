@@ -95,7 +95,7 @@ class UsuarioControllerIntegrationTest {
         assertThatThrownBy(() -> restTemplate.exchange(
                 baseUrl + "/api/usuarios/me", HttpMethod.DELETE,
                 new HttpEntity<>(headers), Void.class))
-                .isInstanceOf(HttpClientErrorException.Forbidden.class);
+                .isInstanceOf(HttpClientErrorException.BadRequest.class);
         ResponseEntity<Map> preservado = restTemplate.exchange(
                 baseUrl + "/api/usuarios/me", HttpMethod.GET, new HttpEntity<>(headers), Map.class);
         assertThat(preservado.getBody().get("nome")).isEqualTo("Usuário Atualizado");

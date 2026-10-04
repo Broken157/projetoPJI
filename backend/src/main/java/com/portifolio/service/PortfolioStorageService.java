@@ -70,6 +70,8 @@ public class PortfolioStorageService {
         catch (IOException ex) { throw new PortfolioOperationException(ex); }
     }
 
+    public void validarReferencia(long artista, String ref) { resolver(artista, ref); }
+
     private Path resolver(long artista, String ref) {
         // A gramática também impede referências absolutas, drives, NUL e nomes vindos do cliente.
         if (artista <= 0 || ref == null || !ref.matches("[1-9][0-9]*/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|jpeg|png|pdf|mp3)")

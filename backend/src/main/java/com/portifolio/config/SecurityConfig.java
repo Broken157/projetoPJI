@@ -81,7 +81,9 @@ public class SecurityConfig {
                                 "/api/tags", "/api/tags/**", "/api/funcoes", "/api/funcoes/**").denyAll()
                         .requestMatchers(HttpMethod.PUT, "/api/tags", "/api/tags/**", "/api/funcoes", "/api/funcoes/**").denyAll()
                         .requestMatchers(HttpMethod.PATCH, "/api/tags", "/api/tags/**", "/api/funcoes", "/api/funcoes/**").denyAll()
-                        // RF22 ainda não orquestra anonimização/retenção: não expor hard deletes em cascata.
+                        // RF22: somente a rota titular com confirmação chega à orquestração.
+                        .requestMatchers(HttpMethod.DELETE, "/api/usuarios/me").authenticated()
+                        // Hard deletes genéricos continuam contidos.
                         .requestMatchers(HttpMethod.DELETE,
                                 "/api/usuarios", "/api/usuarios/**",
                                 "/api/perfis-artistas", "/api/perfis-artistas/**",

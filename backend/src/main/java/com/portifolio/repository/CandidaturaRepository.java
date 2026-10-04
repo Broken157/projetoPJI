@@ -19,6 +19,7 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
     @Query("""
             select c.id from Candidatura c
             where c.vaga.id = :vagaId and c.status in :statusAtivos
+              and c.artista.usuarioId > 0
               and not exists (
                   select posterior.id from Candidatura posterior
                   where posterior.vaga.id = c.vaga.id
@@ -61,6 +62,7 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
             join perfis_artistas a on a.usuario_id = c.artista_id
             left join perfil_artista_funcao f on f.perfil_artista_id = a.usuario_id
             where c.vaga_id = :vagaId and c.status in ('PENDENTE', 'EM_ANALISE')
+              and c.artista_id > 0
               and not exists (
                   select 1 from candidaturas posterior
                   where posterior.vaga_id = c.vaga_id and posterior.artista_id = c.artista_id
@@ -72,6 +74,7 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
             """, countQuery = """
             select count(*) from candidaturas c
             where c.vaga_id = :vagaId and c.status in ('PENDENTE', 'EM_ANALISE')
+              and c.artista_id > 0
               and not exists (
                   select 1 from candidaturas posterior
                   where posterior.vaga_id = c.vaga_id and posterior.artista_id = c.artista_id

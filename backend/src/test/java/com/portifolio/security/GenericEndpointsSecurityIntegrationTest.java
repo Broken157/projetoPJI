@@ -227,7 +227,7 @@ class GenericEndpointsSecurityIntegrationTest {
         for (Conta conta : List.of(artista, contratante)) {
             mvc.perform(delete(caminhosDelete().get(indice)).header("Authorization", conta.bearer())
                             .param("usuarioId", conta.id().toString()))
-                    .andExpect(status().isForbidden());
+                    .andExpect(indice == 0 ? status().isBadRequest() : status().isForbidden());
         }
         assertThat(snapshot()).isEqualTo(antes);
     }

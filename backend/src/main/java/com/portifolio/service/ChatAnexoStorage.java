@@ -72,6 +72,8 @@ public class ChatAnexoStorage {
         catch (IOException ex) { throw invalido(); }
     }
 
+    public void validarReferencia(Long sala, String referencia) { resolver(sala, referencia); }
+
     private Path resolver(Long sala, String referencia) {
         if (sala == null || sala <= 0 || referencia == null
                 || !referencia.matches("[1-9][0-9]*/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|jpeg|png|pdf|mp3)")

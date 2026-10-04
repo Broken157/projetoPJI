@@ -6,6 +6,7 @@ import com.portifolio.exception.ResourceNotFoundException;
 import com.portifolio.realtime.NotificacaoSseService;
 import com.portifolio.service.NotificacaoService;
 import java.security.Principal;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -53,7 +54,10 @@ public class NotificacaoController {
     }
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(Principal principal) {
+    public SseEmitter stream(Principal principal, HttpServletRequest request) {
+        if (request.getQueryString() != null) {
+            throw new IllegalArgumentException("O stream exige Authorization no header e nao aceita query.");
+        }
         // A short scalar read avoids retaining an OSIV EntityManager/connection for the SSE lifetime.
         // The principal is established by the unchanged JWT filter, never supplied in the request body.
         Long usuarioId = principal == null ? null : jdbcTemplate.query(

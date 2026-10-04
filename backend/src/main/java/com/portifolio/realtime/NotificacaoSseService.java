@@ -5,10 +5,12 @@ import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Service
+@Slf4j
 public class NotificacaoSseService {
 
     private static final long TIMEOUT_MILLIS = 30L * 60L * 1000L;
@@ -25,7 +27,7 @@ public class NotificacaoSseService {
             emissor.send(SseEmitter.event().name("conectado").data("ok"));
         } catch (IOException erro) {
             remover(usuarioId, emissor);
-            emissor.completeWithError(erro);
+            encerrarComErro(emissor, erro);
         }
         return emissor;
     }
@@ -40,13 +42,22 @@ public class NotificacaoSseService {
                 emissor.send(SseEmitter.event().name("notificacao").data(notificacao));
             } catch (Exception erro) {
                 remover(usuarioId, emissor);
-                emissor.completeWithError(erro);
+                encerrarComErro(emissor, erro);
             }
         }
     }
 
     int conexoesAtivas(Long usuarioId) {
         return emissores.getOrDefault(usuarioId, Set.of()).size();
+    }
+
+    private void encerrarComErro(SseEmitter emissor, Exception erro) {
+        try {
+            emissor.completeWithError(erro);
+        } catch (RuntimeException contextoEncerrado) {
+            // The container may already have completed its error callback; the emitter was removed.
+            log.debug("Emitter SSE ja encerrado pelo container.");
+        }
     }
 
     private void remover(Long usuarioId, SseEmitter emissor) {

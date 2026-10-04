@@ -169,7 +169,7 @@ class NotificacaoRf23IntegrationTest {
         assertThat(notificacoes.getFirst().getUsuarioDestino().getId())
                 .isEqualTo(dono.getUsuarioId());
         assertThat(notificacoes.getFirst().getTipo()).isEqualTo(TipoNotificacao.CANDIDATURA);
-        assertThat(notificacoes.getFirst().getLink()).isEqualTo("dashboard-contratante.html");
+        assertThat(notificacoes.getFirst().getLink()).isEqualTo("/vagas/" + vaga.getId() + "/gerenciar");
     }
 
     @Test
@@ -204,7 +204,7 @@ class NotificacaoRf23IntegrationTest {
     }
 
     @Test
-    void falhaAoPersistirNotificacaoNaoDesfazCandidaturaJaConfirmada() throws Exception {
+    void falhaAoPersistirNotificacaoDesfazCandidaturaNaMesmaTransacao() throws Exception {
         PerfilContratante dono = novoContratante("dono-falha-notificacao@rf23.test");
         PerfilArtista artista = novoArtista("artista-falha-notificacao@rf23.test");
         Vaga vaga = novaVaga(dono, StatusVaga.ABERTA);
@@ -215,8 +215,8 @@ class NotificacaoRf23IntegrationTest {
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(corpoCandidatura(vaga, artista)))
-                .andExpect(status().isCreated());
-        assertThat(candidaturaRepository.count()).isOne();
+                .andExpect(status().isConflict());
+        assertThat(candidaturaRepository.count()).isZero();
         assertThat(notificacaoRepository.count()).isZero();
     }
 

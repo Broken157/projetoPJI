@@ -107,6 +107,11 @@ class NotificacaoSsePoolIntegrationTest {
             // Let the existing emitter detect closed clients without waiting its 30-minute timeout.
             sse.entregar(dono.getId(), alerta);
             sse.entregar(outro.getId(), alerta);
+            org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+                sse.entregar(dono.getId(), alerta); sse.entregar(outro.getId(), alerta);
+                assertThat(sse.conexoesAtivas(dono.getId())).isZero();
+                assertThat(sse.conexoesAtivas(outro.getId())).isZero();
+            });
         }
     }
 

@@ -25,11 +25,6 @@ public class NotificacaoPersistenceService {
     private final UsuarioRepository usuarioRepository;
     private final NotificacaoService notificacaoService;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public List<NotificacaoPersistida> persistir(NotificacaoEvento evento) {
-        return salvar(evento);
-    }
-
     @Transactional(propagation = Propagation.MANDATORY)
     public List<NotificacaoPersistida> persistirNaTransacaoAtual(NotificacaoEvento evento) {
         return salvar(evento);

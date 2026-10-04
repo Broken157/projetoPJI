@@ -35,6 +35,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -68,6 +70,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired JwtService jwtService;
     @Autowired NotificacaoRealtimeGateway realtimeGateway;
+    @Autowired NotificacaoSseService sse;
 
     private static String requireTestSecret() {
         String secret = System.getProperty("JWT_SECRET", System.getenv("JWT_SECRET"));
@@ -82,8 +85,8 @@ class NotificacaoWebSocketRf23IntegrationTest {
         jdbcTemplate.execute("TRUNCATE notificacoes, usuarios RESTART IDENTITY CASCADE");
     }
 
-    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS", "CONVITE", "MENSAGEM"})
-    void jwtValidoEntregaNaFilaPrivadaCorretaEmMenosDeCincoSegundos(TipoNotificacao tipo) throws Exception {
+    @ParameterizedTest @CsvSource({"CANDIDATURA,CANDIDATURA","BANCO,BANCO_DE_TALENTOS","CONVITE,CONVITE","MENSAGEM,MENSAGEM","SALVO_PERFIL,SALVO","SALVO_VAGA,SALVO","CANCELAMENTO,CANDIDATURA"})
+    void jwtValidoEntregaNaFilaPrivadaCorretaEmMenosDeCincoSegundos(String produtor, TipoNotificacao tipo) throws Exception {
         Usuario destino = novoUsuario("destino-ws@rf23.test");
         Usuario isolado = novoUsuario("isolado-ws@rf23.test");
         WebSocketStompClient cliente = cliente();
@@ -93,13 +96,14 @@ class NotificacaoWebSocketRf23IntegrationTest {
         BlockingQueue<JsonNode> recebidasIsolado = new LinkedBlockingQueue<>();
         sessaoDestino.subscribe("/user/queue/notificacoes", handler(recebidasDestino));
         sessaoIsolada.subscribe("/user/queue/notificacoes", handler(recebidasIsolado));
-        Thread.sleep(150);
+        aguardarEntregaPrivada(destino, recebidasDestino);
+        aguardarEntregaPrivada(isolado, recebidasIsolado);
 
         NotificacaoResponse alerta = NotificacaoResponse.builder()
                 .id(99L).tipo(tipo).mensagem("Entrega privada")
                 .link("dashboard-contratante.html").lida(false).data(LocalDateTime.now()).build();
         long inicio = System.nanoTime();
-        NotificacaoResponse emitida = entregarOuParticipar(destino, alerta);
+        NotificacaoResponse emitida = produzirPorHttp(destino, produtor, alerta);
         JsonNode recebida = recebidasDestino.poll(5, TimeUnit.SECONDS);
         Duration duracao = Duration.ofNanos(System.nanoTime() - inicio);
 
@@ -109,6 +113,8 @@ class NotificacaoWebSocketRf23IntegrationTest {
         assertThat(recebida.path("link").asText()).isEqualTo(emitida.getLink());
         assertThat(recebida.path("mensagem").asText()).isEqualTo(emitida.getMensagem());
         assertThat(duracao).isLessThan(Duration.ofSeconds(5));
+        assertPrivacidade(recebida);
+        System.out.println("RF36 WS produtor=" + produtor + " entregaMs=" + duracao.toMillis());
         assertThat(recebidasIsolado.poll(700, TimeUnit.MILLISECONDS)).isNull();
         sessaoDestino.disconnect();
         sessaoIsolada.disconnect();
@@ -126,8 +132,8 @@ class NotificacaoWebSocketRf23IntegrationTest {
         cliente.stop();
     }
 
-    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS", "CONVITE", "MENSAGEM"})
-    void sseComAuthorizationEntregaSomenteAoUsuarioCorreto(TipoNotificacao tipo) throws Exception {
+    @ParameterizedTest @CsvSource({"CANDIDATURA,CANDIDATURA","BANCO,BANCO_DE_TALENTOS","CONVITE,CONVITE","MENSAGEM,MENSAGEM","SALVO_PERFIL,SALVO","SALVO_VAGA,SALVO","CANCELAMENTO,CANDIDATURA"})
+    void sseComAuthorizationEntregaSomenteAoUsuarioCorreto(String produtor, TipoNotificacao tipo) throws Exception {
         Usuario destino = novoUsuario("destino-sse@rf23.test");
         Usuario isolado = novoUsuario("isolado-sse@rf23.test");
         HttpClient clienteHttp = HttpClient.newHttpClient();
@@ -148,7 +154,8 @@ class NotificacaoWebSocketRf23IntegrationTest {
                 .id(77L).tipo(tipo).mensagem("Fallback SSE")
                 .link("dashboard-contratante.html").lida(false).data(LocalDateTime.now()).build();
         long inicio = System.nanoTime();
-        NotificacaoResponse emitida = entregarOuParticipar(destino, alerta);
+        CompletableFuture<String> leituraIsolada = CompletableFuture.supplyAsync(() -> lerDados(leitorIsolado));
+        NotificacaoResponse emitida = produzirPorHttp(destino, produtor, alerta);
         String dados = CompletableFuture.supplyAsync(() -> lerDados(leitorDestino))
                 .get(5, TimeUnit.SECONDS);
 
@@ -158,15 +165,158 @@ class NotificacaoWebSocketRf23IntegrationTest {
         assertThat(recebida.path("link").asText()).isEqualTo(emitida.getLink());
         assertThat(recebida.path("mensagem").asText()).isEqualTo(emitida.getMensagem());
         assertThat(Duration.ofNanos(System.nanoTime() - inicio)).isLessThan(Duration.ofSeconds(5));
-        Thread.sleep(250);
-        assertThat(respostaIsolada.body().available()).isZero();
+        assertPrivacidade(recebida);
+        realtimeGateway.entregar(isolado.getId(), isolado.getEmail(), NotificacaoResponse.builder()
+                .id(-1L).tipo(tipo).mensagem("Sentinela de isolamento").link("/vagas/1").build());
+        assertThat(new ObjectMapper().readTree(leituraIsolada.get(5, TimeUnit.SECONDS)).path("id").asLong()).isEqualTo(-1L);
         respostaDestino.body().close();
         respostaIsolada.body().close();
-        Thread.sleep(100);
         // Uma escrita final permite ao servidor detectar os clientes fechados e
         // encerrar os SseEmitter sem prolongar o shutdown da suíte.
         realtimeGateway.entregar(destino.getId(), destino.getEmail(), emitida);
         realtimeGateway.entregar(isolado.getId(), isolado.getEmail(), emitida);
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+            sse.entregar(destino.getId(), emitida); sse.entregar(isolado.getId(), emitida);
+            assertThat(sse.conexoesAtivas(destino.getId())).isZero();
+            assertThat(sse.conexoesAtivas(isolado.getId())).isZero();
+        });
+    }
+
+    // Transport readiness probe is not persisted and precedes the measured real producer.
+    private void aguardarEntregaPrivada(Usuario usuario, BlockingQueue<JsonNode> fila) throws Exception {
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        JsonNode recebido = null;
+        while (recebido == null && System.nanoTime() < limite) {
+            realtimeGateway.entregar(usuario.getId(), usuario.getEmail(), NotificacaoResponse.builder()
+                    .id(-1L).tipo(TipoNotificacao.SALVO).mensagem("Prontidão").link("/vagas/1").build());
+            recebido = fila.poll(50, TimeUnit.MILLISECONDS);
+        }
+        assertThat(recebido).isNotNull(); assertThat(recebido.path("id").asLong()).isEqualTo(-1L); fila.clear();
+    }
+
+    private void assertPrivacidade(JsonNode alerta) {
+        java.util.Set<String> campos = new java.util.HashSet<>(); alerta.fieldNames().forEachRemaining(campos::add);
+        assertThat(campos).containsExactlyInAnyOrder("id","tipo","mensagem","link","lida","data");
+        assertThat(alerta.toString()).doesNotContain("@rf", "11999999999", "1990-01-01", "{noop}teste",
+                "Corpo privado", "cpf", "cnpj", "responsavel", "experiencia", "token", "telefone", "senha");
+        assertThat(alerta.path("link").asText()).startsWith("/").doesNotContain("://", "token=");
+    }
+
+    private NotificacaoResponse produzirPorHttp(Usuario destino, String produtor, NotificacaoResponse alerta) throws Exception {
+        if (produtor.equals("CANDIDATURA") || produtor.startsWith("SALVO") || produtor.equals("CANCELAMENTO")) {
+            return candidaturaSalvoOuCancelamento(destino, produtor);
+        }
+        return entregarOuParticipar(destino, alerta);
+    }
+
+    private NotificacaoResponse candidaturaSalvoOuCancelamento(Usuario destino, String produtor) throws Exception {
+        Usuario ator = novoUsuario("ator-produtor@rf36.test");
+        boolean perfil = produtor.equals("SALVO_PERFIL");
+        Usuario contratante = produtor.equals("CANCELAMENTO") ? ator : destino;
+        long vaga = 0;
+        if (perfil) {
+            jdbcTemplate.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico) values (?,'ARTISTA_SOLO')", destino.getId());
+        } else {
+            contratante.setTipoUsuario(TipoUsuario.CONTRATANTE); usuarioRepository.saveAndFlush(contratante);
+            jdbcTemplate.update("insert into perfis_contratantes(usuario_id,tipo_contratante) values (?,'PESSOA_FISICA')", contratante.getId());
+            vaga = jdbcTemplate.queryForObject("""
+                    insert into vagas(contratante_id,area_id,titulo,descricao,requisitos,cidade,estado,tipo_contrato,abrangencia,status)
+                    values (?,1,'Vaga pública RF36','Descrição','','São Paulo','SP','Projeto','LOCAL','ABERTA') returning id
+                    """, Long.class, contratante.getId());
+        }
+        String caminho, corpo, metodo = "POST";
+        if (produtor.startsWith("SALVO")) {
+            caminho = "/api/salvos"; corpo = "{\"tipoAlvo\":\""+(perfil?"PERFIL_ARTISTA":"VAGA")+"\",\"alvoId\":"+(perfil?destino.getId():vaga)+"}";
+        } else if (produtor.equals("CANCELAMENTO")) {
+            jdbcTemplate.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico) values (?,'ARTISTA_SOLO')", destino.getId());
+            jdbcTemplate.update("insert into candidaturas(vaga_id,artista_id,mensagem_apresentacao,link_portfolio_candidatura,status,data_candidatura) values (?,?,'Corpo privado','https://portfolio.test','PENDENTE',current_timestamp)", vaga,destino.getId());
+            caminho = "/api/vagas/"+vaga; corpo = "{\"confirmacao\":true,\"motivo\":\"Projeto encerrado\"}"; metodo = "DELETE";
+        } else {
+            jdbcTemplate.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,disponivel_oportunidades) values (?,'ARTISTA_SOLO',true)", ator.getId());
+            com.portifolio.support.OfficialSchemaFixtures.completarArtista(jdbcTemplate, ator.getId());
+            caminho = "/api/candidaturas"; corpo = "{\"vagaId\":"+vaga+",\"mensagemApresentacao\":\"Corpo privado\",\"linkPortfolioCandidatura\":\"https://portfolio.test\"}";
+        }
+        var resposta = HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:"+port+caminho))
+                .header("Authorization", "Bearer "+jwtService.gerarToken(ator)).header("Content-Type","application/json")
+                .method(metodo,HttpRequest.BodyPublishers.ofString(corpo)).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(resposta.statusCode()).isEqualTo(metodo.equals("DELETE") ? 204 : 201);
+        var registro = jdbcTemplate.queryForMap("select id,tipo_notificacao::text as tipo,mensagem_alerta,link_contexto,usuario_destino_id from notificacoes");
+        assertThat(registro).containsEntry("usuario_destino_id", destino.getId());
+        String link = perfil ? "/perfis/ARTISTA/"+destino.getId() : "/vagas/"+vaga+(produtor.equals("CANDIDATURA") ? "/gerenciar" : "");
+        assertThat(registro).containsEntry("link_contexto",link);
+        return NotificacaoResponse.builder().id(((Number) registro.get("id")).longValue())
+                .tipo(TipoNotificacao.valueOf((String)registro.get("tipo"))).mensagem((String)registro.get("mensagem_alerta"))
+                .link((String)registro.get("link_contexto")).build();
+    }
+
+    @ParameterizedTest @ValueSource(strings={"INEXISTENTE","INAPTO"})
+    void connectRejeitaIdentidadeAtualInexistenteOuInapta(String estado) {
+        Usuario usuario = novoUsuario("estado-ws@rf36.test"); String token = jwtService.gerarToken(usuario);
+        if (estado.equals("INEXISTENTE")) usuarioRepository.deleteById(usuario.getId());
+        else jdbcTemplate.update("update usuarios set status_conta='BLOQUEADA' where id=?",usuario.getId());
+        var cliente = cliente(); try { assertConexaoRejeitada(cliente,token); } finally { cliente.stop(); }
+    }
+
+    @ParameterizedTest @ValueSource(strings={"AUSENTE","INVALIDO","EXPIRADO","INEXISTENTE","INAPTO"})
+    void connectInvalidoEnviaErrorEFechaWebSocketReal(String caso) throws Exception {
+        Usuario usuario = novoUsuario("error-ws@rf36.test");
+        String token = jwtService.gerarToken(usuario);
+        if (caso.equals("INVALIDO")) token = "jwt-invalido";
+        if (caso.equals("EXPIRADO")) token = tokenExpirado(usuario);
+        if (caso.equals("INEXISTENTE")) usuarioRepository.deleteById(usuario.getId());
+        if (caso.equals("INAPTO")) jdbcTemplate.update("update usuarios set status_conta='BLOQUEADA' where id=?",usuario.getId());
+        QuadrosStomp quadros = new QuadrosStomp();
+        try (HttpClient http = HttpClient.newHttpClient()) {
+            var socket = http.newWebSocketBuilder().header("Origin","http://localhost:3000")
+                    .buildAsync(URI.create("ws://localhost:"+port+"/ws"),quadros).get(5,TimeUnit.SECONDS);
+            try {
+                socket.sendText("CONNECT\naccept-version:1.2\nhost:localhost\n"
+                        +(caso.equals("AUSENTE")?"":"Authorization:Bearer "+token+"\n")+"\n\u0000",true).get(5,TimeUnit.SECONDS);
+                assertThat(quadros.erro.get(5,TimeUnit.SECONDS)).startsWith("ERROR");
+                assertThat(quadros.fechamento.get(5,TimeUnit.SECONDS)).isNotNull();
+                assertThat(quadros.conectado.isDone()).isFalse();
+            } finally { socket.abort(); }
+        }
+    }
+
+    @Test void assinaturaDeFilaPrivadaAlheiaEnviaErrorEFecha() throws Exception {
+        Usuario usuario = novoUsuario("assinatura@rf36.test");
+        Usuario outro = novoUsuario("alheio@rf36.test");
+        QuadrosStomp quadros = new QuadrosStomp();
+        try (HttpClient http = HttpClient.newHttpClient()) {
+            var socket = http.newWebSocketBuilder().header("Origin","http://localhost:3000")
+                    .buildAsync(URI.create("ws://localhost:"+port+"/ws"),quadros).get(5,TimeUnit.SECONDS);
+            try {
+                socket.sendText("CONNECT\naccept-version:1.2\nhost:localhost\nAuthorization:Bearer "+jwtService.gerarToken(usuario)+"\n\n\u0000",true).get(5,TimeUnit.SECONDS);
+                assertThat(quadros.conectado.get(5,TimeUnit.SECONDS)).startsWith("CONNECTED");
+                socket.sendText("SUBSCRIBE\nid:alheia\ndestination:/user/"+outro.getEmail()+"/queue/notificacoes\n\n\u0000",true).get(5,TimeUnit.SECONDS);
+                assertThat(quadros.erro.get(5,TimeUnit.SECONDS)).startsWith("ERROR");
+                assertThat(quadros.fechamento.get(5,TimeUnit.SECONDS)).isNotNull();
+            } finally { socket.abort(); }
+        }
+    }
+
+    private static class QuadrosStomp implements java.net.http.WebSocket.Listener {
+        final CompletableFuture<String> conectado = new CompletableFuture<>();
+        final CompletableFuture<String> erro = new CompletableFuture<>();
+        final CompletableFuture<Integer> fechamento = new CompletableFuture<>();
+        final StringBuilder buffer = new StringBuilder();
+        @Override public java.util.concurrent.CompletionStage<?> onText(java.net.http.WebSocket socket, CharSequence texto, boolean ultimo) {
+            buffer.append(texto);
+            int fim;
+            while ((fim = buffer.indexOf("\u0000")) >= 0) {
+                String quadro = buffer.substring(0,fim).stripLeading(); buffer.delete(0,fim+1);
+                if (quadro.startsWith("CONNECTED")) conectado.complete(quadro);
+                if (quadro.startsWith("ERROR")) erro.complete(quadro);
+            }
+            socket.request(1); return null;
+        }
+        @Override public java.util.concurrent.CompletionStage<?> onClose(java.net.http.WebSocket socket, int status, String motivo) {
+            fechamento.complete(status); return null;
+        }
+        @Override public void onError(java.net.http.WebSocket socket, Throwable falha) {
+            conectado.completeExceptionally(falha); erro.completeExceptionally(falha); fechamento.completeExceptionally(falha);
+        }
     }
 
     private NotificacaoResponse entregarOuParticipar(Usuario destino, NotificacaoResponse alerta) throws Exception {
@@ -367,6 +517,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
     private String tokenExpirado(Usuario usuario) {
         return Jwts.builder()
                 .subject(usuario.getEmail())
+                .claim("id",usuario.getId())
                 .issuedAt(new Date(System.currentTimeMillis() - 120_000))
                 .expiration(new Date(System.currentTimeMillis() - 60_000))
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))

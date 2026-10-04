@@ -307,7 +307,7 @@ class VagaCancelamentoRf25IntegrationTest {
                 .allSatisfy(notificacao -> {
                     assertThat(notificacao.getLida()).isFalse();
                     assertThat(notificacao.getMensagem()).contains("cancelada");
-                    assertThat(notificacao.getLink()).isEqualTo("detalhe-vaga.html?id=" + vaga.getId());
+                    assertThat(notificacao.getLink()).isEqualTo("/vagas/" + vaga.getId());
                 });
         assertThat(jdbcTemplate.queryForObject(
                 "select count(distinct usuario_destino_id) from notificacoes", Integer.class))

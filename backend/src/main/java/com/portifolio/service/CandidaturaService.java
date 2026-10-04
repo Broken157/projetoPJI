@@ -210,7 +210,7 @@ public class CandidaturaService {
                 Set.of(vaga.getContratante().getUsuarioId()),
                 TipoNotificacao.CANDIDATURA,
                 "Nova candidatura recebida para a vaga \"" + vaga.getTitulo() + "\".",
-                "dashboard-contratante.html");
+                "/vagas/" + vaga.getId() + "/gerenciar");
         eventPublisher.publishEvent(notificacao);
         avisarResponsavelSeMenor(usuario, vaga);
         return toResponse(salva);

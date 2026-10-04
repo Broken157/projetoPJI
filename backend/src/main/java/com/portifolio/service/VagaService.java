@@ -583,7 +583,7 @@ public class VagaService {
                 destinatarios,
                 TipoNotificacao.CANDIDATURA,
                 mensagem,
-                "detalhe-vaga.html?id=" + vagaId);
+                "/vagas/" + vagaId);
         if (status == StatusVaga.CANCELADA) {
             // RF28: registros obrigatórios participam do rollback; só a entrega aguarda o commit.
             notificacaoPersistenceService.persistirNaTransacaoAtual(evento)

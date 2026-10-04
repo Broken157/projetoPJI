@@ -53,6 +53,7 @@ public class ChatService {
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
     private final MenorAutorizadoPolicy menorAutorizadoPolicy;
+    private final ConviteVagaService conviteVagaService;
 
     @Transactional
     public ChatSalaResponse criarOuReutilizarSala(String emailAutenticado, Long usuarioDestinoId) {
@@ -229,8 +230,11 @@ public class ChatService {
                     ? atual.getId() : destino.getId();
             Long contratanteId = atual.getTipoUsuario() == TipoUsuario.CONTRATANTE
                     ? atual.getId() : destino.getId();
+            Usuario artista = atual.getId().equals(artistaId) ? atual : destino;
+            Usuario contratante = atual.getId().equals(contratanteId) ? atual : destino;
             if (!candidaturaRepository.existsByArtistaUsuarioIdAndVagaContratanteUsuarioId(
-                    artistaId, contratanteId)) {
+                    artistaId, contratanteId)
+                    && !conviteVagaService.interacaoProfissionalValida(contratante, artista)) {
                 throw new UnprocessableEntityException(
                         "Chat com menor exige interacao profissional valida entre os participantes.");
             }

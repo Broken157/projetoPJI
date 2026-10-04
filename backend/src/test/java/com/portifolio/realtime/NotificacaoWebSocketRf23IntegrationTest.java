@@ -82,7 +82,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
         jdbcTemplate.execute("TRUNCATE notificacoes, usuarios RESTART IDENTITY CASCADE");
     }
 
-    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS"})
+    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS", "CONVITE"})
     void jwtValidoEntregaNaFilaPrivadaCorretaEmMenosDeCincoSegundos(TipoNotificacao tipo) throws Exception {
         Usuario destino = novoUsuario("destino-ws@rf23.test");
         Usuario isolado = novoUsuario("isolado-ws@rf23.test");
@@ -126,7 +126,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
         cliente.stop();
     }
 
-    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS"})
+    @ParameterizedTest @EnumSource(value = TipoNotificacao.class, names = {"CANDIDATURA", "BANCO_DE_TALENTOS", "CONVITE"})
     void sseComAuthorizationEntregaSomenteAoUsuarioCorreto(TipoNotificacao tipo) throws Exception {
         Usuario destino = novoUsuario("destino-sse@rf23.test");
         Usuario isolado = novoUsuario("isolado-sse@rf23.test");
@@ -170,6 +170,9 @@ class NotificacaoWebSocketRf23IntegrationTest {
     }
 
     private NotificacaoResponse entregarOuParticipar(Usuario destino, NotificacaoResponse alerta) throws Exception {
+        if (alerta.getTipo() == TipoNotificacao.CONVITE) {
+            return convidarPorHttp(destino);
+        }
         if (alerta.getTipo() != TipoNotificacao.BANCO_DE_TALENTOS) {
             realtimeGateway.entregar(destino.getId(), destino.getEmail(), alerta);
             return alerta;
@@ -195,6 +198,42 @@ class NotificacaoWebSocketRf23IntegrationTest {
                 .containsEntry("link_contexto", "/perfis/ARTISTA/" + artista.getId());
         return NotificacaoResponse.builder().id(((Number) registro.get("id")).longValue())
                 .tipo(TipoNotificacao.BANCO_DE_TALENTOS).mensagem((String) registro.get("mensagem_alerta"))
+                .link((String) registro.get("link_contexto")).build();
+    }
+
+    private NotificacaoResponse convidarPorHttp(Usuario artista) throws Exception {
+        jdbcTemplate.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,disponivel_oportunidades) values (?,'ARTISTA_SOLO',true)", artista.getId());
+        com.portifolio.support.OfficialSchemaFixtures.completarArtista(jdbcTemplate, artista.getId());
+        Usuario contratante = novoUsuario("contratante-convite@rf42.test");
+        contratante.setTipoUsuario(TipoUsuario.CONTRATANTE);
+        usuarioRepository.saveAndFlush(contratante);
+        jdbcTemplate.update("insert into perfis_contratantes(usuario_id,tipo_contratante) values (?,'PESSOA_FISICA')", contratante.getId());
+        HttpClient cliente = HttpClient.newHttpClient();
+        HttpRequest participacao = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/talentos/contratantes/" + contratante.getId() + "/participacao"))
+                .header("Authorization", "Bearer " + jwtService.gerarToken(artista))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"confirmado\":true}")).build();
+        assertThat(cliente.send(participacao, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(201);
+        long vagaId = jdbcTemplate.queryForObject("""
+                insert into vagas(contratante_id,area_id,titulo,descricao,requisitos,cidade,estado,tipo_contrato,abrangencia,status)
+                values (?,1,'Vaga RF42','Descrição','','São Paulo','SP','Freelance','LOCAL','ABERTA') returning id
+                """, Long.class, contratante.getId());
+        HttpRequest convite = HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/api/talentos/" + artista.getId() + "/convites"))
+                .header("Authorization", "Bearer " + jwtService.gerarToken(contratante))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"vagaId\":" + vagaId + ",\"confirmado\":true}")).build();
+        var resultado = cliente.send(convite, HttpResponse.BodyHandlers.ofString());
+        assertThat(resultado.statusCode()).isEqualTo(201);
+        var registro = jdbcTemplate.queryForMap("select id,tipo_notificacao::text as tipo,mensagem_alerta,link_contexto,usuario_destino_id from notificacoes where tipo_notificacao='CONVITE'");
+        assertThat(registro).containsEntry("tipo", "CONVITE").containsEntry("usuario_destino_id", artista.getId())
+                .containsEntry("link_contexto", "/vagas/" + vagaId);
+        assertThat(new ObjectMapper().readTree(resultado.body()).path("notificacaoId").asLong())
+                .isEqualTo(((Number) registro.get("id")).longValue());
+        assertThat(jdbcTemplate.queryForObject("select count(*) from candidaturas", Long.class)).isZero();
+        return NotificacaoResponse.builder().id(((Number) registro.get("id")).longValue())
+                .tipo(TipoNotificacao.CONVITE).mensagem((String) registro.get("mensagem_alerta"))
                 .link((String) registro.get("link_contexto")).build();
     }
 

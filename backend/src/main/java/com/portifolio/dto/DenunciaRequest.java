@@ -11,5 +11,5 @@ public record DenunciaRequest(
         @NotNull @Positive Long alvoId,
         @NotBlank @Size(max = 150) String motivo,
         @Size(max = 2000) String descricao) {
-    public enum TipoAlvo { VAGA, PERFIL_ARTISTA, PERFIL_CONTRATANTE }
+    public enum TipoAlvo { VAGA, COMUNIDADE, PERFIL_ARTISTA, PERFIL_CONTRATANTE }
 }

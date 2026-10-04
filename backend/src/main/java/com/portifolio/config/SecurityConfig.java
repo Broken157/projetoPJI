@@ -73,6 +73,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/perfis/publicos", "/api/perfis/publicos/*/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/portfolio/publico/**").permitAll()
                         .requestMatchers("/api/portfolio/**").hasRole("ARTISTA")
+                        .requestMatchers("/api/moderacao", "/api/moderacao/**").hasAnyRole("ADMIN", "MODERADOR")
                         // O handshake nao carrega JWT. A autenticacao ocorre no frame STOMP CONNECT.
                         .requestMatchers(HttpMethod.GET, "/ws", "/ws/**").permitAll()
                         // Não há administração global no MVP. Cadastro convencional só por /auth/cadastro.

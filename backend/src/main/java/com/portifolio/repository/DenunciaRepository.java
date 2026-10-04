@@ -39,16 +39,43 @@ public class DenunciaRepository {
             """;
 
     public long inserir(Long denunciante, DenunciaRequest request, String motivo, String descricao) {
-        if (request.tipoAlvo() == DenunciaRequest.TipoAlvo.VAGA) {
+        if (geral(request)) {
             return jdbc.queryForObject("""
                     insert into reportes_usuario(denunciante_id,tipo_conteudo,conteudo_id,motivo_reporte,descricao_adicional)
-                    values (?,cast('VAGA' as tipo_conteudo_enum),?,?,?) returning id
-                    """, Long.class, denunciante, request.alvoId(), motivo, descricao);
+                    values (?,cast(? as tipo_conteudo_enum),?,?,?) returning id
+                    """, Long.class, denunciante, request.tipoAlvo().name(), request.alvoId(), motivo, descricao);
         }
         return jdbc.queryForObject("""
                 insert into denuncias_plagio(denunciante_id,perfil_denunciado_id,tipo_violacao,descricao_detalhada)
                 values (?,?,cast(? as tipo_violacao_enum),?) returning id
                 """, Long.class, denunciante, request.alvoId(), motivo.replace(' ', '_'), descricao);
+    }
+
+    private boolean geral(DenunciaRequest request) {
+        return request.tipoAlvo() == DenunciaRequest.TipoAlvo.VAGA || request.tipoAlvo() == DenunciaRequest.TipoAlvo.COMUNIDADE;
+    }
+
+    public boolean comunidadePublica(long id) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from comunidades c join usuarios u on u.id=c.criador_id where c.id=? and c.privacidade='PUBLICA' and u.status_conta='ATIVA' and "
+                + ModeracaoConteudoRepository.COMUNIDADE_PUBLICAVEL + ")", Boolean.class, id));
+    }
+
+    public Optional<Long> duplicada(Long denunciante, DenunciaRequest request, String motivo, String descricao) {
+        // Lock transacional, compartilhado entre instâncias, sem coluna/constraint nova.
+        jdbc.query("select pg_advisory_xact_lock(hashtextextended(?,0))", r -> {},
+                "RF18:" + denunciante + ":" + request.tipoAlvo() + ":" + request.alvoId());
+        String sql = geral(request) ? """
+                select id from reportes_usuario where denunciante_id=? and conteudo_id=? and tipo_conteudo::text=?
+                and motivo_reporte=? and descricao_adicional is not distinct from cast(? as text)
+                and data_reporte >= current_timestamp - interval '60 seconds' order by id desc limit 1
+                """ : """
+                select id from denuncias_plagio where denunciante_id=? and perfil_denunciado_id=? and tipo_violacao::text=?
+                and descricao_detalhada=? and status_denuncia in ('RECEBIDA','EM_ANALISE') order by id desc limit 1
+                """;
+        return (geral(request)
+                ? jdbc.query(sql, (r,n)->r.getLong("id"), denunciante, request.alvoId(), request.tipoAlvo().name(), motivo, descricao)
+                : jdbc.query(sql, (r,n)->r.getLong("id"), denunciante, request.alvoId(), motivo.replace(' ', '_'), descricao))
+                .stream().findFirst();
     }
 
     public Optional<DenunciaResponse> buscarPropria(Long denunciante, Categoria categoria, Long id) {

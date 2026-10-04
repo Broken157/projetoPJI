@@ -20,15 +20,22 @@ public class PortfolioArquivoService {
     private final PortfolioAccessService acesso;
     private final ArquivoPortfolioValidator validator;
     private final TransactionTemplate tx;
+    private final com.portifolio.repository.ModeracaoConteudoRepository moderacao;
+    private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
     public PortfolioArquivoService(PortfolioArquivoRepository arquivos, PortfolioStorageService storage,
-            PortfolioAccessService acesso, ArquivoPortfolioValidator validator, PlatformTransactionManager manager) {
+            PortfolioAccessService acesso, ArquivoPortfolioValidator validator, PlatformTransactionManager manager,
+            com.portifolio.repository.ModeracaoConteudoRepository moderacao,
+            com.portifolio.validation.ConteudoPublicoValidator conteudoPublico) {
         this.arquivos = arquivos; this.storage = storage; this.acesso = acesso; this.validator = validator;
         this.tx = new TransactionTemplate(manager);
+        this.moderacao = moderacao;
+        this.conteudoPublico = conteudoPublico;
     }
     public PortfolioArquivoResponse enviar(org.springframework.web.multipart.MultipartFile file) {
         return operacao(() -> tx.execute(status -> {
             var dono = acesso.artistaAtual();
             var validado = validator.validar(file);
+            conteudoPublico.texto(validado.nome(), "Nome do arquivo", 150, true);
             String ref = storage.novaReferencia(dono.getUsuarioId(), validado.extensao());
             compensarRollback(() -> storage.limparUpload(dono.getUsuarioId(), ref));
             storage.gravar(dono.getUsuarioId(), ref, validado.bytes());
@@ -66,6 +73,9 @@ public class PortfolioArquivoService {
         operacao(() -> tx.execute(status -> {
             var dono = acesso.artistaAtual();
             var item = arquivos.bloquearProprio(id, dono.getUsuarioId()).orElseThrow(PortfolioAccessService::naoEncontrado);
+            if (moderacao.arquivoComEvidencia(id)) {
+                throw new ConflictException("Arquivo vinculado a galeria denunciada ou moderada; evidência preservada.");
+            }
             String ref = item.getUrlArquivo();
             byte[] backup = storage.ler(dono.getUsuarioId(), ref, item.getTamanhoBytes());
             // DELETE físico antes do commit: se falhar, o banco reverte; se o commit falhar, restaura o arquivo.
@@ -85,7 +95,7 @@ public class PortfolioArquivoService {
     }
     private <T> T operacao(Supplier<T> acao) {
         try { return acao.get(); }
-        catch (UnprocessableEntityException | UnauthorizedException | ForbiddenException | ResourceNotFoundException | PortfolioOperationException ex) { throw ex; }
+        catch (UnprocessableEntityException | UnauthorizedException | ForbiddenException | ResourceNotFoundException | ConflictException | PortfolioOperationException ex) { throw ex; }
         catch (RuntimeException ex) { throw new PortfolioOperationException(ex); }
     }
     private PortfolioArquivoResponse dto(PortfolioArquivo a, boolean publico) {

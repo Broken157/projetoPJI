@@ -18,7 +18,9 @@ public class DenunciaController {
 
     @PostMapping
     public ResponseEntity<DenunciaResponse> registrar(@Valid @RequestBody DenunciaRequest request) {
-        var response = service.registrar(request);
+        var registro = service.registrar(request);
+        var response = registro.denuncia();
+        if (!registro.criada()) return ResponseEntity.ok(response);
         return ResponseEntity.created(URI.create("/api/denuncias/" + response.categoria() + "/" + response.id()))
                 .body(response);
     }

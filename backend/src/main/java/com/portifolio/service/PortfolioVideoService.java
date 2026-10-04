@@ -18,6 +18,7 @@ public class PortfolioVideoService {
     private final EmbedExternoRepository videos;
     private final PortfolioAccessService acesso;
     private final VideoPortfolioValidator validator;
+    private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
     public record VideoResponse(Long id, String urlOriginal, String embedUrl, String provedor, String legenda) {}
 
     @Transactional
@@ -53,6 +54,7 @@ public class PortfolioVideoService {
     }
     private String legenda(Map<String, String> request) {
         String value = request.get("legenda");
+        conteudoPublico.texto(value, "Legenda", 255, false);
         if (value != null && (value.length() > 255 || value.chars().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t')))
             throw new UnprocessableEntityException("A legenda deve ter até 255 caracteres, sem caracteres de controle.");
         return value == null || value.isBlank() ? null : value.strip();

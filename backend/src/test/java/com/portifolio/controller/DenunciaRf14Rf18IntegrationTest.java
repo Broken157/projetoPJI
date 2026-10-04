@@ -144,7 +144,7 @@ class DenunciaRf14Rf18IntegrationTest {
         enviar(artista,"VAGA",0,"Outro","Contexto").andExpect(status().isBadRequest());
         enviar(contratante,"PERFIL_ARTISTA",1,"OUTRO"," ").andExpect(status().isBadRequest());
         enviar(contratante,"PERFIL_ARTISTA",1,"OUTRO","x".repeat(2001)).andExpect(status().isBadRequest());
-        enviarJson(artista,"{\"tipoAlvo\":\"COMUNIDADE\",\"alvoId\":10,\"motivo\":\"Outro\"}").andExpect(status().isBadRequest());
+        enviarJson(artista,"{\"tipoAlvo\":\"COMUNIDADE\",\"alvoId\":10,\"motivo\":\"Outro\"}").andExpect(status().isNotFound());
         assertThat(total()).isZero();
     }
 

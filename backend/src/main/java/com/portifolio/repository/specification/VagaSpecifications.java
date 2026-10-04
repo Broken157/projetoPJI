@@ -16,6 +16,22 @@ public final class VagaSpecifications {
     private VagaSpecifications() {
     }
 
+    public static Specification<Vaga> semBloqueioModeracao() {
+        return (root, query, cb) -> {
+            var ultimoId = query.subquery(Long.class);
+            var historico = ultimoId.from(com.portifolio.model.ModeracaoConteudo.class);
+            ultimoId.select(cb.max(historico.<Long>get("id"))).where(
+                    cb.equal(historico.get("tipoConteudo"), "VAGA"),
+                    cb.equal(historico.get("conteudoId"), root.get("id")));
+            var bloqueio = query.subquery(Long.class);
+            var acao = bloqueio.from(com.portifolio.model.ModeracaoConteudo.class);
+            bloqueio.select(acao.get("id")).where(cb.equal(acao.get("id"), ultimoId),
+                    cb.or(cb.isNull(acao.get("statusModeracao")),
+                            acao.get("statusModeracao").in("BLOQUEADO", "SOB_ANALISE")));
+            return cb.not(cb.exists(bloqueio));
+        };
+    }
+
     public static Specification<Vaga> comStatus(StatusVaga status) {
         return (root, query, cb) -> status == null
                 ? cb.conjunction()

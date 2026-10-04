@@ -16,10 +16,10 @@ public class CommunityController {
     private static final String VISIBLE="(lower(c.privacidade::text)='publica' or c.criador_id=? or exists(select 1 from membros_comunidade m where m.comunidade_id=c.id and m.usuario_id=? and m.aprovado=true))";
     @GetMapping public Pagina listar(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="12") int size){
         Long user=usuario();if(page<0||size<1||size>50)throw new IllegalArgumentException("Paginação inválida.");
-        var rows=jdbc.query("select c.* from comunidades c where "+VISIBLE+" order by c.id desc limit ? offset ?",mapper,user,user,size+1,(long)page*size);
+        var rows=jdbc.query("select c.* from comunidades c where "+VISIBLE+" and "+com.portifolio.repository.ModeracaoConteudoRepository.COMUNIDADE_PUBLICAVEL+" order by c.id desc limit ? offset ?",mapper,user,user,size+1,(long)page*size);
         return new Pagina(rows.stream().limit(size).toList(),page,size,rows.size()>size);
     }
     @GetMapping("/{id}") public Item detalhe(@PathVariable Long id){
-        Long user=usuario();return jdbc.query("select c.* from comunidades c where c.id=? and "+VISIBLE,mapper,id,user,user).stream().findFirst().orElseThrow(()->new ResourceNotFoundException("Comunidade não encontrada."));
+        Long user=usuario();return jdbc.query("select c.* from comunidades c where c.id=? and "+VISIBLE+" and "+com.portifolio.repository.ModeracaoConteudoRepository.COMUNIDADE_PUBLICAVEL,mapper,id,user,user).stream().findFirst().orElseThrow(()->new ResourceNotFoundException("Comunidade não encontrada."));
     }
 }

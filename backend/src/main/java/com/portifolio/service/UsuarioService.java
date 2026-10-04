@@ -30,6 +30,7 @@ public class UsuarioService {
     private final PerfilCompletoService perfilCompletoService;
     private final RefreshTokenService refreshTokenService;
     private final PasswordPolicy passwordPolicy;
+    private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
 
     @Transactional(readOnly = true)
     public UsuarioResponse buscarAtual() {
@@ -41,6 +42,7 @@ public class UsuarioService {
         Usuario usuario = usuarioAtual();
         validarEmailDisponivel(request.getEmail(), usuario.getId());
 
+        conteudoPublico.texto(request.getNome(), "Nome público", 150, true);
         usuario.setNome(request.getNome());
         usuario.setTelefone(request.getTelefone());
         usuario.setEmail(request.getEmail());
@@ -102,6 +104,7 @@ public class UsuarioService {
             throw new UnprocessableEntityException(
                     "Troque a senha por /api/usuarios/me informando a senha atual.");
         }
+        conteudoPublico.texto(request.getNome(), "Nome público", 150, true);
         usuario.setNome(request.getNome());
         usuario.setTelefone(request.getTelefone());
         usuario.setEmail(request.getEmail());
@@ -197,6 +200,7 @@ public class UsuarioService {
     }
 
     private void preencherUsuarioNaCriacao(Usuario usuario, UsuarioRequest request) {
+        conteudoPublico.texto(request.getNome(), "Nome público", 150, true);
         usuario.setNome(request.getNome());
         usuario.setDataNascimento(request.getDataNascimento());
         usuario.setTelefone(request.getTelefone());

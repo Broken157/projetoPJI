@@ -75,6 +75,8 @@ public class VagaService {
     private final ApplicationEventPublisher eventPublisher;
     private final NotificacaoPersistenceService notificacaoPersistenceService;
     private final VagaPrazoPolicy vagaPrazoPolicy;
+    private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
+    private final com.portifolio.repository.ModeracaoConteudoRepository moderacao;
 
     // RF03 — Listagem e busca paginada (cursor-based) de vagas ABERTAS. Endpoint público.
     // RF03 Fase 2 — se o artista autenticado tiver candidaturas em vagas CANCELADA,
@@ -87,6 +89,7 @@ public class VagaService {
 
         Specification<Vaga> filtrosPublicos = Specification
                 .where(VagaSpecifications.comStatus(StatusVaga.ABERTA))
+                .and(VagaSpecifications.semBloqueioModeracao())
                 .and(VagaSpecifications.prazoAindaValido(vagaPrazoPolicy.hoje()))
                 .and(VagaSpecifications.buscaTituloOuContratante(filtro.getBusca()))
                 .and(VagaSpecifications.tituloContem(filtro.getTitulo()))
@@ -167,7 +170,7 @@ public class VagaService {
         int tamanho = normalizarTamanho(size);
         Vaga origem = vagaRepository.findById(vagaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
-        if (origem.getStatus() == StatusVaga.RASCUNHO) {
+        if (origem.getStatus() == StatusVaga.RASCUNHO || moderacao.oculto("VAGA", vagaId)) {
             throw new ResourceNotFoundException("Vaga não encontrada.");
         }
 
@@ -178,6 +181,7 @@ public class VagaService {
 
         Specification<Vaga> spec = Specification
                 .where(VagaSpecifications.comStatus(StatusVaga.ABERTA))
+                .and(VagaSpecifications.semBloqueioModeracao())
                 .and(VagaSpecifications.prazoAindaValido(vagaPrazoPolicy.hoje()))
                 .and(VagaSpecifications.idMaiorQue(cursor))
                 .and(VagaSpecifications.idDiferente(vagaId))
@@ -346,6 +350,9 @@ public class VagaService {
         boolean proprietario = usuario != null
                 && usuario.getTipoUsuario() == TipoUsuario.CONTRATANTE
                 && vaga.getContratante().getUsuarioId().equals(usuario.getId());
+        if (!proprietario && moderacao.oculto("VAGA", id)) {
+            throw new ResourceNotFoundException("Vaga não encontrada.");
+        }
         Optional<Candidatura> candidaturaDoArtista = usuario != null
                 && usuario.getTipoUsuario() == TipoUsuario.ARTISTA
                 ? candidaturaRepository.findByVagaIdAndArtistaUsuarioIdOrderByIdDesc(vaga.getId(), usuario.getId())
@@ -375,6 +382,7 @@ public class VagaService {
     @Transactional
     public VagaResponse criar(VagaRequest request) {
         Usuario usuario = exigirContratanteAtual();
+        validarConteudoPublico(request);
         StatusVaga statusSolicitado = request.getStatus() == null ? StatusVaga.ABERTA : request.getStatus();
         if (statusSolicitado != StatusVaga.ABERTA && statusSolicitado != StatusVaga.RASCUNHO) {
             throw new UnprocessableEntityException("Criação aceita somente ABERTA ou RASCUNHO.");
@@ -425,6 +433,7 @@ public class VagaService {
                 && statusAtual != StatusVaga.PAUSADA) {
             throw new UnprocessableEntityException("Vaga " + statusAtual + " não pode ser editada.");
         }
+        validarConteudoPublico(request);
         preencherVaga(vaga, request);
         normalizarPublicacao(vaga);
         validarPrazoInformado(vaga.getDataLimiteCandidatura());
@@ -793,10 +802,30 @@ public class VagaService {
     }
 
     private void validarPublicacao(Vaga vaga) {
+        conteudoPublico.texto(vaga.getTitulo(), "Título", 150, true);
+        conteudoPublico.texto(vaga.getDescricao(), "Descrição", 20000, true);
+        conteudoPublico.texto(vaga.getRequisitos(), "Requisitos", 20000, false);
+        conteudoPublico.texto(vaga.getBeneficios(), "Benefícios", 20000, false);
+        conteudoPublico.texto(vaga.getCidade(), "Cidade", 100, true);
+        conteudoPublico.texto(vaga.getTipoContrato(), "Tipo de contrato", 100, true);
+        conteudoPublico.texto(vaga.getExperiencia(), "Experiência", 100, false);
+        if (vaga.getFotos() != null) vaga.getFotos().forEach(url -> conteudoPublico.url(url, "Foto", 500, true));
         if (vaga.getModeloTrabalho() == null) {
             throw new UnprocessableEntityException("Modelo de trabalho é obrigatório para publicar.");
         }
         validarPrazoInformado(vaga.getDataLimiteCandidatura());
+    }
+
+    private void validarConteudoPublico(VagaAtualizacaoRequest request) {
+        conteudoPublico.texto(request.getTitulo(), "Título", 150, true);
+        conteudoPublico.texto(request.getDescricao(), "Descrição", 20000, true);
+        conteudoPublico.texto(request.getRequisitos(), "Requisitos", 20000, false);
+        conteudoPublico.texto(request.getBeneficios(), "Benefícios", 20000, false);
+        conteudoPublico.texto(request.getCidade(), "Cidade", 100, true);
+        conteudoPublico.texto(request.getTipoContrato(), "Tipo de contrato", 100, true);
+        conteudoPublico.texto(request.getExperiencia(), "Experiência", 100, false);
+        if (request.getFotos() != null) request.getFotos().forEach(
+                url -> conteudoPublico.url(url, "Foto", 500, true));
     }
 
     private void validarPrazoInformado(LocalDate prazo) {

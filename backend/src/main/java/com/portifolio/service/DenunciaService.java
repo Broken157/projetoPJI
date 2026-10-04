@@ -29,16 +29,24 @@ public class DenunciaService {
     private final UsuarioRepository usuarios;
     private final PerfilPublicoService perfis;
     private final VagaService vagas;
+    private final com.portifolio.repository.ModeracaoConteudoRepository moderacao;
+    private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
+    public record Registro(DenunciaResponse denuncia, boolean criada) {}
 
     @Transactional
-    public DenunciaResponse registrar(DenunciaRequest request) {
+    public Registro registrar(DenunciaRequest request) {
         Long denunciante = usuario().getId();
         String motivo = request.motivo().strip();
         String descricao = request.descricao() == null ? null : request.descricao().strip();
         Categoria categoria;
         if (request.tipoAlvo() == DenunciaRequest.TipoAlvo.VAGA) {
             // RF05 conserva descoberta por ID, ownership e visibilidade da vaga.
-            vagas.buscarPorId(request.alvoId());
+            var vaga = vagas.buscarPorId(request.alvoId());
+            if (vaga.getStatus() != com.portifolio.model.enums.StatusVaga.ABERTA || moderacao.oculto("VAGA", request.alvoId()))
+                throw new ResourceNotFoundException("Vaga pública não encontrada.");
+            categoria = Categoria.CONTEUDO;
+        } else if (request.tipoAlvo() == DenunciaRequest.TipoAlvo.COMUNIDADE) {
+            if (!denuncias.comunidadePublica(request.alvoId())) throw new ResourceNotFoundException("Comunidade pública não encontrada.");
             categoria = Categoria.CONTEUDO;
         } else {
             if (!VIOLACOES.contains(motivo)) {
@@ -55,8 +63,11 @@ public class DenunciaService {
             perfis.buscar(tipo, request.alvoId());
             categoria = Categoria.PLAGIO;
         }
-        long id = denuncias.inserir(denunciante, request, motivo, descricao);
-        return denuncias.buscarPropria(denunciante, categoria, id).orElseThrow();
+        conteudoPublico.texto(motivo, "Motivo", 150, true);
+        conteudoPublico.texto(descricao, "Descrição", 2000, false);
+        var duplicada = denuncias.duplicada(denunciante, request, motivo, descricao);
+        long id = duplicada.orElseGet(() -> denuncias.inserir(denunciante, request, motivo, descricao));
+        return new Registro(denuncias.buscarPropria(denunciante, categoria, id).orElseThrow(), duplicada.isEmpty());
     }
 
     public DenunciaResponse buscar(Categoria categoria, Long id) {

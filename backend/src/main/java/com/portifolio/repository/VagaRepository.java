@@ -74,6 +74,8 @@ public interface VagaRepository extends JpaRepository<Vaga, Long>, JpaSpecificat
             join vaga_funcao tv on tv.vaga_id = v.id
             where v.status = 'ABERTA'
               and tv.funcao_id in (:funcaoIds)
+              and coalesce((select coalesce(m.status_moderacao::text,'SOB_ANALISE') from moderacao_conteudo m
+                  where m.tipo_conteudo='VAGA' and m.conteudo_id=v.id order by m.id desc limit 1),'APROVADO')='APROVADO'
             group by v.id, v.data_publicacao
             order by count(distinct tv.funcao_id) desc,
                      v.data_publicacao desc nulls last,
@@ -84,6 +86,8 @@ public interface VagaRepository extends JpaRepository<Vaga, Long>, JpaSpecificat
             join vaga_funcao tv on tv.vaga_id = v.id
             where v.status = 'ABERTA'
               and tv.funcao_id in (:funcaoIds)
+              and coalesce((select coalesce(m.status_moderacao::text,'SOB_ANALISE') from moderacao_conteudo m
+                  where m.tipo_conteudo='VAGA' and m.conteudo_id=v.id order by m.id desc limit 1),'APROVADO')='APROVADO'
             """, nativeQuery = true)
     Page<VagaRecomendadaProjection> findRecomendadasPorFuncoes(
             @Param("funcaoIds") Set<Long> funcaoIds,

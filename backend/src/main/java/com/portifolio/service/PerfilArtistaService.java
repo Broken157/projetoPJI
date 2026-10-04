@@ -32,6 +32,7 @@ public class PerfilArtistaService {
     private final AvatarService avatarService; // RF34
     private final AuthenticatedUserResolver authenticatedUserResolver;
     private final PerfilCompletoService perfilCompletoService;
+    private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
 
     @Transactional(readOnly = true)
     public List<PerfilArtistaResponse> listarTodos() {
@@ -105,6 +106,11 @@ public class PerfilArtistaService {
     }
 
     private void preencherPerfil(PerfilArtista perfil, PerfilArtistaRequest request) {
+        conteudoPublico.texto(request.getBiografia(), "Biografia", 5000, false);
+        conteudoPublico.texto(request.getCidade(), "Cidade", 100, false);
+        conteudoPublico.texto(request.getLocalizacao(), "Localização", 150, false);
+        conteudoPublico.url(request.getUrlPortfolio(), "Portfólio", 255, false);
+        conteudoPublico.url(request.getBannerUrl(), "Banner", 255, true);
         perfil.setBiografia(request.getBiografia());
         var local = com.portifolio.validation.LocalizacaoArtista.deRequest(
                 request.getCidade(), request.getEstado(), request.getLocalizacao());

@@ -30,6 +30,7 @@ class UsuarioServicePasswordPolicyTest {
     @Mock PerfilCompletoService perfilCompletoService;
     @Mock RefreshTokenService refreshTokenService;
     @Mock PasswordPolicy passwordPolicy;
+    @Mock com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
     @InjectMocks UsuarioService usuarioService;
 
     @Test

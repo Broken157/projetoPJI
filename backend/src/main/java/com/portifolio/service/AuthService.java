@@ -57,6 +57,7 @@ public class AuthService {
     private final CadastroValidator cadastroValidator;
     private final GoogleRegistrationContextService googleRegistrationContext;
     private final GoogleAccountAccessPolicy accountAccessPolicy;
+    private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
 
     // ──────────────────────────────────────────────────────────
     // RF01 — Cadastro convencional e vínculo com uma área principal
@@ -83,6 +84,8 @@ public class AuthService {
 
     private Usuario novoUsuario(CadastroDadosRequest request, CadastroValidator.DadosValidados dados,
             String nome, String email) {
+        conteudoPublico.texto(nome, "Nome público", 150, true);
+        conteudoPublico.texto(request.getNomeEntidade(), "Nome da entidade", 150, false);
         Usuario usuario = new Usuario();
         usuario.setNome(nome);
         usuario.setUsername(request.getUsername());

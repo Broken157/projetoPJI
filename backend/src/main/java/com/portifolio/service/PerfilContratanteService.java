@@ -23,6 +23,7 @@ public class PerfilContratanteService {
     private final AvatarService avatarService; // RF34
     private final AuthenticatedUserResolver authenticatedUserResolver;
     private final PerfilCompletoService perfilCompletoService;
+    private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
 
     @Transactional(readOnly = true)
     public List<PerfilContratanteResponse> listarTodos() {
@@ -94,6 +95,10 @@ public class PerfilContratanteService {
     }
 
     private void preencherPerfil(PerfilContratante perfil, PerfilContratanteRequest request) {
+        conteudoPublico.texto(request.getNomeEmpresa(), "Nome da empresa", 150, false);
+        conteudoPublico.texto(request.getBiografia(), "Biografia", 5000, false);
+        conteudoPublico.texto(request.getLocalizacao(), "Localização", 150, false);
+        conteudoPublico.url(request.getBannerUrl(), "Banner", 255, true);
         perfil.setNomeEmpresa(request.getNomeEmpresa());
         if (request.getTipoPerfil() != null) perfil.setTipoPerfil(request.getTipoPerfil());
         if (perfil.getTipoContratante() == null)

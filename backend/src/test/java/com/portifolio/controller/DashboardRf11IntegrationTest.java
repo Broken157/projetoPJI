@@ -65,6 +65,8 @@ class DashboardRf11IntegrationTest {
     @Autowired CandidaturaRepository candidaturaRepository;
     @Autowired JwtService jwtService;
     @Autowired EntityManagerFactory entityManagerFactory;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate namedJdbc;
 
     @AfterEach
     void limparBanco() {
@@ -102,10 +104,11 @@ class DashboardRf11IntegrationTest {
                         .header("Authorization", bearer(artista.getUsuario())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tipoUsuario").value("ARTISTA"))
-                .andExpect(jsonPath("$.vagasRecomendadas.content.length()").value(2))
+                .andExpect(jsonPath("$.vagasRecomendadas.content.length()").value(3))
                 .andExpect(jsonPath("$.vagasRecomendadas.content[0].titulo").value("Duas coincidencias"))
                 .andExpect(jsonPath("$.vagasRecomendadas.content[0].quantidadeFuncoesCoincidentes").value(2))
                 .andExpect(jsonPath("$.vagasRecomendadas.content[1].titulo").value("Uma coincidencia"))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[2].quantidadeFuncoesCoincidentes").value(0))
                 .andExpect(jsonPath("$.candidaturasRecentes").doesNotExist())
                 .andExpect(jsonPath("$.talentosSugeridos").doesNotExist())
                 .andExpect(jsonPath("$.email").doesNotExist())
@@ -117,6 +120,7 @@ class DashboardRf11IntegrationTest {
     @Test
     void artistaSemFuncoesNaoRecebeSugestaoAleatoriaEEnxergaPerfilIncompleto() throws Exception {
         PerfilArtista artista = criarArtista("sem-funcoes@rf11.test", false, LocalDate.of(1992, 2, 2));
+        jdbcTemplate.update("delete from perfil_artista_area where perfil_artista_id=?", artista.getUsuarioId());
         PerfilContratante contratante = criarContratante("publicador@rf11.test", true);
         criarVaga(contratante, "Vaga qualquer", StatusVaga.ABERTA, criarFuncao("Cinema"));
 
@@ -312,11 +316,20 @@ class DashboardRf11IntegrationTest {
         mockMvc.perform(get("/api/dashboard").param("size", "20")
                         .header("Authorization", bearer(artista.getUsuario())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.vagasRecomendadas.content.length()").value(20));
+                .andExpect(jsonPath("$.vagasRecomendadas.content.length()").value(5))
+                .andExpect(jsonPath("$.vagasRecomendadas.totalElements").value(20));
 
-        // RF24 acrescenta uma unica consulta agregada para mensagens nao lidas;
-        // o teto continua constante, independentemente das 20 recomendacoes.
-        assertThat(statistics.getPrepareStatementCount()).isLessThanOrEqualTo(7);
+        long cinco = statistics.getPrepareStatementCount();
+        long jdbcCinco = chamadasJdbc();
+        org.mockito.Mockito.clearInvocations(namedJdbc);
+        statistics.clear();
+        painel(artista.getUsuario(), 1);
+        long uma = statistics.getPrepareStatementCount();
+        long jdbcUma = chamadasJdbc();
+        System.out.println("RF11 consultas artista: preview1="+uma+" preview5="+cinco+" JDBC1="+jdbcUma+" JDBC5="+jdbcCinco);
+        // Ambos os tamanhos têm mais resultados: COUNT não é omitido pelo Pageable.
+        assertThat(cinco).isLessThanOrEqualTo(uma);
+        assertThat(jdbcCinco).isEqualTo(jdbcUma);
     }
 
     @Test
@@ -337,13 +350,328 @@ class DashboardRf11IntegrationTest {
         Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         statistics.clear();
 
+        org.mockito.Mockito.clearInvocations(namedJdbc);
+
         mockMvc.perform(get("/api/dashboard").param("size", "20")
                         .header("Authorization", bearer(dono.getUsuario())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.candidaturasRecentes.content.length()").value(20))
-                .andExpect(jsonPath("$.talentosSugeridos.content.length()").value(20));
+                .andExpect(jsonPath("$.candidaturasRecentes.content.length()").value(5))
+                .andExpect(jsonPath("$.talentosSugeridos.content.length()").value(5))
+                .andExpect(jsonPath("$.candidaturasRecentes.totalElements").value(20))
+                .andExpect(jsonPath("$.talentosSugeridos.totalElements").value(20));
 
-        assertThat(statistics.getPrepareStatementCount()).isLessThanOrEqualTo(10);
+        long cinco = statistics.getPrepareStatementCount();
+        long jdbcCinco = chamadasJdbc();
+        org.mockito.Mockito.clearInvocations(namedJdbc);
+        statistics.clear();
+        painel(dono.getUsuario(), 1);
+        long uma = statistics.getPrepareStatementCount();
+        long jdbcUma = chamadasJdbc();
+        System.out.println("RF11 consultas contratante: preview1="+uma+" preview5="+cinco+" JDBC1="+jdbcUma+" JDBC5="+jdbcCinco);
+        // Page de uma vaga dispensa COUNT para size=5, mas pode contar para size=1.
+        assertThat(cinco).isLessThanOrEqualTo(uma);
+        assertThat(jdbcCinco).isEqualTo(jdbcUma);
+    }
+
+@org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.portifolio.model.enums.StatusConta.class,
+            mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE, names = "ATIVA")
+    void tokenAntigoNaoLiberaContaInapta(com.portifolio.model.enums.StatusConta estado) throws Exception {
+        var artista = criarArtista("estado@rf11.test", true, LocalDate.of(1990, 1, 1));
+        String token = bearer(artista.getUsuario());
+        jdbcTemplate.update("update usuarios set status_conta=? where id=?", estado.name(), artista.getUsuarioId());
+        mockMvc.perform(get("/api/dashboard").header("Authorization", token)).andExpect(status().isUnauthorized());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = TipoUsuario.class, names = {"ADMIN", "MODERADOR"})
+    void equipeNaoRecebeFallbackContratante(TipoUsuario tipo) throws Exception {
+        var u = criarUsuario("equipe@rf11.test", tipo, false, LocalDate.of(1990, 1, 1));
+        mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(u))).andExpect(status().isForbidden());
+    }
+
+    @Test void tokenExpiradoRevogadoEUsuarioRemovidoNaoAcessam() throws Exception {
+        var artista = criarArtista("token@rf11.test", true, LocalDate.of(1990, 1, 1));
+        Long expiracao = (Long) org.springframework.test.util.ReflectionTestUtils.getField(jwtService, "expiration");
+        String expirado;
+        try {
+            org.springframework.test.util.ReflectionTestUtils.setField(jwtService, "expiration", -1000L);
+            expirado = bearer(artista.getUsuario());
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(jwtService, "expiration", expiracao);
+        }
+        mockMvc.perform(get("/api/dashboard").header("Authorization", expirado)).andExpect(status().isUnauthorized());
+        String revogado = bearer(artista.getUsuario());
+        jwtService.revogar(revogado.substring(7));
+        mockMvc.perform(get("/api/dashboard").header("Authorization", revogado)).andExpect(status().isUnauthorized());
+        String antigo = bearer(artista.getUsuario());
+        jdbcTemplate.update("delete from usuarios where id=?", artista.getUsuarioId());
+        mockMvc.perform(get("/api/dashboard").header("Authorization", antigo)).andExpect(status().isUnauthorized());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {13, 14, 17})
+    void idadeProtegidaSemAutorizacaoNaoAcessa(int idade) throws Exception {
+        var a = criarArtista("menor-sem@rf11.test", true, LocalDate.now().minusYears(idade));
+        mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(a.getUsuario())))
+                .andExpect(status().isForbidden());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {14, 17})
+    void menorAutorizadoTemPainelMinimoEConsentimentoAtual(int idade) throws Exception {
+        var a = criarArtista("menor-autorizado@rf11.test", true, LocalDate.now().minusYears(idade));
+        autorizar(a.getUsuarioId());
+        String token = bearer(a.getUsuario());
+        var result = mockMvc.perform(get("/api/dashboard").header("Authorization", token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.perfilCompleto").value(true)).andReturn();
+        verificarPrivacidade(result.getResponse().getContentAsString());
+        jdbcTemplate.update("update responsaveis_legais set consentimento_revogado=true where usuario_id=?", a.getUsuarioId());
+        mockMvc.perform(get("/api/dashboard").header("Authorization", token)).andExpect(status().isForbidden());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = StatusVaga.class,
+            mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE, names = "ABERTA")
+    void recomendacaoNaoIncluiOutrosEstados(StatusVaga estado) throws Exception {
+        var f = criarFuncao("Estado recomendação");
+        var a = criarArtista("estado-vaga@rf11.test", true, LocalDate.of(1990, 1, 1), f);
+        var c = criarContratante("dono-estado@rf11.test", true);
+        criarVaga(c, "Fora do feed", estado, f);
+        criarVaga(c, "Elegível", StatusVaga.ABERTA, f);
+        mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(a.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.vagasRecomendadas.totalElements").value(1))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[0].titulo").value("Elegível"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {-1, 0, 1})
+    void recomendacaoRespeitaBordaDoPrazoSemAlterarEstado(int dias) throws Exception {
+        var f = criarFuncao("Prazo");
+        var a = criarArtista("prazo@rf11.test", true, LocalDate.of(1990, 1, 1), f);
+        var c = criarContratante("dono-prazo@rf11.test", true);
+        var v = criarVaga(c, "Prazo controlado", StatusVaga.ABERTA, f);
+        jdbcTemplate.update("update vagas set data_limite_candidatura=? where id=?", LocalDate.now().plusDays(dias), v.getId());
+        mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(a.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.vagasRecomendadas.totalElements").value(dias > 0 ? 1 : 0));
+        assertThat(jdbcTemplate.queryForObject("select status::text from vagas where id=?", String.class, v.getId())).isEqualTo("ABERTA");
+    }
+
+    @Test void hierarquiaAreasSecundariasEspecializacoesEExplicacaoReal() throws Exception {
+        var f1 = criarFuncao("Primária");
+        var a = criarArtista("hierarquia@rf11.test", true, LocalDate.of(1990, 1, 1), f1);
+        var c = criarContratante("hierarquia-dono@rf11.test", true);
+        Long f2id = jdbcTemplate.queryForObject("insert into funcoes(area_id,nome) values(2,'Secundária') returning id", Long.class);
+        jdbcTemplate.update("insert into perfil_artista_area(perfil_artista_id,area_id,principal,nivel_experiencia) values(?,2,false,'INICIANTE')", a.getUsuarioId());
+        jdbcTemplate.update("insert into perfil_artista_funcao(perfil_artista_id,area_id,funcao_id) values(?,2,?)", a.getUsuarioId(), f2id);
+        Long spec = jdbcTemplate.queryForObject("insert into especializacoes(nome) values('Especialização secundária') returning id", Long.class);
+        jdbcTemplate.update("insert into funcao_especializacao(funcao_id,especializacao_id) values(?,?)", f2id, spec);
+        jdbcTemplate.update("insert into perfil_artista_especializacao(perfil_artista_id,area_id,especializacao_id) values(?,2,?)", a.getUsuarioId(), spec);
+        var principal = criarVaga(c, "Principal", StatusVaga.ABERTA, f1);
+        var secundaria = criarVaga(c, "Secundária especializada", StatusVaga.ABERTA);
+        jdbcTemplate.update("update vagas set area_id=2 where id=?", secundaria.getId());
+        jdbcTemplate.update("insert into vaga_funcao(vaga_id,funcao_id) values(?,?)", secundaria.getId(), f2id);
+        jdbcTemplate.update("insert into vaga_especializacao(vaga_id,especializacao_id) values(?,?)", secundaria.getId(), spec);
+        var outra = criarVaga(c, "Área incompatível", StatusVaga.ABERTA);
+        jdbcTemplate.update("update vagas set area_id=3 where id=?", outra.getId());
+        // Mesmo timestamp: especialização refina o empate de funções; principal não ganha peso.
+        jdbcTemplate.update("update vagas set data_publicacao='2026-01-01'");
+        var first = mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(a.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.vagasRecomendadas.totalElements").value(2))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[0].id").value(secundaria.getId()))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[0].areaId").value(2))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[0].quantidadeFuncoesCoincidentes").value(1))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[0].quantidadeEspecializacoesCoincidentes").value(1))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[0].motivoRecomendacao").value(
+                        org.hamcrest.Matchers.containsString("1 especialização")))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[1].id").value(principal.getId())).andReturn();
+        var second = painel(a.getUsuario(), 5);
+        assertThat(second).isEqualTo(first.getResponse().getContentAsString());
+        verificarPrivacidade(second);
+    }
+
+    @Test void funcaoPrecedeEspecializacaoEDesempateUsaIdSemEngajamento() throws Exception {
+        var f1 = criarFuncao("Função 1"); var f2 = criarFuncao("Função 2");
+        var a = criarArtista("ordem@rf11.test", true, LocalDate.of(1990, 1, 1), f1, f2);
+        var c = criarContratante("ordem-dono@rf11.test", true);
+        Long spec = jdbcTemplate.queryForObject("select especializacao_id from perfil_artista_especializacao where perfil_artista_id=? limit 1", Long.class, a.getUsuarioId());
+        var especializada = criarVaga(c, "Uma especializada", StatusVaga.ABERTA, f1);
+        jdbcTemplate.update("insert into vaga_especializacao(vaga_id,especializacao_id) values(?,?)", especializada.getId(), spec);
+        var duas = criarVaga(c, "Duas funções", StatusVaga.ABERTA, f1, f2);
+        var empate = criarVaga(c, "Empate mais novo ID", StatusVaga.ABERTA, f1, f2);
+        jdbcTemplate.update("update vagas set data_publicacao='2026-01-01'");
+        String antes = painel(a.getUsuario(), 5);
+        mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(a.getUsuario())))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[0].id").value(empate.getId()))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[1].id").value(duas.getId()))
+                .andExpect(jsonPath("$.vagasRecomendadas.content[2].id").value(especializada.getId()));
+        // RF19 é independente: salvar a vaga de menor relevância não altera matching.
+        jdbcTemplate.update("insert into itens_salvos(usuario_id,tipo_alvo,alvo_id) values(?,'VAGA',?)", a.getUsuarioId(), especializada.getId());
+        assertThat(painel(a.getUsuario(), 5)).isEqualTo(antes);
+        assertThat(antes).doesNotContain("score", "medalha", "seguidores", "engajamento", "87%");
+    }
+
+    @Test void minhasCandidaturasSaoPropriasLimitadasComStatusReal() throws Exception {
+        var a = criarArtista("apps@rf11.test", true, LocalDate.of(1990, 1, 1));
+        var outro = criarArtista("apps-outro@rf11.test", true, LocalDate.of(1990, 1, 1));
+        var c = criarContratante("apps-dono@rf11.test", true);
+        for (int i=0; i<7; i++) criarCandidatura(criarVaga(c, "Minha "+i, StatusVaga.ABERTA), a, LocalDateTime.now().plusMinutes(i));
+        criarCandidatura(criarVaga(c, "Alheia", StatusVaga.ABERTA), outro, LocalDateTime.now().plusDays(1));
+        var result = mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(a.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.minhasCandidaturas.content.length()").value(5))
+                .andExpect(jsonPath("$.minhasCandidaturas.totalElements").value(7))
+                .andExpect(jsonPath("$.minhasCandidaturas.hasMore").value(true))
+                .andExpect(jsonPath("$.minhasCandidaturas.content[0].tituloVaga").value("Minha 6"))
+                .andExpect(jsonPath("$.minhasCandidaturas.content[0].status").value("PENDENTE")).andReturn();
+        var minhas = new com.fasterxml.jackson.databind.ObjectMapper().readTree(result.getResponse().getContentAsString())
+                .path("minhasCandidaturas").toString();
+        assertThat(minhas).doesNotContain("Alheia", "ACEITA", "REJEITADA", "Mensagem privada");
+        verificarPrivacidade(result.getResponse().getContentAsString());
+    }
+
+    @Test void incompletoSinalizaMasNaoConcedePermissaoRf06() throws Exception {
+        var f = criarFuncao("Incompleto RF06");
+        var a = criarArtista("incompleto-rf06@rf11.test", false, LocalDate.of(1990, 1, 1), f);
+        var c = criarContratante("dono-rf06@rf11.test", true);
+        var v = criarVaga(c, "Candidatar", StatusVaga.ABERTA, f);
+        mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(a.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.perfilIncompleto").value(true));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/candidaturas")
+                .header("Authorization", bearer(a.getUsuario())).contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"vagaId\":"+v.getId()+",\"mensagemApresentacao\":\"Interesse profissional\",\"linkPortfolioCandidatura\":\"https://example.org/p\"}"))
+                .andExpect(status().isUnprocessableEntity());
+        assertThat(candidaturaRepository.count()).isZero();
+    }
+
+    @Test void contratanteResumoEstadosEPreviaSomenteDoDonoSemTransicaoDePrazo() throws Exception {
+        var c = criarContratante("estados-dono@rf11.test", true);
+        var outro = criarContratante("estados-outro@rf11.test", true);
+        for (var s : StatusVaga.values()) criarVaga(c, "Própria "+s, s);
+        criarVaga(outro, "Alheia", StatusVaga.ABERTA);
+        jdbcTemplate.update("update vagas set data_limite_candidatura=? where contratante_id=? and status='ABERTA'", LocalDate.now(), c.getUsuarioId());
+        var result = mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(c.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.minhasVagas.totalElements").value(5))
+                .andExpect(jsonPath("$.minhasVagas.content.length()").value(5))
+                .andExpect(jsonPath("$.vagasPorStatus.ABERTA").value(1))
+                .andExpect(jsonPath("$.vagasPorStatus.RASCUNHO").value(1))
+                .andExpect(jsonPath("$.vagasPorStatus.PAUSADA").value(1))
+                .andExpect(jsonPath("$.vagasPorStatus.ENCERRADA").value(1))
+                .andExpect(jsonPath("$.vagasPorStatus.CANCELADA").value(1)).andReturn();
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("Alheia");
+        assertThat(jdbcTemplate.queryForObject("select count(*) from vagas where contratante_id=? and status='ABERTA'", Long.class, c.getUsuarioId())).isEqualTo(1);
+    }
+
+    @Test void recentesUsamVigenciaRf45SemRetiradasDuplicacaoNemUsuarioRemovido() throws Exception {
+        var c = criarContratante("vigencia-dono@rf11.test", true);
+        var a = criarArtista("vigencia@rf11.test", true, LocalDate.of(1990, 1, 1));
+        var menor = criarArtista("vigencia-menor@rf11.test", true, LocalDate.now().minusYears(17));
+        autorizar(menor.getUsuarioId());
+        var v = criarVaga(c, "Vaga vigente", StatusVaga.ABERTA);
+        var antiga = criarCandidatura(v, a, LocalDateTime.now().minusDays(1));
+        jdbcTemplate.update("update candidaturas set status='RETIRADA' where id=?", antiga.getId());
+        var atual = criarCandidatura(v, a, LocalDateTime.now());
+        criarCandidatura(v, menor, LocalDateTime.now().plusMinutes(1));
+        var result = mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(c.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.candidaturasRecentes.totalElements").value(2))
+                .andExpect(jsonPath("$.candidaturasRecentes.content[1].id").value(atual.getId())).andReturn();
+        verificarPrivacidade(result.getResponse().getContentAsString());
+        jdbcTemplate.update("update candidaturas set status='RETIRADA' where id=?", atual.getId());
+        mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(c.getUsuario())))
+                .andExpect(jsonPath("$.candidaturasRecentes.totalElements").value(1));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = TipoUsuario.class, names = {"ARTISTA", "CONTRATANTE"})
+    void mensagensNotificacoesReaisPropriasSemLeituraOuEfeitosColaterais(TipoUsuario tipo) throws Exception {
+        Usuario u = tipo == TipoUsuario.ARTISTA ? criarArtista("counts@rf11.test", true, LocalDate.of(1990,1,1)).getUsuario()
+                : criarContratante("counts@rf11.test", true).getUsuario();
+        var outro = criarArtista("counts-outro@rf11.test", true, LocalDate.of(1990,1,1)).getUsuario();
+        Long sala = jdbcTemplate.queryForObject("insert into salas_chat default values returning id", Long.class);
+        Long alheia = jdbcTemplate.queryForObject("insert into salas_chat default values returning id", Long.class);
+        jdbcTemplate.update("insert into participantes_chat(sala_id,usuario_id) values(?,?),(?,?),(?,?)", sala,u.getId(),sala,outro.getId(),alheia,outro.getId());
+        jdbcTemplate.update("insert into mensagens_chat(sala_id,remetente_id,texto_mensagem,lida) values(?,?,?,false),(?,?,?,false),(?,?,?,true),(?,?,?,false)",
+                sala,outro.getId(),"recebida",sala,u.getId(),"própria",sala,outro.getId(),"lida",alheia,outro.getId(),"alheia");
+        jdbcTemplate.update("insert into mensagens_chat(sala_id,remetente_id,texto_mensagem,texto_original,url_anexo,lida,excluida) values(?,null,'Mensagem excluída','Evidência restrita','/storage/privado',false,true)", sala);
+        jdbcTemplate.update("insert into notificacoes(usuario_destino_id,tipo_notificacao,mensagem_alerta,link_contexto,lida) values(?,'MENSAGEM','Recebida','/mensagens',false),(?,'MENSAGEM','Já lida','/mensagens',true),(?,'MENSAGEM','Alheia','/mensagens',false)",u.getId(),u.getId(),outro.getId());
+        var antes = snapshot();
+        var result = mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(u)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.mensagens.quantidadeNaoLidas").value(2))
+                .andExpect(jsonPath("$.notificacoes.quantidadeNaoLidas").value(1)).andReturn();
+        assertThat(snapshot()).isEqualTo(antes);
+        verificarPrivacidade(result.getResponse().getContentAsString());
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("Evidência restrita", "/storage/privado", "recebida", "Alheia");
+    }
+
+    @Test void bancoProprioCountSemContextoNuncaCriaSalaOuMembership() throws Exception {
+        var c = criarContratante("banco-count@rf11.test", true);
+        var outro = criarContratante("banco-outro@rf11.test", true);
+        var a = criarArtista("banco-artista@rf11.test", true, LocalDate.of(1990,1,1));
+        var b = criarArtista("banco-alheio@rf11.test", true, LocalDate.of(1990,1,1));
+        jdbcTemplate.update("insert into banco_talentos(contratante_id,artista_id) values(?,?),(?,?)",c.getUsuarioId(),a.getUsuarioId(),outro.getUsuarioId(),b.getUsuarioId());
+        var antes = snapshot();
+        mockMvc.perform(get("/api/dashboard").param("contratanteId",outro.getUsuarioId().toString())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"usuarioId\":"+outro.getUsuarioId()+"}")
+                .header("Authorization", bearer(c.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.quantidadeBancoTalentos").value(1))
+                .andExpect(jsonPath("$.talentosSugeridos.content.length()").value(0));
+        assertThat(snapshot()).isEqualTo(antes);
+    }
+
+    @Test void bancoPreviewRf17IsoladoEMenorSemExperienciaPrivada() throws Exception {
+        var f = criarFuncao("Banco menor");
+        var dono = criarContratante("banco-preview@rf11.test", true);
+        var outro = criarContratante("banco-preview-outro@rf11.test", true);
+        criarVaga(dono,"Contexto próprio",StatusVaga.ABERTA,f);
+        var menor = criarArtista("banco-menor@rf11.test",true,LocalDate.now().minusYears(17),f);
+        autorizar(menor.getUsuarioId());
+        var alheio = criarArtista("membro-alheio@rf11.test",true,LocalDate.of(1990,1,1),f);
+        criarArtista("publico-fora-banco@rf11.test",true,LocalDate.of(1990,1,1),f);
+        jdbcTemplate.update("insert into banco_talentos(contratante_id,artista_id) values(?,?),(?,?)",
+                dono.getUsuarioId(),menor.getUsuarioId(),outro.getUsuarioId(),alheio.getUsuarioId());
+        var antes = snapshot();
+        var result = mockMvc.perform(get("/api/dashboard").header("Authorization",bearer(dono.getUsuario())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.quantidadeBancoTalentos").value(1))
+                .andExpect(jsonPath("$.talentosSugeridos.totalElements").value(1))
+                .andExpect(jsonPath("$.talentosSugeridos.content[0].artistaId").value(menor.getUsuarioId())).andReturn();
+        verificarPrivacidade(result.getResponse().getContentAsString());
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("membro-alheio","publico-fora-banco","INICIANTE");
+        assertThat(snapshot()).isEqualTo(antes);
+    }
+
+    private long chamadasJdbc() {
+        return org.mockito.Mockito.mockingDetails(namedJdbc).getInvocations().stream()
+                .filter(i -> i.getMethod().getName().startsWith("query")).count();
+    }
+
+    private String painel(Usuario u, int size) throws Exception {
+        return mockMvc.perform(get("/api/dashboard").param("size",String.valueOf(size)).header("Authorization",bearer(u)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    }
+
+    private void autorizar(Long artista) {
+        jdbcTemplate.update("insert into responsaveis_legais(usuario_id,nome_responsavel,telefone_responsavel,email_responsavel,data_consentimento) values(?,'Responsável privado','11900009999','guardiao@rf11.invalid',current_timestamp)", artista);
+    }
+
+    private java.util.Map<String,String> snapshot() {
+        var resultado = new java.util.LinkedHashMap<String,String>();
+        for (String tabela : new String[]{"usuarios","perfis_artistas","perfil_artista_area","vagas","candidaturas",
+                "salas_chat","participantes_chat","mensagens_chat","notificacoes","banco_talentos"}) {
+            resultado.put(tabela, jdbcTemplate.queryForObject("select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb)::text from "+tabela+" t", String.class));
+        }
+        return resultado;
+    }
+
+    private void verificarPrivacidade(String response) throws Exception {
+        var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+        var proibidos = Set.of("cpf","cnpj","telefone","email","dataNascimento","responsavel","responsavelLegal",
+                "consentimento","senha","refreshToken","nivelExperiencia","textoOriginal","texto_original","urlAnexo","storagePath");
+        var pendentes = new java.util.ArrayDeque<com.fasterxml.jackson.databind.JsonNode>(); pendentes.add(root);
+        while(!pendentes.isEmpty()) {
+            var node = pendentes.remove();
+            if(node.isObject()) node.fieldNames().forEachRemaining(key -> assertThat(proibidos).doesNotContain(key));
+            node.elements().forEachRemaining(pendentes::add);
+        }
+        assertThat(response).doesNotContain("guardiao@rf11.invalid","Responsável privado","11900009999","hash-privado");
     }
 
     private Usuario criarUsuario(String email, TipoUsuario tipo, boolean completo, LocalDate nascimento) {

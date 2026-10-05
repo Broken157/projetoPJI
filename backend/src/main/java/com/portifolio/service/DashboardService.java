@@ -8,7 +8,6 @@ import com.portifolio.dto.DashboardTalentoResponse;
 import com.portifolio.dto.DashboardVagaResponse;
 import com.portifolio.dto.FuncaoResponse;
 import com.portifolio.exception.ResourceNotFoundException;
-import com.portifolio.model.PerfilArtista;
 import com.portifolio.model.PerfilContratante;
 import com.portifolio.model.Funcao;
 import com.portifolio.model.Usuario;
@@ -16,7 +15,6 @@ import com.portifolio.model.Vaga;
 import com.portifolio.model.enums.StatusVaga;
 import com.portifolio.repository.CandidaturaRepository;
 import com.portifolio.repository.MensagemChatRepository;
-import com.portifolio.repository.PerfilArtistaRepository;
 import com.portifolio.repository.PerfilContratanteRepository;
 import com.portifolio.repository.VagaRepository;
 import com.portifolio.repository.projection.CandidaturaDashboardProjection;
@@ -43,26 +41,34 @@ public class DashboardService {
     private static final int TAMANHO_PADRAO = 5;
     private static final int TAMANHO_MAXIMO = 50;
     private static final Set<StatusVaga> STATUS_ATIVOS = Set.of(StatusVaga.ABERTA, StatusVaga.PAUSADA);
-    private static final DashboardDisponibilidadeResponse NOTIFICACOES_DISPONIVEIS =
-            DashboardDisponibilidadeResponse.builder()
-                    .disponivel(true)
-                    .mensagem("Alertas de candidaturas e mudancas nas vagas em tempo real.")
-                    .build();
 
     private final AuthenticatedUserResolver authenticatedUserResolver;
-    private final PerfilArtistaRepository perfilArtistaRepository;
     private final PerfilContratanteRepository perfilContratanteRepository;
     private final VagaRepository vagaRepository;
     private final CandidaturaRepository candidaturaRepository;
     private final MensagemChatRepository mensagemChatRepository;
     private final AvatarService avatarService;
     private final TalentoService talentoService;
+    private final NotificacaoService notificacaoService;
+    private final VagaService vagaService;
+    private final VagaPrazoPolicy vagaPrazoPolicy;
+    private final com.portifolio.repository.BancoTalentosRepository bancoTalentosRepository;
+    private final com.portifolio.security.GoogleAccountAccessPolicy accountAccessPolicy;
+    private final com.portifolio.security.MenorAutorizadoPolicy menorPolicy;
 
     @Transactional(readOnly = true)
     public DashboardResponse buscar(Integer size) {
         int tamanho = validarTamanho(size);
         Usuario usuario = authenticatedUserResolver.usuarioAtual()
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario autenticado nao encontrado."));
+
+        if (!accountAccessPolicy.acessoNormalPermitido(usuario)) {
+            throw new com.portifolio.exception.ForbiddenException("Conta sem acesso normal.");
+        }
+        if (usuario.getTipoUsuario() == com.portifolio.model.enums.TipoUsuario.ARTISTA
+                && menorPolicy.exigeProtecao(usuario) && !menorPolicy.autorizado(usuario)) {
+            throw new com.portifolio.exception.ForbiddenException("Artista sem autorização vigente.");
+        }
 
         return switch (usuario.getTipoUsuario()) {
             case ARTISTA -> dashboardArtista(usuario, tamanho);
@@ -72,21 +78,17 @@ public class DashboardService {
     }
 
     private DashboardResponse dashboardArtista(Usuario usuario, int tamanho) {
-        PerfilArtista perfil = perfilArtistaRepository.buscarPublicoPorUsuarioId(usuario.getId())
-                .orElse(null);
-        Set<Long> funcaoIds = perfil == null
-                ? Set.of()
-                : perfil.getFuncoes().stream().map(Funcao::getId).collect(Collectors.toSet());
-
         return DashboardResponse.builder()
                 .tipoUsuario(usuario.getTipoUsuario())
                 .nomeExibicao(usuario.getNome())
                 .avatarUrl(avatarService.resolverUrl(
                         usuario.getId(), usuario.getFotoPerfil(), null))
                 .perfilCompleto(Boolean.TRUE.equals(usuario.getPerfilCompleto()))
-                .notificacoes(NOTIFICACOES_DISPONIVEIS)
+                .perfilIncompleto(!Boolean.TRUE.equals(usuario.getPerfilCompleto()))
+                .notificacoes(notificacoesDisponiveis())
                 .mensagens(mensagensDisponiveis(usuario.getId()))
-                .vagasRecomendadas(buscarVagasRecomendadas(funcaoIds, tamanho))
+                .vagasRecomendadas(buscarVagasRecomendadas(tamanho))
+                .minhasCandidaturas(buscarMinhasCandidaturas(usuario.getId(), tamanho))
                 .build();
     }
 
@@ -104,32 +106,30 @@ public class DashboardService {
                 .avatarUrl(avatarService.resolverUrl(
                         usuario.getId(), usuario.getFotoPerfil(), null))
                 .perfilCompleto(Boolean.TRUE.equals(usuario.getPerfilCompleto()))
-                .notificacoes(NOTIFICACOES_DISPONIVEIS)
+                .perfilIncompleto(!Boolean.TRUE.equals(usuario.getPerfilCompleto()))
+                .notificacoes(notificacoesDisponiveis())
                 .mensagens(mensagensDisponiveis(usuario.getId()))
+                .minhasVagas(buscarMinhasVagas(usuario.getId(), tamanho))
+                .vagasPorStatus(vagasPorStatus(usuario.getId()))
+                .quantidadeBancoTalentos(bancoTalentosRepository.contarDoContratante(usuario.getId()))
                 .candidaturasRecentes(buscarCandidaturasRecentes(usuario.getId(), tamanho))
                 .talentosSugeridos(!legacySchema && usuario.getStatusConta() == com.portifolio.model.enums.StatusConta.ATIVA
                         ? buscarTalentosSugeridos(usuario.getId(), tamanho) : secaoVazia())
                 .build();
     }
 
-    private DashboardSecaoResponse<DashboardVagaResponse> buscarVagasRecomendadas(
-            Set<Long> funcaoIds, int tamanho) {
-        if (funcaoIds.isEmpty()) {
-            return secaoVazia();
-        }
-
-        Page<VagaRecomendadaProjection> pagina = vagaRepository.findRecomendadasPorFuncoes(
-                funcaoIds, PageRequest.of(0, tamanho));
+    private DashboardSecaoResponse<DashboardVagaResponse> buscarVagasRecomendadas(int tamanho) {
+        Page<VagaRecomendadaProjection> pagina = vagaService.recomendarParaArtista(tamanho);
         if (pagina.isEmpty()) {
             return secaoVazia();
         }
         List<Long> ids = pagina.getContent().stream().map(VagaRecomendadaProjection::getId).toList();
         Map<Long, Vaga> vagas = vagaRepository.findByIdIn(ids).stream()
                 .collect(Collectors.toMap(Vaga::getId, Function.identity()));
-        Map<Long, Long> coincidencias = pagina.getContent().stream()
+        Map<Long, VagaRecomendadaProjection> coincidencias = pagina.getContent().stream()
                 .collect(Collectors.toMap(
                         VagaRecomendadaProjection::getId,
-                        VagaRecomendadaProjection::getQuantidadeFuncoesCoincidentes));
+                        Function.identity()));
 
         List<DashboardVagaResponse> content = ids.stream()
                 .map(vagas::get)
@@ -176,7 +176,7 @@ public class DashboardService {
         return secao(content, pagina.totalElements(), pagina.hasMore());
     }
 
-    private DashboardVagaResponse toVagaResponse(Vaga vaga, Long coincidencias) {
+    private DashboardVagaResponse toVagaResponse(Vaga vaga, VagaRecomendadaProjection coincidencias) {
         PerfilContratante contratante = vaga.getContratante();
         String nomeContratante = contratante.getNomeEmpresa() == null
                 || contratante.getNomeEmpresa().isBlank()
@@ -192,7 +192,13 @@ public class DashboardService {
                 .modeloTrabalho(vaga.getModeloTrabalho())
                 .dataPublicacao(vaga.getDataPublicacao())
                 .funcoes(toFuncoes(vaga.getFuncoes()))
-                .quantidadeFuncoesCoincidentes(coincidencias == null ? 0 : coincidencias)
+                .quantidadeFuncoesCoincidentes(coincidencias.getQuantidadeFuncoesCoincidentes())
+                .areaId(vaga.getArea().getId())
+                .areaCompativel(vaga.getArea().getNome())
+                .quantidadeEspecializacoesCoincidentes(coincidencias.getQuantidadeEspecializacoesCoincidentes())
+                .motivoRecomendacao("Área compatível; " + coincidencias.getQuantidadeFuncoesCoincidentes()
+                        + " função(ões) e " + coincidencias.getQuantidadeEspecializacoesCoincidentes()
+                        + " especialização(ões) em comum nesta área. Ordem: funções, especializações, publicação e ID.")
                 .build();
     }
 
@@ -208,7 +214,39 @@ public class DashboardService {
         if (tamanho < 1 || tamanho > TAMANHO_MAXIMO) {
             throw new IllegalArgumentException("size deve estar entre 1 e 50.");
         }
-        return tamanho;
+        // Preserva size 1–50; RF11 oferece somente preview com o default histórico de 5.
+        return Math.min(tamanho, TAMANHO_PADRAO);
+    }
+
+    private DashboardDisponibilidadeResponse notificacoesDisponiveis() {
+        return DashboardDisponibilidadeResponse.builder().disponivel(true)
+                .mensagem("Alertas de candidaturas e mudancas nas vagas em tempo real.")
+                .quantidadeNaoLidas(notificacaoService.contarNaoLidas()).build();
+    }
+
+    private DashboardSecaoResponse<DashboardCandidaturaResponse> buscarMinhasCandidaturas(Long dono, int tamanho) {
+        var pagina = candidaturaRepository.findPreviewDoArtista(dono, PageRequest.of(0, tamanho));
+        var content = pagina.stream().map(c -> DashboardCandidaturaResponse.builder()
+                .id(c.getId()).vagaId(c.getVagaId()).tituloVaga(c.getTituloVaga())
+                .status(c.getStatus()).dataCandidatura(c.getDataCandidatura()).build()).toList();
+        return secao(content, pagina.getTotalElements(), pagina.hasNext());
+    }
+
+    private DashboardSecaoResponse<com.portifolio.dto.DashboardVagaPropriaResponse> buscarMinhasVagas(Long dono, int tamanho) {
+        var pagina = vagaRepository.findPreviewDoContratante(dono, PageRequest.of(0, tamanho));
+        var content = pagina.stream().map(v -> new com.portifolio.dto.DashboardVagaPropriaResponse(
+                v.getId(), v.getTitulo(), v.getStatus(), v.getDataPublicacao(), v.getDataLimiteCandidatura(),
+                vagaPrazoPolicy.estaVencida(v.getDataLimiteCandidatura()))).toList();
+        return secao(content, pagina.getTotalElements(), pagina.hasNext());
+    }
+
+    private Map<StatusVaga, Long> vagasPorStatus(Long dono) {
+        Map<StatusVaga, Long> resultado = new java.util.EnumMap<>(StatusVaga.class);
+        for (StatusVaga status : StatusVaga.values()) resultado.put(status, 0L);
+        for (var row : vagaRepository.contarPorStatusDoContratante(dono)) {
+            resultado.put(row.getStatus(), row.getQuantidade());
+        }
+        return resultado;
     }
 
     private DashboardDisponibilidadeResponse mensagensDisponiveis(Long usuarioId) {

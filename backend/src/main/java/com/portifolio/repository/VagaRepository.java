@@ -67,31 +67,59 @@ public interface VagaRepository extends JpaRepository<Vaga, Long>, JpaSpecificat
     @Query("select v from Vaga v where v.id = :id")
     Optional<Vaga> findDetalhesById(@Param("id") Long id);
 
+    // RF03: matching hierárquico compartilhado com RF11, sem algoritmo no agregador.
     @Query(value = """
             select v.id as id,
-                   count(distinct tv.funcao_id) as quantidadeFuncoesCoincidentes
+                   (select count(*) from vaga_funcao vf join perfil_artista_funcao pf
+                       on pf.funcao_id=vf.funcao_id and pf.area_id=v.area_id
+                       where vf.vaga_id=v.id and pf.perfil_artista_id=:artistaId) as quantidadeFuncoesCoincidentes,
+                   (select count(*) from vaga_especializacao ve join perfil_artista_especializacao pe
+                       on pe.especializacao_id=ve.especializacao_id and pe.area_id=v.area_id
+                       where ve.vaga_id=v.id and pe.perfil_artista_id=:artistaId
+                         and exists (select 1 from funcao_especializacao fe
+                             join vaga_funcao vf on vf.funcao_id=fe.funcao_id and vf.vaga_id=v.id
+                             join perfil_artista_funcao pf on pf.funcao_id=fe.funcao_id
+                               and pf.area_id=v.area_id and pf.perfil_artista_id=:artistaId
+                             where fe.especializacao_id=ve.especializacao_id)) as quantidadeEspecializacoesCoincidentes
             from vagas v
-            join vaga_funcao tv on tv.vaga_id = v.id
             where v.status = 'ABERTA'
-              and tv.funcao_id in (:funcaoIds)
+              and (v.data_limite_candidatura is null or v.data_limite_candidatura > :hoje)
+              and exists (select 1 from perfil_artista_area pa
+                  where pa.perfil_artista_id=:artistaId and pa.area_id=v.area_id)
               and coalesce((select coalesce(m.status_moderacao::text,'SOB_ANALISE') from moderacao_conteudo m
                   where m.tipo_conteudo='VAGA' and m.conteudo_id=v.id order by m.id desc limit 1),'APROVADO')='APROVADO'
-            group by v.id, v.data_publicacao
-            order by count(distinct tv.funcao_id) desc,
+            order by quantidadeFuncoesCoincidentes desc, quantidadeEspecializacoesCoincidentes desc,
                      v.data_publicacao desc nulls last,
                      v.id desc
             """, countQuery = """
-            select count(distinct v.id)
+            select count(*)
             from vagas v
-            join vaga_funcao tv on tv.vaga_id = v.id
             where v.status = 'ABERTA'
-              and tv.funcao_id in (:funcaoIds)
+              and (v.data_limite_candidatura is null or v.data_limite_candidatura > :hoje)
+              and exists (select 1 from perfil_artista_area pa
+                  where pa.perfil_artista_id=:artistaId and pa.area_id=v.area_id)
               and coalesce((select coalesce(m.status_moderacao::text,'SOB_ANALISE') from moderacao_conteudo m
                   where m.tipo_conteudo='VAGA' and m.conteudo_id=v.id order by m.id desc limit 1),'APROVADO')='APROVADO'
             """, nativeQuery = true)
-    Page<VagaRecomendadaProjection> findRecomendadasPorFuncoes(
-            @Param("funcaoIds") Set<Long> funcaoIds,
+    Page<VagaRecomendadaProjection> findRecomendadasParaArtista(
+            @Param("artistaId") Long artistaId,
+            @Param("hoje") LocalDate hoje,
             Pageable pageable);
+
+    @Query(value = """
+            select v.id as id, v.titulo as titulo, v.status as status,
+                   v.dataPublicacao as dataPublicacao, v.dataLimiteCandidatura as dataLimiteCandidatura
+            from Vaga v where v.contratante.usuarioId=:dono
+            order by v.dataPublicacao desc nulls last, v.id desc
+            """, countQuery = "select count(v) from Vaga v where v.contratante.usuarioId=:dono")
+    Page<com.portifolio.repository.projection.VagaDashboardProjection> findPreviewDoContratante(
+            @Param("dono") Long dono, Pageable pageable);
+
+    @Query("""
+            select v.status as status, count(v) as quantidade from Vaga v
+            where v.contratante.usuarioId=:dono group by v.status
+            """)
+    List<com.portifolio.repository.projection.VagaStatusProjection> contarPorStatusDoContratante(@Param("dono") Long dono);
 
     @Query(value = "select distinct vf.funcao_id from vaga_funcao vf join vagas v on v.id=vf.vaga_id where v.contratante_id=:contratanteId and v.status in (:statusAtivos)", nativeQuery=true)
     Set<Long> findFuncaoIdsDasVagasAtivasDoContratante(

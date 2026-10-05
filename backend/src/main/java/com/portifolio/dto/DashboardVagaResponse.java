@@ -20,4 +20,8 @@ public class DashboardVagaResponse {
     private LocalDateTime dataPublicacao;
     private Set<FuncaoResponse> funcoes;
     private long quantidadeFuncoesCoincidentes;
+    private Short areaId;
+    private String areaCompativel;
+    private long quantidadeEspecializacoesCoincidentes;
+    private String motivoRecomendacao;
 }

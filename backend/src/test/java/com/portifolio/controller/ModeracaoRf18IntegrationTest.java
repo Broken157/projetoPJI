@@ -82,7 +82,8 @@ class ModeracaoRf18IntegrationTest {
         mvc.perform(get("/api/vagas/11/similares")).andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(0));
         mvc.perform(get("/api/vagas/10").header("Authorization",token(2))).andExpect(status().isOk());
         assertThat(quantidade("vagas")).isEqualTo(3);
-        assertThat(vagas.findRecomendadasPorFuncoes(Set.of(10L),org.springframework.data.domain.PageRequest.of(0,1)).getTotalElements()).isEqualTo(1);
+        db.update("insert into perfil_artista_area(perfil_artista_id,area_id,principal) values(1,1,true)");
+        assertThat(vagas.findRecomendadasParaArtista(1L,java.time.LocalDate.now(),org.springframework.data.domain.PageRequest.of(0,1)).getTotalElements()).isEqualTo(1);
         acao(4,"VAGA",10,"APROVADO").andExpect(status().isForbidden());
         acao(3,"VAGA",10,"APROVADO").andExpect(status().isCreated());
         mvc.perform(get("/api/vagas/10")).andExpect(status().isOk());

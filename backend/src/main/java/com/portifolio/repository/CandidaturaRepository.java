@@ -126,6 +126,10 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
             join artista.usuario usuario
             where vaga.contratante.usuarioId = :contratanteId
               and vaga.status in :statusAtivos
+              and c.status in ('PENDENTE', 'EM_ANALISE') and artista.usuarioId > 0
+              and not exists (select posterior.id from Candidatura posterior
+                  where posterior.vaga.id=c.vaga.id and posterior.artista.usuarioId=artista.usuarioId
+                    and posterior.id > c.id)
             order by c.dataCandidatura desc, c.id desc
             """, countQuery = """
             select count(c.id)
@@ -133,9 +137,21 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
             join c.vaga vaga
             where vaga.contratante.usuarioId = :contratanteId
               and vaga.status in :statusAtivos
+              and c.status in ('PENDENTE', 'EM_ANALISE') and c.artista.usuarioId > 0
+              and not exists (select posterior.id from Candidatura posterior
+                  where posterior.vaga.id=c.vaga.id and posterior.artista.usuarioId=c.artista.usuarioId
+                    and posterior.id > c.id)
             """)
     Page<CandidaturaDashboardProjection> findRecentesDoContratanteEmVagasAtivas(
             @Param("contratanteId") Long contratanteId,
             @Param("statusAtivos") Set<StatusVaga> statusAtivos,
             Pageable pageable);
+
+    @Query(value = """
+            select c.id as id, c.vaga.id as vagaId, c.vaga.titulo as tituloVaga,
+                   c.status as status, c.dataCandidatura as dataCandidatura
+            from Candidatura c where c.artista.usuarioId=:dono
+            order by c.dataCandidatura desc, c.id desc
+            """, countQuery = "select count(c) from Candidatura c where c.artista.usuarioId=:dono")
+    Page<CandidaturaDashboardProjection> findPreviewDoArtista(@Param("dono") Long dono, Pageable pageable);
 }

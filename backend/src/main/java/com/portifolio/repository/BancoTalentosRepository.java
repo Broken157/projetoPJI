@@ -10,6 +10,11 @@ import org.springframework.stereotype.Repository;
 public class BancoTalentosRepository {
     private final NamedParameterJdbcTemplate jdbc;
 
+    public long contarDoContratante(Long contratanteId) {
+        return jdbc.queryForObject("select count(*) from banco_talentos where contratante_id=:dono",
+                Map.of("dono", contratanteId), Long.class);
+    }
+
     public boolean adicionar(Long contratanteId, Long artistaId) {
         return jdbc.update("""
                 insert into banco_talentos (contratante_id, artista_id)

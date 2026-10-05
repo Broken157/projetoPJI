@@ -78,6 +78,20 @@ public class VagaService {
     private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
     private final com.portifolio.repository.ModeracaoConteudoRepository moderacao;
 
+    /** RF03: recomendações profissionais; RF11 somente apresenta esta página. */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<com.portifolio.repository.projection.VagaRecomendadaProjection>
+            recomendarParaArtista(Integer size) {
+        Usuario usuario = authenticatedUserResolver.usuarioAtual()
+                .orElseThrow(() -> new com.portifolio.exception.UnauthorizedException("Autenticação necessária."));
+        if (usuario.getTipoUsuario() != TipoUsuario.ARTISTA
+                || usuario.getStatusConta() != com.portifolio.model.enums.StatusConta.ATIVA) {
+            throw new ForbiddenException("Recomendações exigem artista com conta ativa.");
+        }
+        return vagaRepository.findRecomendadasParaArtista(usuario.getId(), vagaPrazoPolicy.hoje(),
+                PageRequest.of(0, normalizarTamanho(size)));
+    }
+
     // RF03 — Listagem e busca paginada (cursor-based) de vagas ABERTAS. Endpoint público.
     // RF03 Fase 2 — se o artista autenticado tiver candidaturas em vagas CANCELADA,
     // elas voltam em uma seção separada da resposta.

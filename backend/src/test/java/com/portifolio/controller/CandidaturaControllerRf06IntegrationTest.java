@@ -79,9 +79,14 @@ class CandidaturaControllerRf06IntegrationTest {
     @MockitoBean com.portifolio.service.GuardianApplicationNoticeSender guardianNoticeSender;
     @MockitoBean com.portifolio.realtime.NotificacaoRealtimeGateway realtimeGateway;
     @Autowired JwtService jwtService;
+    @Autowired @org.springframework.beans.factory.annotation.Qualifier("avisosResponsavelExecutor")
+    org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor avisosExecutor;
 
     @AfterEach
     void limparBanco() {
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(10))
+                .until(() -> avisosExecutor.getActiveCount() == 0
+                        && avisosExecutor.getThreadPoolExecutor().getQueue().isEmpty());
         jdbcTemplate.execute(
                 "TRUNCATE candidaturas, vagas, perfis_artistas, perfis_contratantes, usuarios RESTART IDENTITY CASCADE");
     }
@@ -132,12 +137,13 @@ class CandidaturaControllerRf06IntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(corpoCriacao(vaga.getId(), null)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.emailResponsavel").doesNotExist());
-        verify(guardianNoticeSender).enviarAviso("responsavel@teste.com", vaga.getId());
+        verify(guardianNoticeSender, org.mockito.Mockito.timeout(5000))
+                .enviarAviso("responsavel@teste.com", vaga.getId());
         mockMvc.perform(post("/api/candidaturas")
                         .header("Authorization", bearer(artista.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON).content(corpoCriacao(vaga.getId(), null)))
                 .andExpect(status().isConflict());
-        verify(guardianNoticeSender, org.mockito.Mockito.times(1))
+        verify(guardianNoticeSender, org.mockito.Mockito.timeout(5000).times(1))
                 .enviarAviso("responsavel@teste.com", vaga.getId());
     }
 
@@ -156,7 +162,8 @@ class CandidaturaControllerRf06IntegrationTest {
         assertThat(candidaturaRepository.count()).isOne();
         assertThat(jdbcTemplate.queryForList("select usuario_destino_id from notificacoes", Long.class))
                 .containsExactly(dono.getUsuarioId());
-        verify(guardianNoticeSender).enviarAviso("responsavel@teste.com", vaga.getId());
+        verify(guardianNoticeSender, org.mockito.Mockito.timeout(5000))
+                .enviarAviso("responsavel@teste.com", vaga.getId());
     }
 
     @Test

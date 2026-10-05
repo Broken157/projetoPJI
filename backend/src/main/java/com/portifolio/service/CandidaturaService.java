@@ -13,7 +13,6 @@ import com.portifolio.exception.ResourceNotFoundException;
 import com.portifolio.exception.UnprocessableEntityException;
 import com.portifolio.model.Candidatura;
 import com.portifolio.model.PerfilArtista;
-import com.portifolio.model.ResponsavelLegal;
 import com.portifolio.model.Funcao;
 import com.portifolio.model.Usuario;
 import com.portifolio.model.Vaga;
@@ -21,13 +20,12 @@ import com.portifolio.model.enums.StatusCandidatura;
 import com.portifolio.model.enums.StatusVaga;
 import com.portifolio.model.enums.TipoNotificacao;
 import com.portifolio.model.enums.TipoUsuario;
-import com.portifolio.model.enums.StatusConta;
 import com.portifolio.repository.CandidaturaRepository;
 import com.portifolio.repository.PerfilArtistaRepository;
 import com.portifolio.repository.VagaRepository;
 import com.portifolio.security.AuthenticatedUserResolver;
+import com.portifolio.security.MenorAutorizadoPolicy;
 import java.time.LocalDateTime;
-import java.time.Period;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,6 +57,7 @@ public class CandidaturaService {
     private final VagaRepository vagaRepository;
     private final PerfilArtistaRepository perfilArtistaRepository;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final MenorAutorizadoPolicy menorAutorizadoPolicy;
     private final AvatarService avatarService;
     private final ApplicationEventPublisher eventPublisher;
     private final NotificacaoPersistenceService notificacaoPersistenceService;
@@ -168,6 +167,9 @@ public class CandidaturaService {
     public CandidaturaResponse criar(CandidaturaCriacaoRequest request) {
         Usuario usuario = exigirUsuarioAtual();
         exigirTipo(usuario, TipoUsuario.ARTISTA, "Somente artistas podem se candidatar.");
+        if (menorAutorizadoPolicy.exigeProtecao(usuario) && !menorAutorizadoPolicy.autorizado(usuario)) {
+            throw new ForbiddenException("Autorização do responsável é necessária para se candidatar.");
+        }
 
         bloquearPar(request.getVagaId(), usuario.getId());
         Vaga vaga = vagaRepository.findByIdForUpdate(request.getVagaId())
@@ -212,7 +214,7 @@ public class CandidaturaService {
                 "Nova candidatura recebida para a vaga \"" + vaga.getTitulo() + "\".",
                 "/vagas/" + vaga.getId() + "/gerenciar");
         eventPublisher.publishEvent(notificacao);
-        avisarResponsavelSeMenor(usuario, vaga);
+        avisarResponsavelSeMenor(usuario, salva);
         return toResponse(salva);
     }
 
@@ -316,22 +318,10 @@ public class CandidaturaService {
                 .getSingleResult();
     }
 
-    private void avisarResponsavelSeMenor(Usuario usuario, Vaga vaga) {
-        if (usuario.getDataNascimento() == null
-                || usuario.getStatusConta() != StatusConta.ATIVA) {
-            return;
-        }
-        int idade = Period.between(usuario.getDataNascimento(), vagaPrazoPolicy.hoje()).getYears();
-        if (idade < 14 || idade >= 18) {
-            return;
-        }
-        ResponsavelLegal responsavel = usuario.getResponsavelLegal();
-        if (responsavel != null && responsavel.getDataConsentimento() != null
-                && !Boolean.TRUE.equals(responsavel.getConsentimentoRevogado())
-                && responsavel.getEmailResponsavel() != null
-                && !responsavel.getEmailResponsavel().isBlank()) {
+    private void avisarResponsavelSeMenor(Usuario usuario, Candidatura candidatura) {
+        if (menorAutorizadoPolicy.autorizado(usuario)) {
             eventPublisher.publishEvent(new AvisoResponsavelCandidaturaEvento(
-                    responsavel.getEmailResponsavel(), vaga.getId()));
+                    candidatura.getId(), usuario.getId(), candidatura.getVaga().getId()));
         }
     }
 

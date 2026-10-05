@@ -1,5 +1,6 @@
 package com.portifolio.service;
 
+import java.net.URI;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.mail.SimpleMailMessage;
@@ -18,7 +19,7 @@ public class SmtpGuardianApplicationNoticeSender implements GuardianApplicationN
             @Value("${app.frontend.base-url}") String frontendBaseUrl) {
         this.mailSender = mailSender;
         this.remetente = remetente;
-        this.frontendBaseUrl = frontendBaseUrl.replaceAll("/+$", "");
+        this.frontendBaseUrl = basePublicaSegura(frontendBaseUrl);
     }
 
     @Override
@@ -29,7 +30,20 @@ public class SmtpGuardianApplicationNoticeSender implements GuardianApplicationN
         mensagem.setSubject("Aviso de candidatura — Palco");
         mensagem.setText("Olá,\n\nO artista adolescente sob sua responsabilidade se candidatou "
                 + "a uma vaga no Palco. Esta mensagem é informativa; nenhuma nova aprovação é necessária.\n\n"
-                + "Vaga: " + frontendBaseUrl + "/vagas/" + vagaId + "\n");
+                + (frontendBaseUrl.isEmpty() ? "" : "Vaga: " + frontendBaseUrl + "/vagas/" + vagaId + "\n"));
         mailSender.send(mensagem);
+    }
+
+    private static String basePublicaSegura(String valor) {
+        if (valor == null || valor.isBlank()) return "";
+        try {
+            URI uri = URI.create(valor);
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null
+                    || uri.getUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null
+                    || !(uri.getPath().isEmpty() || uri.getPath().equals("/"))) return "";
+            return valor.replaceAll("/+$", "");
+        } catch (IllegalArgumentException erro) {
+            return "";
+        }
     }
 }

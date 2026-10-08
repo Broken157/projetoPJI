@@ -21,6 +21,7 @@ import com.portifolio.model.Usuario;
 import com.portifolio.model.Vaga;
 import com.portifolio.model.enums.StatusCandidatura;
 import com.portifolio.model.enums.StatusVaga;
+import com.portifolio.model.enums.FormaRemuneracao;
 import com.portifolio.model.enums.TipoUsuario;
 import com.portifolio.model.enums.TipoNotificacao;
 import com.portifolio.repository.CandidaturaRepository;
@@ -63,6 +64,9 @@ public class VagaService {
     private static final int LOTE_NOTIFICACOES_STATUS = 100;
 
     private final VagaRepository vagaRepository;
+    private final com.portifolio.repository.VagaConsultaRepository consultas;
+    private final com.portifolio.repository.ItemSalvoRepository salvos;
+    private final jakarta.persistence.EntityManager entityManager;
     private final PerfilContratanteRepository perfilContratanteRepository;
     private final FuncaoRepository funcaoRepository;
     private final com.portifolio.repository.EspecializacaoRepository especializacaoRepository;
@@ -99,15 +103,28 @@ public class VagaService {
     public VagaListagemResponse listar(VagaBuscaFiltro filtro) {
         validarFiltros(filtro);
         int tamanho = normalizarTamanho(filtro.getSize());
-        Usuario usuarioAtual = authenticatedUserResolver.usuarioAtual().orElse(null);
+        Usuario usuario = authenticatedUserResolver.usuarioAtual().orElse(null);
+        boolean pessoal = filtro.isSomenteMinhasVagas() || filtro.isSomenteCandidatei()
+                || filtro.isSomenteFavoritas();
+        if (pessoal && usuario == null)
+            throw new com.portifolio.exception.UnauthorizedException("Autenticação necessária para filtros pessoais.");
+        if (filtro.isSomenteMinhasVagas() && filtro.isSomenteCandidatei())
+            throw new IllegalArgumentException("Recortes de contratante e artista são incompatíveis.");
+        if (filtro.isSomenteMinhasVagas() && usuario.getTipoUsuario() != TipoUsuario.CONTRATANTE
+                || filtro.isSomenteCandidatei() && usuario.getTipoUsuario() != TipoUsuario.ARTISTA)
+            throw new ForbiddenException("Papel incompatível com o filtro pessoal.");
 
-        Specification<Vaga> filtrosPublicos = Specification
-                .where(VagaSpecifications.comStatus(StatusVaga.ABERTA))
-                .and(VagaSpecifications.semBloqueioModeracao())
-                .and(VagaSpecifications.prazoAindaValido(vagaPrazoPolicy.hoje()))
-                .and(VagaSpecifications.buscaTituloOuContratante(filtro.getBusca()))
+        Specification<Vaga> acesso = filtro.isSomenteMinhasVagas()
+                ? VagaSpecifications.doContratante(usuario.getId())
+                : pessoal ? VagaSpecifications.naoRascunho().and(VagaSpecifications.semBloqueioModeracao())
+                : VagaSpecifications.comStatus(StatusVaga.ABERTA)
+                        .and(VagaSpecifications.semBloqueioModeracao())
+                        .and(VagaSpecifications.prazoAindaValido(vagaPrazoPolicy.hoje()));
+        if (filtro.isSomenteCandidatei()) acesso = acesso.and(VagaSpecifications.comCandidaturaDe(usuario.getId()));
+        if (filtro.isSomenteFavoritas()) acesso = acesso.and(VagaSpecifications.favoritaDe(usuario.getId()));
+        Specification<Vaga> filtros = acesso
+                .and(VagaSpecifications.tituloContem(filtro.getBusca()))
                 .and(VagaSpecifications.tituloContem(filtro.getTitulo()))
-                .and(VagaSpecifications.empresaContem(filtro.getEmpresa()))
                 .and(VagaSpecifications.cidadeIgual(filtro.getCidade()))
                 .and(VagaSpecifications.estadoIgual(filtro.getEstado()))
                 .and(VagaSpecifications.modeloTrabalhoIgual(filtro.getModeloTrabalho()))
@@ -116,72 +133,55 @@ public class VagaService {
                 .and(VagaSpecifications.remuneracaoMaxima(filtro.getFaixaSalarialMax()))
                 .and(VagaSpecifications.areaAtuacaoContem(filtro.getAreaAtuacao()))
                 .and(VagaSpecifications.areaIgual(filtro.getAreaId()))
-                .and(VagaSpecifications.comAlgumaFuncao(filtro.getFuncaoIds()))
-                .and(VagaSpecifications.comAlgumaEspecializacao(filtro.getEspecializacaoIds()))
+                .and(VagaSpecifications.classificacao(filtro.getFuncaoIds(), filtro.getEspecializacaoIds()))
                 .and(VagaSpecifications.experienciaIgual(filtro.getExperiencia()))
                 .and(VagaSpecifications.abrangenciaIgual(filtro.getAbrangencia()))
                 .and(VagaSpecifications.formaRemuneracaoIgual(filtro.getFormaRemuneracao()))
                 .and(VagaSpecifications.afirmativa(filtro.getAfirmativa()))
-                .and(VagaSpecifications.comAlgumaCategoriaAfirmativa(
-                        filtro.getCategoriaAfirmativaIds()));
-        Specification<Vaga> spec = filtrosPublicos.and(
-                VagaSpecifications.idMaiorQue(filtro.getCursor()));
-
-        Pageable pageable = PageRequest.of(0, tamanho + 1, Sort.by(Sort.Direction.ASC, "id"));
-        List<Vaga> bruto = vagaRepository.findAll(spec, pageable).getContent();
-        long totalElements = vagaRepository.count(filtrosPublicos);
-
+                .and(VagaSpecifications.comAlgumaCategoriaAfirmativa(filtro.getCategoriaAfirmativaIds()))
+                .and(VagaSpecifications.publicacaoEntre(
+                        filtro.getDataPublicacao() == null ? filtro.getDataPublicacaoInicio() : filtro.getDataPublicacao(),
+                        filtro.getDataPublicacao() == null ? filtro.getDataPublicacaoFim() : filtro.getDataPublicacao()))
+                .and(VagaSpecifications.prazoEntre(
+                        filtro.getDataLimite() == null ? filtro.getDataLimiteInicio() : filtro.getDataLimite(),
+                        filtro.getDataLimite() == null ? filtro.getDataLimiteFim() : filtro.getDataLimite(), filtro.getComPrazo()));
+        int offset = filtro.getPage() == null ? 0 : Math.multiplyExact(filtro.getPage(), tamanho);
+        List<Long> bruto = consultas.ids(filtros.and(VagaSpecifications.idMaiorQue(filtro.getCursor())),
+                offset, tamanho + 1);
         boolean hasMore = bruto.size() > tamanho;
-        List<Vaga> pagina = hasMore ? bruto.subList(0, tamanho) : bruto;
-
-        // O feed e publico mesmo quando o proprietario esta autenticado.
-        // Dados administrativos permanecem no detalhe/gerenciamento da propria vaga.
-        List<VagaResponse> content = carregarComFuncoesEContratante(pagina, null);
-        Long nextCursor = hasMore ? pagina.get(pagina.size() - 1).getId() : null;
-
-        PaginaCanceladas canceladas = buscarVagasCanceladasParaArtistaLogado(
-                usuarioAtual, filtro.getCursorCanceladas(), tamanho);
-
-        return VagaListagemResponse.builder()
-                .content(content)
-                .totalElements(totalElements)
-                .nextCursor(nextCursor)
-                .hasMore(hasMore)
-                .vagasCanceladasComCandidatura(canceladas.content())
-                .nextCursorCanceladas(canceladas.nextCursor())
-                .hasMoreCanceladas(canceladas.hasMore())
-                .build();
+        List<Long> ids = hasMore ? bruto.subList(0, tamanho) : bruto;
+        List<VagaResponse> content = marcarFavoritas(carregarPorIds(ids,
+                filtro.isSomenteMinhasVagas() ? usuario.getId() : null, false), usuario);
+        PaginaCanceladas canceladas = pessoal ? PaginaCanceladas.vazia()
+                : buscarVagasCanceladasParaArtistaLogado(usuario, filtro.getCursorCanceladas(), tamanho);
+        return VagaListagemResponse.builder().content(content).totalElements(vagaRepository.count(filtros))
+                .nextCursor(hasMore ? ids.getLast() : null).hasMore(hasMore)
+                .vagasCanceladasComCandidatura(marcarFavoritas(canceladas.content(), usuario))
+                .nextCursorCanceladas(canceladas.nextCursor()).hasMoreCanceladas(canceladas.hasMore()).build();
     }
 
     @Transactional(readOnly = true)
     public VagaListagemResponse listarMinhas(Long cursor, Integer size) {
-        Usuario usuario = exigirContratanteAtual();
-        validarCursor(cursor, "Cursor");
-        int tamanho = normalizarTamanho(size);
+        VagaBuscaFiltro filtro = new VagaBuscaFiltro();
+        filtro.setSomenteMinhasVagas(true);
+        filtro.setCursor(cursor);
+        filtro.setSize(size);
+        return listar(filtro);
+    }
 
-        Specification<Vaga> spec = Specification
-                .where(VagaSpecifications.doContratante(usuario.getId()))
-                .and(VagaSpecifications.idMaiorQue(cursor));
-
-        Pageable pageable = PageRequest.of(0, tamanho + 1, Sort.by(Sort.Direction.ASC, "id"));
-        List<Vaga> bruto = vagaRepository.findAll(spec, pageable).getContent();
-        boolean hasMore = bruto.size() > tamanho;
-        List<Vaga> pagina = hasMore ? bruto.subList(0, tamanho) : bruto;
-        List<VagaResponse> content = carregarComFuncoesEContratante(pagina, usuario.getId());
-        Long nextCursor = hasMore ? pagina.get(pagina.size() - 1).getId() : null;
-
-        return VagaListagemResponse.builder()
-                .content(content)
-                .nextCursor(nextCursor)
-                .hasMore(hasMore)
-                .vagasCanceladasComCandidatura(List.of())
-                .build();
+    private List<VagaResponse> marcarFavoritas(List<VagaResponse> vagas, Usuario usuario) {
+        if (usuario == null || vagas.isEmpty()) return vagas;
+        Set<Long> ids = vagas.stream().map(VagaResponse::getId).collect(Collectors.toSet());
+        Set<Long> favoritos = salvos.buscarAlvosSalvos(usuario.getId(),
+                com.portifolio.model.enums.TipoAlvoSalvo.VAGA, ids);
+        return vagas.stream().map(v -> v.toBuilder().favorito(favoritos.contains(v.getId())).build()).toList();
     }
 
     @Transactional(readOnly = true)
     public VagaListagemResponse listarSimilares(Long vagaId, Long cursor, Integer size) {
         validarCursor(cursor, "Cursor");
         int tamanho = normalizarTamanho(size);
+        buscarPorId(vagaId);
         Vaga origem = vagaRepository.findById(vagaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
         if (origem.getStatus() == StatusVaga.RASCUNHO || moderacao.oculto("VAGA", vagaId)) {
@@ -201,14 +201,14 @@ public class VagaService {
                 .and(VagaSpecifications.idDiferente(vagaId))
                 .and(VagaSpecifications.comAlgumaFuncao(funcaoIds));
 
-        Pageable pageable = PageRequest.of(0, tamanho + 1, Sort.by(Sort.Direction.ASC, "id"));
-        List<Vaga> bruto = vagaRepository.findAll(spec, pageable).getContent();
+        List<Long> bruto = consultas.ids(spec, 0, tamanho + 1);
         boolean hasMore = bruto.size() > tamanho;
-        List<Vaga> pagina = hasMore ? bruto.subList(0, tamanho) : bruto;
+        List<Long> pagina = hasMore ? bruto.subList(0, tamanho) : bruto;
 
         return VagaListagemResponse.builder()
-                .content(carregarComFuncoesEContratante(pagina, null))
-                .nextCursor(hasMore ? pagina.get(pagina.size() - 1).getId() : null)
+                .content(marcarFavoritas(carregarPorIds(pagina, null, false),
+                        authenticatedUserResolver.usuarioAtual().orElse(null)))
+                .nextCursor(hasMore ? pagina.getLast() : null)
                 .hasMore(hasMore)
                 .vagasCanceladasComCandidatura(List.of())
                 .build();
@@ -266,6 +266,21 @@ public class VagaService {
     }
 
     private void validarFiltros(VagaBuscaFiltro filtro) {
+        if (filtro.getEmpresa() != null) throw new UnprocessableEntityException("RF03 não filtra por empresa.");
+        if (filtro.getTipoContrato() != null && !filtro.getTipoContrato().isBlank())
+            filtro.setTipoContrato(com.portifolio.validation.CatalogoVaga.contrato(filtro.getTipoContrato()));
+        if (filtro.getExperiencia() != null && !filtro.getExperiencia().isBlank())
+            filtro.setExperiencia(com.portifolio.validation.CatalogoVaga.experiencia(filtro.getExperiencia(), false));
+        if (filtro.getPage() != null && (filtro.getPage() < 0
+                || (long) filtro.getPage() * normalizarTamanho(filtro.getSize()) > Integer.MAX_VALUE))
+            throw new IllegalArgumentException("Página fora do intervalo suportado.");
+        if (filtro.getPage() != null && filtro.getCursor() != null)
+            throw new IllegalArgumentException("Use página ou cursor, sem combinar.");
+        validarIntervalo(filtro.getDataPublicacao(), filtro.getDataPublicacaoInicio(), filtro.getDataPublicacaoFim());
+        validarIntervalo(filtro.getDataLimite(), filtro.getDataLimiteInicio(), filtro.getDataLimiteFim());
+        if (Boolean.FALSE.equals(filtro.getComPrazo()) && (filtro.getDataLimite() != null
+                || filtro.getDataLimiteInicio() != null || filtro.getDataLimiteFim() != null))
+            throw new IllegalArgumentException("Intervalo de prazo exige vagas com prazo.");
         if (legacySchema && ((filtro.getAreaAtuacao()!=null && !filtro.getAreaAtuacao().isBlank())
                 || filtro.getAreaId() != null
                 || (filtro.getFuncaoIds()!=null && !filtro.getFuncaoIds().isEmpty())
@@ -290,7 +305,7 @@ public class VagaService {
                     "Remuneração mínima não pode ser maior que a máxima.");
         }
         if (filtro.getEstado() != null && !filtro.getEstado().isBlank()
-                && filtro.getEstado().trim().length() != 2) {
+                && !filtro.getEstado().trim().matches("[a-zA-Z]{2}")) {
             throw new IllegalArgumentException("Estado deve usar exatamente 2 caracteres.");
         }
         if (filtro.getFuncaoIds() != null
@@ -350,10 +365,22 @@ public class VagaService {
     }
 
     private int normalizarTamanho(Integer solicitado) {
-        if (solicitado == null || solicitado < 1) {
+        if (solicitado != null && solicitado < 1) throw new IllegalArgumentException("size deve ser positivo.");
+        if (solicitado == null) {
             return TAMANHO_PADRAO;
         }
         return Math.min(solicitado, TAMANHO_MAXIMO);
+    }
+
+    private void validarIntervalo(LocalDate exata, LocalDate inicio, LocalDate fim) {
+        if (exata != null && (inicio != null || fim != null))
+            throw new IllegalArgumentException("Data exata e intervalo são incompatíveis.");
+        if (inicio != null && fim != null && inicio.isAfter(fim))
+            throw new IllegalArgumentException("Intervalo de datas invertido.");
+        for (LocalDate data : new LocalDate[]{exata, inicio, fim}) {
+            if (data != null && (data.getYear() < 1 || data.getYear() > 9998))
+                throw new IllegalArgumentException("Data fora do intervalo suportado.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -378,13 +405,15 @@ public class VagaService {
         }
         if (vaga.getStatus() != StatusVaga.ABERTA
                 && !proprietario
-                && candidaturaDoArtista.isEmpty()) {
+                && candidaturaDoArtista.isEmpty()
+                && (usuario == null || !salvos.existsByUsuarioIdAndTipoAlvoAndAlvoId(
+                        usuario.getId(), com.portifolio.model.enums.TipoAlvoSalvo.VAGA, id))) {
             // Não permite descobrir por ID uma vaga ausente do feed público.
             throw new ResourceNotFoundException("Vaga não encontrada.");
         }
 
-        VagaResponse resposta = toResponse(
-                vaga, false, proprietario ? usuario.getId() : null);
+        VagaResponse resposta = marcarFavoritas(List.of(toResponse(
+                vaga, false, proprietario ? usuario.getId() : null)), usuario).getFirst();
         Candidatura candidatura = candidaturaDoArtista.orElse(null);
         return resposta.toBuilder()
                 .contratantePublico(toContratantePublico(vaga.getContratante()))
@@ -415,6 +444,8 @@ public class VagaService {
         if (statusSolicitado == StatusVaga.ABERTA) {
             validarPublicacao(vaga);
             vaga.setDataPublicacao(LocalDateTime.now());
+        } else {
+            vaga.setDataPublicacao(null);
         }
         vaga.setStatus(statusSolicitado);
         if (legacySchema) {
@@ -434,6 +465,7 @@ public class VagaService {
             salva.setEspecializacoes(especializacoes);
             vagaRepository.flush();
         }
+        entityManager.refresh(salva);
         return toResponse(salva);
     }
 
@@ -444,17 +476,31 @@ public class VagaService {
         exigirProprietario(vaga);
         StatusVaga statusAtual = vaga.getStatus();
         if (statusAtual != StatusVaga.RASCUNHO && statusAtual != StatusVaga.ABERTA
-                && statusAtual != StatusVaga.PAUSADA) {
+                && statusAtual != StatusVaga.PAUSADA && statusAtual != StatusVaga.ENCERRADA) {
             throw new UnprocessableEntityException("Vaga " + statusAtual + " não pode ser editada.");
         }
         validarConteudoPublico(request);
+        LocalDate prazoAnterior = vaga.getDataLimiteCandidatura();
+        if (statusAtual != StatusVaga.RASCUNHO) {
+            com.portifolio.validation.CatalogoVaga.experiencia(request.getExperiencia(), true);
+            if (request.getModeloTrabalho() == null)
+                throw new UnprocessableEntityException("Modelo de trabalho é obrigatório para publicar.");
+        }
+        if (!java.util.Objects.equals(prazoAnterior, request.getDataLimiteCandidatura()))
+            validarPrazoInformado(request.getDataLimiteCandidatura());
         preencherVaga(vaga, request);
         normalizarPublicacao(vaga);
-        validarPrazoInformado(vaga.getDataLimiteCandidatura());
-        if (statusAtual != StatusVaga.RASCUNHO) validarPublicacao(vaga);
+        if (!java.util.Objects.equals(prazoAnterior, vaga.getDataLimiteCandidatura()))
+            validarPrazoInformado(vaga.getDataLimiteCandidatura());
+        if (statusAtual != StatusVaga.RASCUNHO) validarPublicacao(vaga, false);
         vaga.setStatus(statusAtual);
+        // Marca inclusive alterações só em coleções; o trigger oficial define
+        // o timestamp autoritativo, lido novamente após o flush.
+        vaga.setUltimaAtualizacao(LocalDateTime.now());
         if (legacySchema) officialLocalVagas.atualizarCampos(vaga);
-        return toResponse(vagaRepository.save(vaga));
+        Vaga salva = vagaRepository.saveAndFlush(vaga);
+        entityManager.refresh(salva);
+        return toResponse(salva);
     }
 
     @Transactional
@@ -639,19 +685,22 @@ public class VagaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Área artística não encontrada.")));
         var valorMinimo = request.getValorMinimo();
         var valorMaximo = request.getValorMaximo();
-
-        if (request.getFormaRemuneracao()
-                != com.portifolio.model.enums.FormaRemuneracao.A_COMBINAR) {
-
-            if (valorMinimo == null) {
-                throw new IllegalArgumentException("Informe o valor da remuneração.");
-            }
-
-            if (valorMaximo == null) {
-                valorMaximo = valorMinimo;
-            }
-
-            if (valorMinimo.compareTo(valorMaximo) > 0) {
+        var alias = request.getRemuneraValor();
+        if (alias != null) {
+            if (valorMinimo != null && alias.compareTo(valorMinimo) != 0
+                    || valorMaximo != null && alias.compareTo(valorMaximo) != 0)
+                throw new UnprocessableEntityException("Alias de valor único diverge da faixa canônica.");
+            valorMinimo = alias;
+            valorMaximo = alias;
+        }
+        if (request.getFormaRemuneracao() == FormaRemuneracao.A_COMBINAR) {
+            if (valorMinimo != null || valorMaximo != null)
+                throw new UnprocessableEntityException("A_COMBINAR exige valores mínimo e máximo nulos.");
+        } else {
+            if (valorMinimo == null || valorMaximo == null)
+                throw new UnprocessableEntityException("Informe ambos os extremos da faixa de remuneração.");
+            if (valorMinimo.signum() < 0 || valorMaximo.signum() < 0
+                    || valorMinimo.compareTo(valorMaximo) > 0) {
                 throw new IllegalArgumentException(
                         "Remuneração exige faixa mínima e máxima válida.");
             }
@@ -671,9 +720,14 @@ public class VagaService {
         vaga.setEnderecoCompleto(request.getEnderecoCompleto());
         vaga.setBeneficios(request.getBeneficios());
         vaga.setModeloTrabalho(request.getModeloTrabalho());
-        vaga.setTipoContrato(request.getTipoContrato());
-        vaga.setExperiencia(request.getExperiencia());
+        vaga.setTipoContrato(com.portifolio.validation.CatalogoVaga.contrato(request.getTipoContrato()));
+        vaga.setExperiencia(com.portifolio.validation.CatalogoVaga.experiencia(request.getExperiencia(), false));
         vaga.setDataLimiteCandidatura(request.getDataLimiteCandidatura());
+        if (request.getAbrangencia() != com.portifolio.model.enums.Abrangencia.LOCAL
+                && request.getAbrangencia() != com.portifolio.model.enums.Abrangencia.NACIONAL
+                && (vaga.getId() == null || request.getAbrangencia() != vaga.getAbrangencia()))
+            throw new UnprocessableEntityException(
+                    "D09: abrangência legada sem equivalência consolidada; use LOCAL ou NACIONAL.");
         vaga.setAbrangencia(request.getAbrangencia());
         if (request.getFotos() != null) {
             vaga.setFotos(new ArrayList<>(request.getFotos().stream()
@@ -685,42 +739,46 @@ public class VagaService {
                 : mudouArea ? new HashSet<>() : new HashSet<>(vaga.getFuncoes());
         if (funcoesDesejadas.stream().anyMatch(
                 funcao -> !funcao.getArea().getId().equals(vaga.getArea().getId()))) {
-            throw new IllegalArgumentException("As funções devem pertencer à área da vaga.");
+            throw new UnprocessableEntityException("As funções devem pertencer à área da vaga.");
         }
-        Set<Long> compativeis = funcoesDesejadas.stream()
-                .flatMap(funcao -> funcao.getEspecializacoes().stream())
-                .map(com.portifolio.model.Especializacao::getId).collect(Collectors.toSet());
+        if (funcoesDesejadas.size() > 3)
+            throw new UnprocessableEntityException("Vaga aceita até 3 Funções.");
+        if (request.getEspecializacaoIds() != null)
+            com.portifolio.validation.TaxonomiaProfissional.ids(request.getEspecializacaoIds(), 3);
+        Set<Long> compativeis = com.portifolio.validation.TaxonomiaProfissional
+                .especializacoesCompativeis(funcoesDesejadas);
         Set<Especializacao> especializacoesDesejadas;
         if (request.getEspecializacaoIds() != null) {
-            if (!compativeis.containsAll(request.getEspecializacaoIds())) {
-                throw new IllegalArgumentException("As especializações devem pertencer às funções selecionadas da vaga.");
-            }
             especializacoesDesejadas = new HashSet<>(
                     especializacaoRepository.findAllById(request.getEspecializacaoIds()));
+            if (especializacoesDesejadas.size() != request.getEspecializacaoIds().size())
+                throw new ResourceNotFoundException("Uma ou mais especializações não foram encontradas.");
+            if (!compativeis.containsAll(request.getEspecializacaoIds())) {
+                throw new UnprocessableEntityException("As especializações devem pertencer às funções selecionadas da vaga.");
+            }
         } else {
             // Edição legada preserva seleções válidas e remove apenas as que ficaram órfãs.
             especializacoesDesejadas = vaga.getEspecializacoes().stream()
                     .filter(especializacao -> compativeis.contains(especializacao.getId()))
                     .collect(Collectors.toSet());
         }
-        if (vaga.getId() == null) {
-            vaga.setFuncoes(funcoesDesejadas);
-            vaga.setEspecializacoes(especializacoesDesejadas);
-        } else {
-            sincronizarTaxonomiaIncremental(vaga, funcoesDesejadas, especializacoesDesejadas);
-        }
+        if (especializacoesDesejadas.size() > 3)
+            throw new UnprocessableEntityException("Vaga aceita até 3 Especializações.");
         if (request.getCategoriaAfirmativaIds() != null) {
             if (request.getCategoriaAfirmativaIds().size() > 1) {
                 throw new UnprocessableEntityException(
-                        "Limitação estrutural do database04 frente ao RF04 revisado: "
+                        "C15: limitação estrutural do database05 frente ao RF04: "
                         + "a vaga aceita somente uma categoria afirmativa; nenhuma seleção foi descartada.");
             }
             var categorias = categoriaAfirmativaRepository.findAllById(request.getCategoriaAfirmativaIds());
             if (categorias.size() != request.getCategoriaAfirmativaIds().size()) {
                 throw new UnprocessableEntityException(
-                        "Categoria afirmativa não representável no enum oficial do database04. "
-                        + "Consulte o catálogo atual; 50+ depende de evolução do banco.");
+                        "Categoria afirmativa não representável no enum oficial do database05.");
             }
+            if (categorias.stream().anyMatch(c -> (c.getId() == 2 || c.getId() == 4)
+                    && vaga.getCategoriasAfirmativas().stream().noneMatch(atual -> atual.getId().equals(c.getId()))))
+                throw new UnprocessableEntityException(
+                        "D14: categoria afirmativa legada sem equivalência consolidada na baseline ativa.");
             vaga.setCategoriasAfirmativas(new HashSet<>(categorias));
         }
         if (Boolean.TRUE.equals(request.getAfirmativa())
@@ -733,10 +791,17 @@ public class VagaService {
             throw new UnprocessableEntityException(
                     "Vaga não afirmativa não pode ter categorias afirmativas.");
         }
+        if (vaga.getId() == null) {
+            vaga.setFuncoes(funcoesDesejadas);
+            vaga.setEspecializacoes(especializacoesDesejadas);
+        } else {
+            sincronizarTaxonomiaIncremental(vaga, funcoesDesejadas, especializacoesDesejadas);
+        }
     }
 
     private Set<Funcao> resolverFuncoes(Set<Long> funcaoIds) {
-        List<Funcao> funcoes = funcaoRepository.findAllById(funcaoIds);
+        com.portifolio.validation.TaxonomiaProfissional.ids(funcaoIds, 3);
+        List<Funcao> funcoes = funcaoRepository.buscarTaxonomia(funcaoIds);
         if (funcoes.size() != funcaoIds.size()) {
             throw new ResourceNotFoundException("Uma ou mais funcoes não foram encontradas.");
         }
@@ -816,18 +881,22 @@ public class VagaService {
     }
 
     private void validarPublicacao(Vaga vaga) {
+        validarPublicacao(vaga, true);
+    }
+
+    private void validarPublicacao(Vaga vaga, boolean validarPrazo) {
         conteudoPublico.texto(vaga.getTitulo(), "Título", 150, true);
         conteudoPublico.texto(vaga.getDescricao(), "Descrição", 20000, true);
         conteudoPublico.texto(vaga.getRequisitos(), "Requisitos", 20000, false);
         conteudoPublico.texto(vaga.getBeneficios(), "Benefícios", 20000, false);
         conteudoPublico.texto(vaga.getCidade(), "Cidade", 100, true);
         conteudoPublico.texto(vaga.getTipoContrato(), "Tipo de contrato", 100, true);
-        conteudoPublico.texto(vaga.getExperiencia(), "Experiência", 100, false);
+        com.portifolio.validation.CatalogoVaga.experiencia(vaga.getExperiencia(), true);
         if (vaga.getFotos() != null) vaga.getFotos().forEach(url -> conteudoPublico.url(url, "Foto", 500, true));
         if (vaga.getModeloTrabalho() == null) {
             throw new UnprocessableEntityException("Modelo de trabalho é obrigatório para publicar.");
         }
-        validarPrazoInformado(vaga.getDataLimiteCandidatura());
+        if (validarPrazo) validarPrazoInformado(vaga.getDataLimiteCandidatura());
     }
 
     private void validarConteudoPublico(VagaAtualizacaoRequest request) {
@@ -913,8 +982,8 @@ public class VagaService {
                 .descricao(vaga.getDescricao())
                 .requisitos(vaga.getRequisitos())
                 .remuneraValor(valorUnico(vaga))
-                .valorMinimo(vaga.getValorMinimo())
-                .valorMaximo(vaga.getValorMaximo())
+                .valorMinimo(vaga.getFormaRemuneracao() == FormaRemuneracao.A_COMBINAR ? null : vaga.getValorMinimo())
+                .valorMaximo(vaga.getFormaRemuneracao() == FormaRemuneracao.A_COMBINAR ? null : vaga.getValorMaximo())
                 .formaRemuneracao(legacySchema ? null : vaga.getFormaRemuneracao())
                 .areaId(vaga.getArea()==null?null:vaga.getArea().getId())
                 .formaPagamento(legacySchema?vaga.getLegacyFormaPagamento():null)
@@ -926,6 +995,8 @@ public class VagaService {
                 .tipoContrato(vaga.getTipoContrato())
                 .status(vaga.getStatus())
                 .dataPublicacao(vaga.getDataPublicacao())
+                .ultimaAtualizacao(vaga.getUltimaAtualizacao())
+                .capaUrl(vaga.getFotos() == null || vaga.getFotos().isEmpty() ? null : vaga.getFotos().getFirst())
                 .funcaoIds(funcaoIds)
                 .especializacaoIds(vaga.getEspecializacoes().stream()
                         .map(com.portifolio.model.Especializacao::getId).collect(Collectors.toSet()))
@@ -947,6 +1018,7 @@ public class VagaService {
     }
 
     private java.math.BigDecimal valorUnico(Vaga vaga) {
+        if (vaga.getFormaRemuneracao() == FormaRemuneracao.A_COMBINAR) return null;
         if (legacySchema) return vaga.getValorMinimo();
         return vaga.getValorMinimo() != null && vaga.getValorMaximo() != null
                 && vaga.getValorMinimo().compareTo(vaga.getValorMaximo()) == 0 ? vaga.getValorMinimo() : null;
@@ -975,7 +1047,7 @@ public class VagaService {
 
     private Usuario exigirUsuarioAtual() {
         return authenticatedUserResolver.usuarioAtual()
-                .orElseThrow(() -> new ForbiddenException("Autenticação obrigatória."));
+                .orElseThrow(() -> new com.portifolio.exception.UnauthorizedException("Autenticação obrigatória."));
     }
 
     private Usuario exigirProprietario(Vaga vaga) {

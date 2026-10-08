@@ -319,6 +319,7 @@ class VagaPrazoRf23Rf06IntegrationTest {
         vaga.setCidade("São Paulo");
         vaga.setEstado("SP");
         vaga.setModeloTrabalho(ModeloTrabalho.REMOTO);
+        vaga.setExperiencia("SEM_EXPERIENCIA");
         vaga.setTipoContrato("Freelance");
         vaga.setStatus(status);
         vaga.setDataLimiteCandidatura(dataLimite);

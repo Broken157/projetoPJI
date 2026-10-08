@@ -33,4 +33,15 @@ public class VagaBuscaFiltro {
     private Long cursor;
     private Long cursorCanceladas;
     private Integer size;
+    private Integer page;
+    private java.time.LocalDate dataPublicacao;
+    private java.time.LocalDate dataPublicacaoInicio;
+    private java.time.LocalDate dataPublicacaoFim;
+    private java.time.LocalDate dataLimite;
+    private java.time.LocalDate dataLimiteInicio;
+    private java.time.LocalDate dataLimiteFim;
+    private Boolean comPrazo;
+    private boolean somenteMinhasVagas;
+    private boolean somenteCandidatei;
+    private boolean somenteFavoritas;
 }

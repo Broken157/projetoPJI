@@ -45,15 +45,7 @@ public final class VagaSpecifications {
     }
 
     public static Specification<Vaga> buscaTituloOuContratante(String busca) {
-        return (root, query, cb) -> {
-            if (busca == null || busca.isBlank()) return cb.conjunction();
-            String termo = "%" + busca.trim().toLowerCase() + "%";
-            var contratante = root.join("contratante");
-            var usuario = contratante.join("usuario");
-            return cb.or(cb.like(cb.lower(root.get("titulo")), termo),
-                    cb.like(cb.lower(contratante.get("nomeEmpresa")), termo),
-                    cb.like(cb.lower(usuario.get("nome")), termo));
-        };
+        return tituloContem(busca);
     }
 
     public static Specification<Vaga> idMaiorQue(Long cursor) {
@@ -65,7 +57,7 @@ public final class VagaSpecifications {
     public static Specification<Vaga> tituloContem(String titulo) {
         return (root, query, cb) -> (titulo == null || titulo.isBlank())
                 ? cb.conjunction()
-                : cb.like(cb.lower(root.get("titulo")), "%" + titulo.trim().toLowerCase() + "%");
+                : cb.like(cb.lower(root.get("titulo")), termoLiteral(titulo), '\\');
     }
 
     public static Specification<Vaga> empresaContem(String empresa) {
@@ -103,19 +95,22 @@ public final class VagaSpecifications {
     public static Specification<Vaga> tipoContratoIgual(String tipoContrato) {
         return (root, query, cb) -> (tipoContrato == null || tipoContrato.isBlank())
                 ? cb.conjunction()
-                : cb.equal(cb.lower(root.get("tipoContrato")), tipoContrato.trim().toLowerCase());
+                : cb.lower(root.<String>get("tipoContrato")).in(
+                        com.portifolio.validation.CatalogoVaga.contratosParaLeitura(tipoContrato));
     }
 
     public static Specification<Vaga> remuneracaoMinima(BigDecimal min) {
         return (root, query, cb) -> min == null
                 ? cb.conjunction()
-                : cb.greaterThanOrEqualTo(root.get("valorMinimo"), min);
+                : cb.and(cb.notEqual(root.get("formaRemuneracao"), FormaRemuneracao.A_COMBINAR),
+                        cb.greaterThanOrEqualTo(root.get("valorMaximo"), min));
     }
 
     public static Specification<Vaga> remuneracaoMaxima(BigDecimal max) {
         return (root, query, cb) -> max == null
                 ? cb.conjunction()
-                : cb.lessThanOrEqualTo(root.get("valorMinimo"), max);
+                : cb.and(cb.notEqual(root.get("formaRemuneracao"), FormaRemuneracao.A_COMBINAR),
+                        cb.lessThanOrEqualTo(root.get("valorMinimo"), max));
     }
 
     public static Specification<Vaga> areaAtuacaoContem(String areaAtuacao) {
@@ -162,10 +157,30 @@ public final class VagaSpecifications {
     }
 
     public static Specification<Vaga> comAlgumaEspecializacao(Set<Long> ids) {
+        return classificacao(null, ids);
+    }
+
+    /** EXISTS evita multiplicação da página e exige a cadeia função/especialização da própria vaga. */
+    public static Specification<Vaga> classificacao(Set<Long> funcoes, Set<Long> especializacoes) {
         return (root, query, cb) -> {
-            if (ids == null || ids.isEmpty()) return cb.conjunction();
-            query.distinct(true);
-            return root.join("especializacoes").get("id").in(ids);
+            boolean temFuncoes = funcoes != null && !funcoes.isEmpty();
+            boolean temEspecializacoes = especializacoes != null && !especializacoes.isEmpty();
+            if (!temFuncoes && !temEspecializacoes) return cb.conjunction();
+            var sub = query.subquery(Long.class);
+            var vaga = sub.from(Vaga.class);
+            var funcao = vaga.join("funcoes");
+            var condicoes = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
+            condicoes.add(cb.equal(vaga.get("id"), root.get("id")));
+            condicoes.add(cb.equal(funcao.get("area").get("id"), vaga.get("area").get("id")));
+            if (temFuncoes) condicoes.add(funcao.get("id").in(funcoes));
+            if (temEspecializacoes) {
+                var selecionada = vaga.join("especializacoes");
+                var permitida = funcao.join("especializacoes");
+                condicoes.add(selecionada.get("id").in(especializacoes));
+                condicoes.add(cb.equal(selecionada.get("id"), permitida.get("id")));
+            }
+            sub.select(vaga.get("id")).where(condicoes.toArray(jakarta.persistence.criteria.Predicate[]::new));
+            return cb.exists(sub);
         };
     }
 
@@ -177,14 +192,54 @@ public final class VagaSpecifications {
 
     // distinct(true) evita vaga duplicada no resultado quando ela casa com mais de uma funcao do filtro
     public static Specification<Vaga> comAlgumaFuncao(Set<Long> funcaoIds) {
+        return classificacao(funcaoIds, null);
+    }
+
+    public static Specification<Vaga> naoRascunho() {
+        return (root, query, cb) -> cb.notEqual(root.get("status"), StatusVaga.RASCUNHO);
+    }
+
+    public static Specification<Vaga> comCandidaturaDe(Long usuarioId) {
         return (root, query, cb) -> {
-            if (funcaoIds == null || funcaoIds.isEmpty()) {
-                return cb.conjunction();
-            }
-            query.distinct(true);
-            Join<Object, Object> funcaoJoin = root.join("funcoes");
-            return funcaoJoin.get("id").in(funcaoIds);
+            var sub = query.subquery(Long.class);
+            var candidatura = sub.from(com.portifolio.model.Candidatura.class);
+            sub.select(candidatura.get("id")).where(
+                    cb.equal(candidatura.get("vaga").get("id"), root.get("id")),
+                    cb.equal(candidatura.get("artista").get("usuarioId"), usuarioId));
+            return cb.exists(sub);
         };
+    }
+
+    public static Specification<Vaga> favoritaDe(Long usuarioId) {
+        return (root, query, cb) -> {
+            var sub = query.subquery(Long.class);
+            var salvo = sub.from(com.portifolio.model.ItemSalvo.class);
+            sub.select(salvo.get("id")).where(cb.equal(salvo.get("usuarioId"), usuarioId),
+                    cb.equal(salvo.get("tipoAlvo"), com.portifolio.model.enums.TipoAlvoSalvo.VAGA),
+                    cb.equal(salvo.get("alvoId"), root.get("id")));
+            return cb.exists(sub);
+        };
+    }
+
+    public static Specification<Vaga> publicacaoEntre(LocalDate inicio, LocalDate fim) {
+        return (root, query, cb) -> cb.and(
+                inicio == null ? cb.conjunction() : cb.greaterThanOrEqualTo(
+                        root.get("dataPublicacao"), inicio.atStartOfDay()),
+                fim == null ? cb.conjunction() : cb.lessThan(
+                        root.get("dataPublicacao"), fim.plusDays(1).atStartOfDay()));
+    }
+
+    public static Specification<Vaga> prazoEntre(LocalDate inicio, LocalDate fim, Boolean comPrazo) {
+        return (root, query, cb) -> cb.and(
+                inicio == null ? cb.conjunction() : cb.greaterThanOrEqualTo(root.get("dataLimiteCandidatura"), inicio),
+                fim == null ? cb.conjunction() : cb.lessThanOrEqualTo(root.get("dataLimiteCandidatura"), fim),
+                comPrazo == null ? cb.conjunction() : comPrazo
+                        ? cb.isNotNull(root.get("dataLimiteCandidatura")) : cb.isNull(root.get("dataLimiteCandidatura")));
+    }
+
+    private static String termoLiteral(String valor) {
+        return "%" + valor.trim().toLowerCase(java.util.Locale.ROOT)
+                .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
     }
 
     public static Specification<Vaga> doContratante(Long usuarioId) {

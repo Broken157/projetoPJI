@@ -14,12 +14,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class VagaServiceTamanhoTest {
 
     private final VagaService service = new VagaService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     @ParameterizedTest
     @CsvSource({
-            "0, 20",
-            "-5, 20",
             "1, 1",
             "20, 20",
             "50, 50",
@@ -44,5 +42,14 @@ class VagaServiceTamanhoTest {
         int resultado = (int) metodo.invoke(service, new Object[]{null});
 
         assertThat(resultado).isEqualTo(esperado);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0", "-5"})
+    void tamanhoNaoPositivoDeveSerRejeitado(int solicitado) throws Exception {
+        Method metodo = VagaService.class.getDeclaredMethod("normalizarTamanho", Integer.class);
+        metodo.setAccessible(true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> metodo.invoke(service, solicitado))
+                .hasCauseInstanceOf(IllegalArgumentException.class);
     }
 }

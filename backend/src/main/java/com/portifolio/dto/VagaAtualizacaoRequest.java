@@ -40,6 +40,10 @@ public class VagaAtualizacaoRequest {
     @DecimalMin("0.00") @Digits(integer = 8, fraction = 2)
     private BigDecimal valorMaximo;
 
+    // Alias antigo de valor fixo; não substitui a faixa canônica.
+    @DecimalMin("0.00") @Digits(integer = 8, fraction = 2)
+    private BigDecimal remuneraValor;
+
     @NotNull(message = "Área artística é obrigatória")
     @Positive
     private Short areaId;
@@ -66,11 +70,11 @@ public class VagaAtualizacaoRequest {
     @Size(max = 100, message = "Tipo de contrato deve ter no máximo 100 caracteres")
     private String tipoContrato;
 
-    @Size(max = 5, message = "Selecione no máximo 5 funções")
+    @Size(max = 3, message = "Selecione no máximo 3 funções")
     private Set<@NotNull(message = "ID de funcao não pode ser nulo")
             @Positive(message = "ID de funcao deve ser positivo") Long> funcaoIds;
 
-    @Size(max = 5, message = "Selecione no máximo 5 especializações")
+    @Size(max = 3, message = "Selecione no máximo 3 especializações")
     private Set<@NotNull @Positive Long> especializacaoIds;
 
     private Set<@NotNull @Positive Integer> categoriaAfirmativaIds;
@@ -85,6 +89,24 @@ public class VagaAtualizacaoRequest {
     private com.portifolio.model.enums.Abrangencia abrangencia;
 
     private List<@Size(max = 500, message = "URL da foto deve ter no máximo 500 caracteres") String> fotos;
+
+    @com.fasterxml.jackson.annotation.JsonSetter("funcaoIds")
+    public void receberFuncoes(List<Long> valores) {
+        funcaoIds = selecao(valores);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonSetter("especializacaoIds")
+    public void receberEspecializacoes(List<Long> valores) {
+        especializacaoIds = selecao(valores);
+    }
+
+    private Set<Long> selecao(List<Long> valores) {
+        if (valores == null) return null;
+        // Bean Validation mantém o envelope global para IDs nulos/não positivos.
+        if (valores.stream().anyMatch(id -> id == null || id <= 0))
+            return new java.util.LinkedHashSet<>(valores);
+        return com.portifolio.validation.TaxonomiaProfissional.ids(valores, 3);
+    }
 
     @com.fasterxml.jackson.annotation.JsonSetter("tagIds")
     public void rejeitarTagsLegadas(Object ignored) {

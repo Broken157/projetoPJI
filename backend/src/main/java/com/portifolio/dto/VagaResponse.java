@@ -36,6 +36,10 @@ public class VagaResponse {
     private String tipoContrato;
     private StatusVaga status;
     private LocalDateTime dataPublicacao;
+    private LocalDateTime ultimaAtualizacao;
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private Boolean favorito;
+    private String capaUrl;
     private Set<Long> funcaoIds;
     private Set<Long> especializacaoIds;
     private Set<Integer> categoriaAfirmativaIds;

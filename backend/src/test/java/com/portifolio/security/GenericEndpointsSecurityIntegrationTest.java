@@ -164,6 +164,7 @@ class GenericEndpointsSecurityIntegrationTest {
                 "formaRemuneracao", "A_COMBINAR", "cidade", "São Paulo", "estado", "SP", "modeloTrabalho", "REMOTO",
                 "tipoContrato", "Freelance", "funcaoIds", List.of(funcaoId)));
         vaga.put("abrangencia", "LOCAL");
+        vaga.put("experiencia", "SEM_EXPERIENCIA");
         JsonNode criada = mapper.readTree(mvc.perform(post("/api/vagas").header("Authorization", contratante.bearer())
                         .contentType(MediaType.APPLICATION_JSON).content(json(vaga)))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.funcaoIds[0]").value(funcaoId))

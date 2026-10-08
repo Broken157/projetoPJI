@@ -339,8 +339,7 @@ class VagaControllerRf03IntegrationTest {
 
         String[][] filtros = {
                 {"titulo", "guitarrista"},
-                {"empresa", "palco cultural"},
-                {"busca", "palco cultural"},
+                {"busca", "guitarrista"},
                 {"cidade", "Campinas"},
                 {"estado", "sp"},
                 {"modeloTrabalho", "HIBRIDO"},
@@ -367,7 +366,7 @@ class VagaControllerRf03IntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(outro.getId()));
 
         mockMvc.perform(get("/api/vagas")
-                        .param("empresa", "Palco")
+                        .param("busca", "Jazz")
                         .param("cidade", "Campinas")
                         .param("modeloTrabalho", "HIBRIDO")
                         .param("areaAtuacao", "Artes Cênicas")
@@ -420,8 +419,7 @@ class VagaControllerRf03IntegrationTest {
                 extrairTitulos(jsonPrimeira), extrairTitulos(jsonUltima))).isTrue();
 
         mockMvc.perform(get("/api/vagas").param("size", "0"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content.length()").value(20));
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -566,10 +564,13 @@ class VagaControllerRf03IntegrationTest {
                 new BigDecimal("1000"), StatusVaga.CANCELADA);
         criarCandidatura(vagaDoOutro, artistaB);
 
+        mockMvc.perform(get("/api/vagas")
+                        .header("Authorization", "Bearer " + tokenPara(artistaAUsuario))
+                        .param("artistaId", artistaBUsuario.getId().toString()))
+                .andExpect(status().isBadRequest());
         MvcResult primeira = mockMvc.perform(get("/api/vagas")
                         .header("Authorization", "Bearer " + tokenPara(artistaAUsuario))
-                        .param("size", "2")
-                        .param("artistaId", artistaBUsuario.getId().toString()))
+                        .param("size", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.vagasCanceladasComCandidatura.length()").value(2))
                 .andExpect(jsonPath("$.hasMoreCanceladas").value(true))
@@ -823,9 +824,9 @@ class VagaControllerRf03IntegrationTest {
                   "modeloTrabalho": "PRESENCIAL",
                   "tipoContrato": "Freelance",
                   "categoria": "Fotografia",
-                  "experiencia": "Intermediaria",
+                  "experiencia": "INTERMEDIARIO",
                   "dataLimiteCandidatura": "2030-05-05",
-                  "abrangencia": "REGIONAL",
+                  "abrangencia": "NACIONAL",
                   "fotos": ["https://example.com/foto.jpg"]
                 }
                 """.formatted(usuario.getId());

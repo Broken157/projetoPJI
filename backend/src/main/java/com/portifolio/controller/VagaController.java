@@ -73,8 +73,43 @@ public class VagaController {
             @RequestParam(required = false) Set<Long> tagIds,
             @RequestParam(required = false) Long cursor,
             @RequestParam(required = false) Long cursorCanceladas,
-            @RequestParam(required = false) Integer size
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) BigDecimal valorMinimo,
+            @RequestParam(required = false) BigDecimal valorMaximo,
+            @RequestParam(required = false) Boolean somenteMinhasVagas,
+            @RequestParam(required = false) Boolean somenteCandidatei,
+            @RequestParam(required = false) Boolean somenteFavoritas,
+            @RequestParam(required = false) String beneficios,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dataPublicacao,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dataPublicacaoInicio,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dataPublicacaoFim,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dataLimite,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dataLimiteInicio,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dataLimiteFim,
+            @RequestParam(required = false) Boolean comPrazo,
+            jakarta.servlet.http.HttpServletRequest request
     ) {
+        Set<String> permitidos = Set.of("titulo", "empresa", "busca", "q", "cidade", "estado",
+                "modeloTrabalho", "tipoContrato", "faixaSalarialMin", "faixaSalarialMax",
+                "valorMinimo", "valorMaximo", "areaAtuacao", "areaId", "funcaoIds",
+                "especializacaoIds", "experiencia", "abrangencia", "formaRemuneracao",
+                "afirmativa", "categoriaAfirmativaIds", "tagIds", "cursor", "cursorCanceladas",
+                "size", "page", "somenteMinhasVagas", "somenteCandidatei", "somenteFavoritas",
+                "beneficios", "dataPublicacao", "dataPublicacaoInicio", "dataPublicacaoFim",
+                "dataLimite", "dataLimiteInicio", "dataLimiteFim", "comPrazo");
+        if (!permitidos.containsAll(request.getParameterMap().keySet())) {
+            throw new IllegalArgumentException("Parâmetro de busca não suportado.");
+        }
+        if (empresa != null) {
+            throw new com.portifolio.exception.UnprocessableEntityException(
+                    "RF03 pesquisa o título da vaga; filtro por empresa foi removido.");
+        }
+        if (beneficios != null) {
+            throw new com.portifolio.exception.UnprocessableEntityException(
+                    "D08: filtro estruturado de benefícios aguarda catálogo oficial.");
+        }
         if (tagIds != null) {
             throw new com.portifolio.exception.UnprocessableEntityException(
                     "O filtro tagIds foi substituído por funcaoIds do catálogo oficial.");
@@ -82,13 +117,15 @@ public class VagaController {
         VagaBuscaFiltro filtro = new VagaBuscaFiltro();
         filtro.setTitulo(titulo);
         filtro.setEmpresa(empresa);
-        filtro.setBusca(busca);
+        if (q != null && busca != null && !q.equals(busca))
+            throw new IllegalArgumentException("q e busca não podem divergir.");
+        filtro.setBusca(q == null ? busca : q);
         filtro.setCidade(cidade);
         filtro.setEstado(estado);
         filtro.setModeloTrabalho(modeloTrabalho);
         filtro.setTipoContrato(tipoContrato);
-        filtro.setFaixaSalarialMin(faixaSalarialMin);
-        filtro.setFaixaSalarialMax(faixaSalarialMax);
+        filtro.setFaixaSalarialMin(valorCompativel(valorMinimo, faixaSalarialMin));
+        filtro.setFaixaSalarialMax(valorCompativel(valorMaximo, faixaSalarialMax));
         filtro.setAreaAtuacao(areaAtuacao);
         filtro.setAreaId(areaId);
         filtro.setFuncaoIds(funcaoIds);
@@ -101,7 +138,24 @@ public class VagaController {
         filtro.setCursor(cursor);
         filtro.setCursorCanceladas(cursorCanceladas);
         filtro.setSize(size);
+        filtro.setPage(page);
+        filtro.setSomenteMinhasVagas(Boolean.TRUE.equals(somenteMinhasVagas));
+        filtro.setSomenteCandidatei(Boolean.TRUE.equals(somenteCandidatei));
+        filtro.setSomenteFavoritas(Boolean.TRUE.equals(somenteFavoritas));
+        filtro.setDataPublicacao(dataPublicacao);
+        filtro.setDataPublicacaoInicio(dataPublicacaoInicio);
+        filtro.setDataPublicacaoFim(dataPublicacaoFim);
+        filtro.setDataLimite(dataLimite);
+        filtro.setDataLimiteInicio(dataLimiteInicio);
+        filtro.setDataLimiteFim(dataLimiteFim);
+        filtro.setComPrazo(comPrazo);
         return ResponseEntity.ok(vagaService.listar(filtro));
+    }
+
+    private BigDecimal valorCompativel(BigDecimal canonico, BigDecimal legado) {
+        if (canonico != null && legado != null && canonico.compareTo(legado) != 0)
+            throw new IllegalArgumentException("Filtros canônico e legado de remuneração divergem.");
+        return canonico == null ? legado : canonico;
     }
 
     @GetMapping("/{id}/similares")

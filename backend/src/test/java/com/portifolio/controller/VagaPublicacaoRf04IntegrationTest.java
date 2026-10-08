@@ -262,13 +262,13 @@ class VagaPublicacaoRf04IntegrationTest {
     }
 
     @Test
-    void database04RejeitaMultiplasCategoriasESemRepresentacaoSemDescartarDados() throws Exception {
+    void database05RejeitaMultiplasCategoriasESemRepresentacaoSemDescartarDados() throws Exception {
         Usuario dono = criarUsuario("limite-afirmativa@rf04.teste", TipoUsuario.CONTRATANTE);
         criarPerfil(dono, "Empresa afirmativa");
         ObjectNode payload = payloadValido();
         payload.putArray("categoriaAfirmativaIds").add(1).add(3);
         publicar(dono, payload).andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("database04")));
+                .andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("C15")));
         assertThat(vagaRepository.count()).isZero();
         payload.putArray("categoriaAfirmativaIds").add(5);
         publicar(dono, payload).andExpect(status().isUnprocessableEntity());
@@ -482,15 +482,15 @@ class VagaPublicacaoRf04IntegrationTest {
         ObjectNode payload = payloadValido();
         payload.putArray("funcaoIds").add(funcao.getId());
         payload.putArray("especializacaoIds").add(esp);
-        publicar(dono, payload).andExpect(status().isBadRequest());
+        publicar(dono, payload).andExpect(status().isUnprocessableEntity());
         payload.putArray("especializacaoIds").add(999999);
-        publicar(dono, payload).andExpect(status().isBadRequest());
+        publicar(dono, payload).andExpect(status().isNotFound());
         payload.putArray("especializacaoIds");
         payload.putArray("categoriaAfirmativaIds").add(999999);
         publicar(dono, payload).andExpect(status().isUnprocessableEntity());
         payload.remove("categoriaAfirmativaIds");
-        payload.putArray("especializacaoIds").add(1).add(2).add(3).add(4).add(5).add(6);
-        publicar(dono, payload).andExpect(status().isBadRequest());
+        payload.putArray("especializacaoIds").add(1).add(2).add(3).add(4);
+        publicar(dono, payload).andExpect(status().isUnprocessableEntity());
         assertThat(vagaRepository.count()).isZero();
     }
 
@@ -508,7 +508,7 @@ class VagaPublicacaoRf04IntegrationTest {
         long id = objectMapper.readTree(resposta.getResponse().getContentAsString()).get("id").asLong();
         payload.put("titulo", "Não persistir");
         payload.putArray("especializacaoIds").add(999999);
-        editarTaxonomia(id,dono,payload).andExpect(status().isBadRequest());
+        editarTaxonomia(id,dono,payload).andExpect(status().isNotFound());
         assertThat(jdbcTemplate.queryForObject("select titulo from vagas where id=?", String.class,id)).isEqualTo("Fotógrafo de evento");
         assertThat(jdbcTemplate.queryForList("select especializacao_id from vaga_especializacao where vaga_id=?",Long.class,id)).containsExactly(esp);
         payload.putArray("especializacaoIds");
@@ -547,6 +547,7 @@ class VagaPublicacaoRf04IntegrationTest {
         payload.put("beneficios", "Transporte");
         payload.put("modeloTrabalho", "PRESENCIAL");
         payload.put("tipoContrato", "Freelance");
+        payload.put("experiencia", "SEM_EXPERIENCIA");
         payload.putArray("funcaoIds");
         return payload;
     }
@@ -564,7 +565,7 @@ class VagaPublicacaoRf04IntegrationTest {
         funcaoRepository.saveAndFlush(outra);
         ObjectNode funcao = payloadValido();
         funcao.putArray("funcaoIds").add(outra.getId());
-        publicar(dono, funcao).andExpect(status().isBadRequest());
+        publicar(dono, funcao).andExpect(status().isUnprocessableEntity());
 
         ObjectNode legado = payloadValido();
         legado.putArray("tagIds").add(outra.getId());

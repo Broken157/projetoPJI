@@ -339,6 +339,7 @@ class NotificacaoRf23IntegrationTest {
         vaga.setEstado("SP");
         vaga.setModeloTrabalho(ModeloTrabalho.REMOTO);
         vaga.setTipoContrato("Freelance");
+        vaga.setExperiencia("SEM_EXPERIENCIA");
         vaga.setStatus(status);
         vaga.setDataPublicacao(LocalDateTime.now());
         vaga.setFuncoes(new HashSet<>());

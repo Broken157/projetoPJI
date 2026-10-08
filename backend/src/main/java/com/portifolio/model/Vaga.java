@@ -96,6 +96,9 @@ public class Vaga {
     @Column(name = "data_publicacao")
     private LocalDateTime dataPublicacao;
 
+    @Column(name = "ultima_atualizacao", insertable = false)
+    private LocalDateTime ultimaAtualizacao;
+
 
     @Column(length = 100)
     private String experiencia;
@@ -107,6 +110,7 @@ public class Vaga {
     private Abrangencia abrangencia;
 
     @ElementCollection
+    @org.hibernate.annotations.BatchSize(size = 50)
     @CollectionTable(name = "fotos_vaga", joinColumns = @JoinColumn(name = "vaga_id"))
     @OrderColumn(name = "ordem")
     @Column(name = "url", nullable = false, length = 500)

@@ -151,15 +151,15 @@ class VagaEdicaoRf07IntegrationTest {
         assertThat(persistida.getFormaRemuneracao()).isEqualTo(com.portifolio.model.enums.FormaRemuneracao.POR_EVENTO);
         assertThat(persistida.getEnderecoCompleto()).isEqualTo("Rua Nova, 10");
         assertThat(persistida.getBeneficios()).isEqualTo("Transporte");
-        assertThat(persistida.getTipoContrato()).isEqualTo("Temporário");
+        assertThat(persistida.getTipoContrato()).isEqualTo("TEMPORARIO");
         assertThat(persistida.getArea().getNome()).isEqualTo("Artes Cênicas");
-        assertThat(persistida.getExperiencia()).isEqualTo("Pleno");
+        assertThat(persistida.getExperiencia()).isEqualTo("INTERMEDIARIO");
         assertThat(persistida.getDataLimiteCandidatura()).isEqualTo(LocalDate.of(2030, 12, 20));
         assertThat(persistida.getAbrangencia()).isEqualTo(com.portifolio.model.enums.Abrangencia.NACIONAL);
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusVaga.class, names = {"RASCUNHO", "PAUSADA"})
+    @EnumSource(value = StatusVaga.class, names = {"RASCUNHO", "ABERTA", "PAUSADA", "ENCERRADA"})
     void edicaoPermitidaPreservaStatus(StatusVaga statusOriginal) throws Exception {
         Usuario dono = criarUsuario("status-" + statusOriginal + "@teste.com", TipoUsuario.CONTRATANTE);
         Vaga vaga = criarVaga(criarContratante(dono), statusOriginal);
@@ -172,7 +172,7 @@ class VagaEdicaoRf07IntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusVaga.class, names = {"ENCERRADA", "CANCELADA"})
+    @EnumSource(value = StatusVaga.class, names = {"CANCELADA"})
     void edicaoBloqueadaPreservaConteudo(StatusVaga statusOriginal) throws Exception {
         Usuario dono = criarUsuario("imutavel-" + statusOriginal + "@teste.com", TipoUsuario.CONTRATANTE);
         Vaga vaga = criarVaga(criarContratante(dono), statusOriginal);
@@ -230,7 +230,7 @@ class VagaEdicaoRf07IntegrationTest {
     }
 
     @Test
-    void deveSubstituirAdicionarRemoverEDeduplicarFuncoes() throws Exception {
+    void deveSubstituirAdicionarRemoverERejeitarDuplicatasDeFuncoes() throws Exception {
         Usuario dono = criarUsuario("funcoes@teste.com", TipoUsuario.CONTRATANTE);
         Vaga vaga = criarVaga(criarContratante(dono), StatusVaga.ABERTA);
         Funcao tag1 = criarFuncao("Música");
@@ -240,6 +240,9 @@ class VagaEdicaoRf07IntegrationTest {
 
         ObjectNode substituir = payloadValido();
         substituir.putArray("funcaoIds").add(tag2.getId()).add(tag3.getId()).add(tag3.getId());
+        editar(vaga.getId(), dono, substituir).andExpect(status().isUnprocessableEntity());
+        assertThat(tagsDaVaga(vaga.getId())).containsExactlyInAnyOrder(tag1.getId(), tag2.getId());
+        substituir.putArray("funcaoIds").add(tag2.getId()).add(tag3.getId());
         editar(vaga.getId(), dono, substituir).andExpect(status().isOk());
         assertThat(tagsDaVaga(vaga.getId())).containsExactlyInAnyOrder(tag2.getId(), tag3.getId());
 
@@ -351,7 +354,7 @@ class VagaEdicaoRf07IntegrationTest {
         payload.put("modeloTrabalho", "HIBRIDO");
         payload.put("tipoContrato", "Temporário");
         payload.put("categoria", "Música");
-        payload.put("experiencia", "Pleno");
+        payload.put("experiencia", "INTERMEDIARIO");
         payload.put("dataLimiteCandidatura", "2030-12-20");
         payload.put("abrangencia", "NACIONAL");
         payload.putArray("fotos").add("assets/vaga-foto-1.png").add("https://exemplo.com/foto.jpg");

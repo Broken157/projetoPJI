@@ -223,7 +223,7 @@ class ModeracaoRf18IntegrationTest {
         p.put("titulo","Vaga RF18"); p.put("descricao","Trabalho artístico válido"); p.put("requisitos","Portfólio");
         p.put("areaId",1);p.put("abrangencia","LOCAL");p.put("valorMinimo",100);p.put("valorMaximo",100);
         p.put("formaRemuneracao","POR_EVENTO");p.put("cidade","São Paulo");p.put("estado","SP");
-        p.put("modeloTrabalho","PRESENCIAL");p.put("tipoContrato","Projeto");return p;
+        p.put("modeloTrabalho","PRESENCIAL");p.put("tipoContrato","Projeto");p.put("experiencia","SEM_EXPERIENCIA");return p;
     }
     @ParameterizedTest @ValueSource(strings={"<script>teste</script>","<img src=x onerror=teste>","javascript:teste","data:text/html,teste"})
     void vagaRejeitaConteudoAtivoNaCriacaoEEdicaoSemAlterarObraValida(String texto) throws Exception {

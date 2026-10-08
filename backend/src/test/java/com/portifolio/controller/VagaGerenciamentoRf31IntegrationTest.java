@@ -486,6 +486,7 @@ class VagaGerenciamentoRf31IntegrationTest {
         vaga.setEstado("SP");
         vaga.setModeloTrabalho(ModeloTrabalho.HIBRIDO);
         vaga.setTipoContrato("Freelance");
+        vaga.setExperiencia("SEM_EXPERIENCIA");
         vaga.setStatus(status);
         vaga.setDataPublicacao(LocalDateTime.now());
         return vagaRepository.save(vaga);

@@ -8,6 +8,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 
 public interface ItemSalvoRepository extends JpaRepository<ItemSalvo, Long> {
+    @Query("select i.alvoId from ItemSalvo i where i.usuarioId=:usuarioId and i.tipoAlvo=:tipo and i.alvoId in :ids")
+    Set<Long> buscarAlvosSalvos(Long usuarioId, TipoAlvoSalvo tipo, Set<Long> ids);
     boolean existsByUsuarioIdAndTipoAlvoAndAlvoId(Long usuarioId, TipoAlvoSalvo tipoAlvo, Long alvoId);
     long countByTipoAlvoAndAlvoId(TipoAlvoSalvo tipoAlvo, Long alvoId);
     Page<ItemSalvo> findByUsuarioIdAndTipoAlvoIn(Long usuarioId, Set<TipoAlvoSalvo> tipos, Pageable pageable);

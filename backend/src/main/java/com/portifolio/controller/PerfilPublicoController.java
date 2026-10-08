@@ -31,12 +31,23 @@ public class PerfilPublicoController {
             @RequestParam(required = false) Short areaId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Long funcaoId,
+            @RequestParam(required = false) Long especializacaoId,
+            @RequestParam(required = false) com.portifolio.model.enums.TipoPerfilArtistico tipoPerfil,
+            @RequestParam(required = false) com.portifolio.model.enums.TipoContratante tipoContratante,
+            @RequestParam(defaultValue = "false") boolean somenteFavoritos,
+            @RequestParam(required = false) Boolean bancoTalentosAtivo,
             @RequestParam Map<String, String> parametros) {
-        if (!Set.of("q", "tipo", "cidade", "estado", "areaId", "page", "size").containsAll(parametros.keySet())) {
+        if (!Set.of("q", "tipo", "cidade", "estado", "areaId", "page", "size", "funcaoId",
+                "especializacaoId", "tipoPerfil", "tipoContratante", "somenteFavoritos", "bancoTalentosAtivo")
+                .containsAll(parametros.keySet())) {
             throw new IllegalArgumentException("Parâmetro não suportado na descoberta pública.");
         }
+        if (parametros.containsKey("bancoTalentosAtivo") && bancoTalentosAtivo == null)
+            throw new IllegalArgumentException("Informe true ou false para bancoTalentosAtivo.");
         return ResponseEntity.ok(perfilPublicoService.descobrir(
-                new FiltroDescobertaPublica(q, tipo, cidade, estado, areaId, page, size)));
+                new FiltroDescobertaPublica(q, tipo, cidade, estado, areaId, page, size,
+                        funcaoId, especializacaoId, tipoPerfil, tipoContratante, somenteFavoritos, bancoTalentosAtivo)));
     }
 
     @GetMapping("/{tipo}/{id}")

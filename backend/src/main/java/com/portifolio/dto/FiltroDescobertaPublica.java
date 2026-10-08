@@ -1,11 +1,20 @@
 package com.portifolio.dto;
 
 import com.portifolio.model.enums.TipoUsuario;
+import com.portifolio.model.enums.TipoPerfilArtistico;
+import com.portifolio.model.enums.TipoContratante;
 import java.util.Locale;
 
-/** Somente filtros públicos; não contém disponibilidade, Banco ou ranking RF17. */
+/** Filtros públicos RF37; favorito é privado e Banco ativo requer capacidade C01. */
 public record FiltroDescobertaPublica(String q, TipoUsuario tipo, String cidade, String estado,
-        Short areaId, int page, int size) {
+        Short areaId, int page, int size, Long funcaoId, Long especializacaoId,
+        TipoPerfilArtistico tipoPerfil, TipoContratante tipoContratante,
+        boolean somenteFavoritos, Boolean bancoTalentosAtivo) {
+
+    public FiltroDescobertaPublica(String q, TipoUsuario tipo, String cidade, String estado,
+            Short areaId, int page, int size) {
+        this(q, tipo, cidade, estado, areaId, page, size, null, null, null, null, false, null);
+    }
     public FiltroDescobertaPublica {
         if (page < 0 || size < 1 || size > 50 || (long) page * size > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("page deve ser não negativo e size entre 1 e 50, dentro do limite de paginação.");
@@ -25,12 +34,24 @@ public record FiltroDescobertaPublica(String q, TipoUsuario tipo, String cidade,
         if (areaId != null && areaId < 1) {
             throw new IllegalArgumentException("areaId deve ser positivo.");
         }
-        if (areaId != null && tipo == TipoUsuario.CONTRATANTE) {
-            throw new IllegalArgumentException("Área artística se aplica somente a ARTISTA.");
+        if ((funcaoId != null && funcaoId < 1) || (especializacaoId != null && especializacaoId < 1)) {
+            throw new IllegalArgumentException("IDs profissionais devem ser positivos.");
+        }
+        boolean profissional = areaId != null || funcaoId != null || especializacaoId != null || tipoPerfil != null;
+        if (profissional && (tipo == TipoUsuario.CONTRATANTE || tipoContratante != null || bancoTalentosAtivo != null)) {
+            throw new IllegalArgumentException("Classificação artística se aplica somente a ARTISTA.");
+        }
+        if (tipo == TipoUsuario.ARTISTA && (tipoContratante != null || bancoTalentosAtivo != null)) {
+            throw new IllegalArgumentException("Filtro de contratante incompatível com ARTISTA.");
         }
         if ("@".equals(q)) {
             throw new IllegalArgumentException("Informe o username após @.");
         }
+    }
+
+    public boolean contextoArtista() {
+        return tipo == TipoUsuario.ARTISTA || areaId != null || funcaoId != null
+                || especializacaoId != null || tipoPerfil != null;
     }
 
     private static String texto(String valor, int limite, String parametro) {

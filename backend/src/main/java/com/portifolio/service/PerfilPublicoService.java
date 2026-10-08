@@ -33,16 +33,60 @@ public class PerfilPublicoService {
     private final MenorAutorizadoPolicy menorAutorizadoPolicy;
     private final com.portifolio.repository.ItemSalvoRepository itemSalvoRepository;
     private final PerfilDescobertaRepository descobertaRepository;
+    private final com.portifolio.security.AuthenticatedUserResolver autenticado;
+    private final com.portifolio.repository.AreaArtisticaRepository areas;
+    private final com.portifolio.repository.FuncaoRepository funcoes;
+    private final com.portifolio.repository.EspecializacaoRepository especializacoes;
 
     @Transactional(readOnly = true)
     public PerfilDescobertaResponse.Pagina descobrir(FiltroDescobertaPublica filtro) {
-        var pagina = descobertaRepository.buscar(filtro);
+        if (filtro.bancoTalentosAtivo() != null)
+            throw new com.portifolio.exception.UnprocessableEntityException(
+                    "BLOQUEADO POR C01: estado Banco de Talentos ATIVO/DESATIVADO ausente no database05.");
+        Long usuarioId = autenticado.usuarioAtual().map(Usuario::getId).orElse(null);
+        if (filtro.somenteFavoritos()) {
+            if (usuarioId == null) throw new com.portifolio.exception.UnauthorizedException("Autenticação obrigatória para favoritos.");
+            if (filtro.tipo() == TipoUsuario.CONTRATANTE || filtro.tipoContratante() != null)
+                throw new com.portifolio.exception.UnprocessableEntityException(
+                        "BLOQUEADO POR C06: favorito de CONTRATANTE não é representável no database05.");
+            if (!filtro.contextoArtista())
+                throw new IllegalArgumentException("Selecione o contexto ARTISTA para consultar favoritos.");
+        }
+        validarTaxonomia(filtro);
+        var pagina = descobertaRepository.buscar(filtro, usuarioId);
+        Set<Long> idsArtistas = pagina.getContent().stream().filter(i -> i.tipo() == TipoUsuario.ARTISTA)
+                .map(PerfilDescobertaRepository.Resumo::usuarioId).collect(Collectors.toSet());
+        Set<Long> favoritos = usuarioId == null || idsArtistas.isEmpty() ? Set.of()
+                : itemSalvoRepository.buscarAlvosSalvos(usuarioId,
+                        com.portifolio.model.enums.TipoAlvoSalvo.PERFIL_ARTISTA, idsArtistas);
         var content = pagina.getContent().stream().map(item -> new PerfilDescobertaResponse(
                 item.usuarioId(), item.tipo(), item.username(), item.nomeExibicao(),
-                avatarService.resolverUrl(item.usuarioId(), item.fotoPerfil(), null), item.cidade(), item.estado())).toList();
+                avatarService.resolverUrl(item.usuarioId(), item.fotoPerfil(), null), item.cidade(), item.estado(),
+                item.tipoPerfil(), item.tipoContratante(), usuarioId == null || item.tipo() != TipoUsuario.ARTISTA
+                        ? null : favoritos.contains(item.usuarioId()))).toList();
         return new PerfilDescobertaResponse.Pagina(content, pagina.getNumber(), pagina.getSize(),
                 pagina.getTotalElements(), pagina.getTotalPages(), pagina.isFirst(), pagina.isLast(),
                 pagina.hasNext(), pagina.hasPrevious());
+    }
+
+    private void validarTaxonomia(FiltroDescobertaPublica filtro) {
+        if (filtro.areaId() != null && !areas.existsById(filtro.areaId()))
+            throw new com.portifolio.exception.UnprocessableEntityException("Área inexistente no catálogo oficial.");
+        if (filtro.especializacaoId() != null && !especializacoes.existsById(filtro.especializacaoId()))
+            throw new com.portifolio.exception.UnprocessableEntityException("Especialização inexistente no catálogo oficial.");
+        if (filtro.funcaoId() != null) {
+            var selecao = funcoes.buscarTaxonomia(Set.of(filtro.funcaoId()));
+            if (selecao.isEmpty()) throw new com.portifolio.exception.UnprocessableEntityException("Função inexistente no catálogo oficial.");
+            var funcao = selecao.getFirst();
+            if (filtro.areaId() != null && !filtro.areaId().equals(funcao.getArea().getId()))
+                throw new com.portifolio.exception.UnprocessableEntityException("Função incompatível com a Área.");
+            if (filtro.especializacaoId() != null && !com.portifolio.validation.TaxonomiaProfissional
+                    .especializacoesCompativeis(selecao).contains(filtro.especializacaoId()))
+                throw new com.portifolio.exception.UnprocessableEntityException("Especialização incompatível com a Função.");
+        } else if (filtro.areaId() != null && filtro.especializacaoId() != null
+                && especializacoes.contarDaArea(filtro.areaId(), Set.of(filtro.especializacaoId())) != 1) {
+            throw new com.portifolio.exception.UnprocessableEntityException("Especialização incompatível com a Área.");
+        }
     }
 
     @Transactional(readOnly = true)

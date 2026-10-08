@@ -73,14 +73,16 @@ public class DescobertaPublicaRf37IntegrationTest {
     }
 
     @Test
-    void visitanteRecebeAmbosOsTiposEAutenticadoRecebeExatamenteAMesmaProjecao() throws Exception {
+    void visitanteEAutenticadoRecebemMesmosDadosPublicosComFavoritoPrivadoSeparado() throws Exception {
         var artista = artista("adulto", 30);
         var contratante = contratante("entidade", 30);
         JsonNode anonimo = pagina();
         assertThat(ids(anonimo)).containsExactly(artista.getUsuarioId(), contratante.getUsuarioId());
         for (Usuario ator : List.of(artista.getUsuario(), contratante.getUsuario())) {
-            assertThat(pagina(get(ROTA).header("Authorization", "Bearer " + jwt.gerarToken(ator))))
-                    .isEqualTo(anonimo);
+            var autenticado = pagina(get(ROTA).header("Authorization", "Bearer " + jwt.gerarToken(ator)));
+            assertThat(autenticado.path("content").get(0).path("favorito").asBoolean()).isFalse();
+            autenticado.path("content").forEach(item -> ((com.fasterxml.jackson.databind.node.ObjectNode)item).remove("favorito"));
+            assertThat(autenticado).isEqualTo(anonimo);
         }
         assertThat(anonimo.path("content").get(0).path("tipo").asText()).isEqualTo("ARTISTA");
         assertThat(anonimo.path("content").get(1).path("tipo").asText()).isEqualTo("CONTRATANTE");
@@ -223,7 +225,7 @@ public class DescobertaPublicaRf37IntegrationTest {
     }
 
     @ParameterizedTest @ValueSource(strings = {"João", "JOÃO", "Palco"})
-    void nomePublicoArtisticoUsaCampoPersistidoRF10(String texto) throws Exception {
+    void nomePublicoUsaCampoPersistidoRF10(String texto) throws Exception {
         var perfil = artista("nome_artistico", 30);
         jdbc.update("update usuarios set nome='João do Palco' where id=?", perfil.getUsuarioId());
         assertThat(ids(pagina("q", texto))).containsExactly(perfil.getUsuarioId());
@@ -280,7 +282,7 @@ public class DescobertaPublicaRf37IntegrationTest {
         assertThat(ids(pagina("areaId", "2"))).containsExactly(perfil.getUsuarioId());
         assertThat(ids(pagina("areaId", "2", "tipo", "ARTISTA", "cidade", "Campinas", "estado", "SP", "q", "musico")))
                 .containsExactly(perfil.getUsuarioId());
-        assertThat(ids(pagina("areaId", "99"))).isEmpty();
+        mvc.perform(get(ROTA).param("areaId", "99")).andExpect(status().isUnprocessableEntity());
     }
 
     @Test
@@ -355,8 +357,9 @@ public class DescobertaPublicaRf37IntegrationTest {
         JsonNode pagina = pagina("size", "50", "areaId", "1");
         assertThat(ids(pagina)).hasSize(50);
         assertThat(pagina.path("totalElements").asLong()).isEqualTo(51);
-        assertThat(SqlInspector.sql.get()).hasSize(pequenas).hasSize(2);
-        assertThat(SqlInspector.sql.get().get(1)).contains("fetch first ? rows only");
+        // Uma validação do catálogo + count + página; custo constante, não por perfil.
+        assertThat(SqlInspector.sql.get()).hasSize(pequenas).hasSize(3);
+        assertThat(SqlInspector.sql.get().getLast()).contains("fetch first ? rows only");
         for (String sql : SqlInspector.sql.get()) {
             String select = sql.substring(0, sql.indexOf(" from "));
             assertThat(select).doesNotContain("data_nascimento", "email", "telefone", "senha", "consentimento", "nivel_experiencia", "responsavel");
@@ -395,7 +398,11 @@ public class DescobertaPublicaRf37IntegrationTest {
     }
     private void whitelist(JsonNode item) {
         List<String> campos = new ArrayList<>(); item.fieldNames().forEachRemaining(campos::add);
-        assertThat(campos).containsExactlyInAnyOrder("usuarioId", "tipo", "username", "nomeExibicao", "avatarUrl", "cidade", "estado");
+        var esperados = new ArrayList<>(List.of("usuarioId", "tipo", "username", "nomeExibicao", "avatarUrl", "cidade", "estado"));
+        if (item.has("tipoPerfil")) { esperados.add("tipoPerfil"); assertThat(item.path("tipo").asText()).isEqualTo("ARTISTA"); }
+        if (item.has("tipoContratante")) { esperados.add("tipoContratante"); assertThat(item.path("tipo").asText()).isEqualTo("CONTRATANTE"); }
+        if (item.has("favorito")) { esperados.add("favorito"); assertThat(item.path("tipo").asText()).isEqualTo("ARTISTA"); }
+        assertThat(campos).containsExactlyInAnyOrderElementsOf(esperados);
         assertThat(item.toString()).doesNotContain("hash-privado", "rf37.test", "11999999999", "responsavel-privado", "INICIANTE");
     }
     private Usuario usuario(String chave, TipoUsuario tipo, int idade) {

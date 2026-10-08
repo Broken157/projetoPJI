@@ -226,8 +226,8 @@ class VagaGerenciamentoRf31IntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusVaga.class, names = {"ABERTA", "PAUSADA"})
-    void proprietarioDeveEncerrarVagaAbertaOuPausada(StatusVaga estado) throws Exception {
+    @EnumSource(value = StatusVaga.class, names = {"ABERTA"})
+    void proprietarioDeveEncerrarVagaAberta(StatusVaga estado) throws Exception {
         PerfilContratante dono = novoContratante("encerrar-" + estado + "@rf31.test");
         Vaga vaga = novaVaga(dono, estado);
 
@@ -239,7 +239,7 @@ class VagaGerenciamentoRf31IntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusVaga.class, names = {"ENCERRADA", "CANCELADA"})
+    @EnumSource(value = StatusVaga.class, names = {"PAUSADA", "ENCERRADA", "CANCELADA"})
     void encerramentoDeEstadoFinalDeveRetornar422(StatusVaga estado) throws Exception {
         PerfilContratante dono = novoContratante("final-" + estado + "@rf31.test");
         Vaga vaga = novaVaga(dono, estado);
@@ -316,7 +316,7 @@ class VagaGerenciamentoRf31IntegrationTest {
         gerenciar(vaga, dono.getUsuario(), "REABRIR").andExpect(status().isOk());
         candidatar(vaga, primeiro)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("PENDENTE"));
+                .andExpect(jsonPath("$.status").value("ATIVA"));
 
         gerenciar(vaga, dono.getUsuario(), "ENCERRAR").andExpect(status().isOk());
         candidatar(vaga, segundo).andExpect(status().isUnprocessableEntity());
@@ -352,6 +352,8 @@ class VagaGerenciamentoRf31IntegrationTest {
         detalhar(vaga, candidato.getUsuario()).andExpect(status().isOk());
         detalhar(vaga, terceiro.getUsuario()).andExpect(status().isNotFound());
 
+        gerenciar(vaga, dono.getUsuario(), "ENCERRAR").andExpect(status().isUnprocessableEntity());
+        gerenciar(vaga, dono.getUsuario(), "REABRIR").andExpect(status().isOk());
         gerenciar(vaga, dono.getUsuario(), "ENCERRAR").andExpect(status().isOk());
         detalhar(vaga, dono.getUsuario())
                 .andExpect(status().isOk())
@@ -390,6 +392,7 @@ class VagaGerenciamentoRf31IntegrationTest {
         String corpo = """
                 {
                   "vagaId": %d,
+                  "confirmacao": true,
                   "artistaId": %d,
                   "mensagemApresentacao": "Tenho interesse nesta oportunidade.",
                   "linkPortfolioCandidatura": "https://portfolio.example/candidatura"

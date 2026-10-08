@@ -418,7 +418,12 @@ public class VagaService {
         return resposta.toBuilder()
                 .contratantePublico(toContratantePublico(vaga.getContratante()))
                 .minhaCandidaturaId(candidatura == null ? null : candidatura.getId())
-                .statusMinhaCandidatura(candidatura == null ? null : candidatura.getStatus())
+                .statusMinhaCandidatura(candidatura == null ? null
+                        : com.portifolio.validation.EstadoCandidaturaFuncional.de(candidatura.getStatus()))
+                .statusLegadoMinhaCandidatura(candidatura == null ? null
+                        : com.portifolio.validation.EstadoCandidaturaFuncional.legado(candidatura.getStatus()) ? candidatura.getStatus() : null)
+                .registroLegadoMinhaCandidatura(candidatura != null
+                        && com.portifolio.validation.EstadoCandidaturaFuncional.legado(candidatura.getStatus()))
                 .build();
     }
 
@@ -513,17 +518,17 @@ public class VagaService {
         StatusVaga novoStatus = switch (acao) {
             case "PUBLICAR" -> exigirTransicao(
                     vaga.getStatus(), acao, StatusVaga.ABERTA, StatusVaga.RASCUNHO);
-            case "SUSPENDER" -> exigirTransicao(
+            case "PAUSAR", "SUSPENDER" -> exigirTransicao(
                     vaga.getStatus(), acao, StatusVaga.PAUSADA, StatusVaga.ABERTA);
             case "REABRIR" -> exigirTransicao(
                     vaga.getStatus(), acao, StatusVaga.ABERTA,
                     StatusVaga.PAUSADA, StatusVaga.ENCERRADA);
             case "ENCERRAR" -> exigirTransicao(
                     vaga.getStatus(), acao, StatusVaga.ENCERRADA,
-                    StatusVaga.ABERTA, StatusVaga.PAUSADA);
+                    StatusVaga.ABERTA);
             default -> throw new IllegalArgumentException(
                     "Ação de gerenciamento inválida: " + acao
-                            + ". Ações aceitas: PUBLICAR, SUSPENDER, REABRIR e ENCERRAR.");
+                            + ". Ações aceitas: PUBLICAR, PAUSAR, SUSPENDER, REABRIR e ENCERRAR.");
         };
 
         if (novoStatus == StatusVaga.ABERTA) {
@@ -565,10 +570,10 @@ public class VagaService {
             vagaRepository.delete(vaga);
             return;
         }
-        if (vaga.getStatus() != StatusVaga.ABERTA && vaga.getStatus() != StatusVaga.PAUSADA) {
+        if (vaga.getStatus() != StatusVaga.ABERTA && vaga.getStatus() != StatusVaga.ENCERRADA) {
             throw new UnprocessableEntityException(
                     "A vaga no estado " + vaga.getStatus()
-                            + " não pode ser cancelada. Somente vagas ABERTA ou PAUSADA podem ser canceladas.");
+                            + " não pode ser cancelada. Somente vagas ABERTA ou ENCERRADA podem ser canceladas.");
         }
         String motivo = validarCancelamento(request);
 
@@ -576,12 +581,6 @@ public class VagaService {
         vagaRepository.save(vaga);
 
         List<Candidatura> candidaturas = candidaturaRepository.findByVagaId(id);
-        List<Candidatura> ativas = candidaturas.stream()
-                .filter(c -> c.getStatus() == StatusCandidatura.PENDENTE
-                        || c.getStatus() == StatusCandidatura.EM_ANALISE)
-                .toList();
-        ativas.forEach(c -> c.setStatus(StatusCandidatura.CANCELADA_POR_VAGA));
-        candidaturaRepository.saveAll(ativas);
 
         LogVagaCancelada log = new LogVagaCancelada();
         log.setVaga(vaga);
@@ -668,6 +667,9 @@ public class VagaService {
         }
         if (request.getMotivo() == null || request.getMotivo().isBlank()) {
             throw new IllegalArgumentException("Motivo é obrigatório.");
+        }
+        if (request.getMotivo().length() > 2000) {
+            throw new IllegalArgumentException("Motivo deve ter no máximo 2000 caracteres.");
         }
         return request.getMotivo().trim();
     }
@@ -873,7 +875,7 @@ public class VagaService {
     private String acoesPermitidas(StatusVaga status) {
         return switch (status) {
             case ABERTA -> "SUSPENDER ou ENCERRAR";
-            case PAUSADA -> "REABRIR ou ENCERRAR";
+            case PAUSADA -> "REABRIR";
             case RASCUNHO -> "PUBLICAR";
             case ENCERRADA -> "REABRIR";
             case CANCELADA -> "nenhuma; este é um estado final";

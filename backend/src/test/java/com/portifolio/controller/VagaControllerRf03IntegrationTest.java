@@ -892,7 +892,7 @@ class VagaControllerRf03IntegrationTest {
 
         String corpo = """
                 {
-                  "vagaId": %d,
+                  "confirmacao": true, "vagaId": %d,
                   "artistaId": %d,
                   "mensagemApresentacao": "Tenho interesse nesta oportunidade.",
                   "linkPortfolioCandidatura": "https://exemplo.com/portfolio",
@@ -905,7 +905,7 @@ class VagaControllerRf03IntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(corpo))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("PENDENTE"))
+                .andExpect(jsonPath("$.status").value("ATIVA"))
                 .andExpect(jsonPath("$.artistaId").value(artistaUsuario.getId()));
     }
 
@@ -965,7 +965,7 @@ class VagaControllerRf03IntegrationTest {
                         .content(corpoCandidatura(vaga.getId(), outro.getId())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.artistaId").value(autenticado.getId()))
-                .andExpect(jsonPath("$.status").value("PENDENTE"));
+                .andExpect(jsonPath("$.status").value("ATIVA"));
 
         assertThat(candidaturaRepository.findAll().getFirst().getArtista().getUsuarioId())
                 .isEqualTo(autenticado.getId());
@@ -1014,7 +1014,7 @@ class VagaControllerRf03IntegrationTest {
     private String corpoCandidatura(Long vagaId, Long artistaId) {
         return """
                 {
-                  "vagaId": %d,
+                  "confirmacao": true, "vagaId": %d,
                   "artistaId": %d,
                   "mensagemApresentacao": "Tenho interesse nesta oportunidade.",
                   "linkPortfolioCandidatura": "https://exemplo.com/portfolio"

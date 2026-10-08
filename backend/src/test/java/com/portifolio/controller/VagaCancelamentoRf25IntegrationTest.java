@@ -244,9 +244,9 @@ class VagaCancelamentoRf25IntegrationTest {
     }
 
     @Test
-    void vagaPausadaTambemDeveSerCancelada() throws Exception {
-        PerfilContratante dono = novoContratante("pausada@rf25.test");
-        Vaga vaga = novaVaga(dono, StatusVaga.PAUSADA);
+    void vagaEncerradaTambemDeveSerCancelada() throws Exception {
+        PerfilContratante dono = novoContratante("encerrada@rf25.test");
+        Vaga vaga = novaVaga(dono, StatusVaga.ENCERRADA);
 
         cancelar(vaga, dono.getUsuario())
                 .andExpect(status().isNoContent());
@@ -256,7 +256,7 @@ class VagaCancelamentoRf25IntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusVaga.class, names = {"ENCERRADA", "CANCELADA"})
+    @EnumSource(value = StatusVaga.class, names = {"PAUSADA", "CANCELADA"})
     void estadoFinalNaoPodeSerCancelado(StatusVaga estado) throws Exception {
         PerfilContratante dono = novoContratante("final-" + estado + "@rf25.test");
         Vaga vaga = novaVaga(dono, estado);
@@ -271,7 +271,7 @@ class VagaCancelamentoRf25IntegrationTest {
     }
 
     @Test
-    void somenteCandidaturasAtivasViraramCanceladaPorVagaSemPerderHistorico()
+    void cancelamentoPreservaTodosOsEstadosFisicosEHistorico()
             throws Exception {
         PerfilContratante dono = novoContratante("status-candidaturas@rf25.test");
         Vaga vaga = novaVaga(dono, StatusVaga.ABERTA);
@@ -295,9 +295,7 @@ class VagaCancelamentoRf25IntegrationTest {
             assertThat(candidatura.getId()).isIn(vagasOriginais.keySet());
             assertThat(candidatura.getVaga().getId()).isEqualTo(vagasOriginais.get(candidatura.getId()));
             StatusCandidatura anterior = statusOriginais.get(candidatura.getId());
-            assertThat(candidatura.getStatus()).isEqualTo(
-                    anterior == StatusCandidatura.PENDENTE || anterior == StatusCandidatura.EM_ANALISE
-                            ? StatusCandidatura.CANCELADA_POR_VAGA : anterior);
+            assertThat(candidatura.getStatus()).isEqualTo(anterior);
         });
         assertThat(jdbcTemplate.queryForObject(
                 "select count(*) from candidaturas where vaga_id = ?",
@@ -336,7 +334,7 @@ class VagaCancelamentoRf25IntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = StatusVaga.class, names = {"ABERTA", "PAUSADA"})
+    @EnumSource(value = StatusVaga.class, names = {"ABERTA", "ENCERRADA"})
     void falhaNaSegundaNotificacaoDesfazTodoCancelamento(StatusVaga estado) throws Exception {
         PerfilContratante dono = novoContratante("dono-atomicidade@rf28.test");
         Vaga vaga = novaVaga(dono, estado);
@@ -399,8 +397,8 @@ class VagaCancelamentoRf25IntegrationTest {
     void candidatoOfflineRecuperaNotificacaoPersistidaDepois() throws Exception {
         PerfilContratante dono = novoContratante("dono-offline@rf28.test");
         PerfilArtista artista = novoArtista("offline@rf28.test");
-        Vaga vaga = novaVaga(dono, StatusVaga.PAUSADA);
-        novaCandidatura(vaga, artista, StatusCandidatura.EM_ANALISE);
+        Vaga vaga = novaVaga(dono, StatusVaga.ENCERRADA);
+        novaCandidatura(vaga, artista, StatusCandidatura.PENDENTE);
 
         cancelar(vaga, dono.getUsuario()).andExpect(status().isNoContent());
 
@@ -435,7 +433,7 @@ class VagaCancelamentoRf25IntegrationTest {
                                (select count(*) from notificacoes n where n.lida = false)
                         from vagas v where v.id = ?
                         """)) {
-            consulta.setString(1, StatusCandidatura.CANCELADA_POR_VAGA.getDatabaseValue());
+            consulta.setString(1, StatusCandidatura.PENDENTE.getDatabaseValue());
             consulta.setLong(2, vaga.getId());
             try (var resultado = consulta.executeQuery()) {
                 assertThat(resultado.next()).isTrue();
@@ -485,7 +483,7 @@ class VagaCancelamentoRf25IntegrationTest {
                 .andExpect(jsonPath("$.status").value("CANCELADA"));
         detalhar(vaga, candidato.getUsuario())
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statusMinhaCandidatura").value("CANCELADA_POR_VAGA"));
+                .andExpect(jsonPath("$.statusMinhaCandidatura").value("ATIVA"));
         detalhar(vaga, terceiro.getUsuario())
                 .andExpect(status().isNotFound());
     }
@@ -554,6 +552,7 @@ class VagaCancelamentoRf25IntegrationTest {
         String corpo = """
                 {
                   "vagaId": %d,
+                  "confirmacao": true,
                   "artistaId": %d,
                   "mensagemApresentacao": "Tenho interesse nesta oportunidade.",
                   "linkPortfolioCandidatura": "https://portfolio.example/candidatura"

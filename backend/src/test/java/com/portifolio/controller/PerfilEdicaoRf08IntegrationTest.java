@@ -815,6 +815,7 @@ class PerfilEdicaoRf08IntegrationTest {
 
     private String candidaturaPayload(Long vagaId, Long artistaId) throws Exception {
         return json(Map.of(
+                "confirmacao", true,
                 "vagaId", vagaId,
                 "artistaId", artistaId,
                 "mensagemApresentacao", "Tenho interesse",

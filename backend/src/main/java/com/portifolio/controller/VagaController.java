@@ -2,6 +2,8 @@ package com.portifolio.controller;
 
 import com.portifolio.dto.VagaBuscaFiltro;
 import com.portifolio.dto.CandidaturaVagaPaginaResponse;
+import com.portifolio.dto.CandidatosVagaFiltro;
+import com.portifolio.dto.ChatSalaResponse;
 import com.portifolio.dto.VagaAtualizacaoRequest;
 import com.portifolio.dto.VagaCancelamentoRequest;
 import com.portifolio.dto.VagaListagemResponse;
@@ -181,9 +183,21 @@ public class VagaController {
     @GetMapping("/{id}/candidaturas")
     public ResponseEntity<CandidaturaVagaPaginaResponse> listarCandidaturas(
             @PathVariable Long id,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size) {
-        return ResponseEntity.ok(candidaturaService.listarPorVaga(id, page, size));
+            @Valid @org.springframework.web.bind.annotation.ModelAttribute CandidatosVagaFiltro filtro,
+            @RequestParam org.springframework.util.MultiValueMap<String, String> parametros) {
+        var permitidos = java.util.Set.of("busca", "status", "areaId", "funcaoId", "especializacaoId",
+                "dataInicio", "dataFim", "somenteFavoritas", "page", "size");
+        parametros.forEach((nome, valores) -> {
+            if (!permitidos.contains(nome) || valores.size() != 1)
+                throw new IllegalArgumentException("Parâmetro de candidatos inválido: " + nome);
+        });
+        return ResponseEntity.ok(candidaturaService.listarPorVaga(id, filtro));
+    }
+
+    @PostMapping("/{id}/candidaturas/{candidaturaId}/conversa")
+    public ResponseEntity<ChatSalaResponse> conversarComCandidato(
+            @PathVariable Long id, @PathVariable Long candidaturaId) {
+        return ResponseEntity.ok(candidaturaService.conversarComCandidato(id, candidaturaId));
     }
 
     @PostMapping

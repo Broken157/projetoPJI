@@ -149,7 +149,7 @@ class AvisoResponsavelRf44IntegrationTest {
         responsaveis.findAll().stream().filter(r -> r.getUsuario().getId().equals(outro.getUsuarioId()))
                 .forEach(r -> {r.setEmailResponsavel("outro.responsavel@rf44.test");responsaveis.saveAndFlush(r);});
         String resposta = mvc.perform(post("/api/candidaturas").header("Authorization", bearer(artista))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"vagaId\":" + vaga.getId()
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"confirmacao\":true,\"vagaId\":" + vaga.getId()
                                 + ",\"emailResponsavel\":\"arbitrario@rf44.test\",\"responsavelId\":999}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         aguardar();
@@ -499,7 +499,7 @@ class AvisoResponsavelRf44IntegrationTest {
     private int criar(PerfilArtista artista, Long vagaId) {
         try {
             return mvc.perform(post("/api/candidaturas").header("Authorization", bearer(artista))
-                    .contentType(MediaType.APPLICATION_JSON).content("{\"vagaId\":" + vagaId + "}"))
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"confirmacao\":true,\"vagaId\":" + vagaId + "}"))
                     .andReturn().getResponse().getStatus();
         } catch (Exception erro) { throw new IllegalStateException(erro); }
     }

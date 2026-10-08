@@ -3,6 +3,7 @@ package com.portifolio.dto;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -15,5 +16,6 @@ public class VagaCancelamentoRequest {
     private Boolean confirmacao;
 
     @NotBlank(message = "Motivo é obrigatório")
+    @Size(max = 2000, message = "Motivo deve ter no máximo 2000 caracteres")
     private String motivo;
 }

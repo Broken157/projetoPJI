@@ -40,5 +40,6 @@ public class PerfilArtistaArea {
         @JoinColumn(name = "perfil_artista_id", referencedColumnName = "perfil_artista_id"),
         @JoinColumn(name = "area_id", referencedColumnName = "area_id")},
         inverseJoinColumns = @JoinColumn(name = "especializacao_id"))
+    @org.hibernate.annotations.BatchSize(size = 50)
     private Set<Especializacao> especializacoes = new HashSet<>();
 }

@@ -189,7 +189,7 @@ class VagaDetalhesRf05IntegrationTest {
         detalhar(vaga, artista.getUsuario())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.minhaCandidaturaId").value(candidatura.getId()))
-                .andExpect(jsonPath("$.statusMinhaCandidatura").value("PENDENTE"))
+                .andExpect(jsonPath("$.statusMinhaCandidatura").value("ATIVA"))
                 .andExpect(jsonPath("$.propriaDoContratante").value(false));
     }
 
@@ -248,7 +248,9 @@ class VagaDetalhesRf05IntegrationTest {
         menor.setNomeResponsavel("Responsável Secreto");
         menor.setTelefoneResponsavel("11911112222");
         menor.setEmailResponsavel("responsavel@privado.test");
-        usuarioRepository.save(menor);
+        menor.getResponsavelLegal().setDataConsentimento(LocalDateTime.now().minusDays(1));
+        menor.getResponsavelLegal().setConsentimentoRevogado(false);
+        usuarioRepository.saveAndFlush(menor);
         PerfilArtista perfil = novoPerfilArtista(
                 menor, LocalDateTime.of(2026, 8, 10, 12, 0));
         novaCandidatura(vaga, perfil, 0);
@@ -274,7 +276,7 @@ class VagaDetalhesRf05IntegrationTest {
     }
 
     @Test
-    void candidatosDevemSerOrdenadosPorFuncoesAtualizacaoEId() throws Exception {
+    void candidatosDevemSerOrdenadosPorDataDaTentativaEIdSemScore() throws Exception {
         PerfilContratante dono = novoContratante("ordenacao@rf05.test");
         Funcao musica = novaFuncao("Música");
         Funcao violao = novaFuncao("Violão");
@@ -300,15 +302,15 @@ class VagaDetalhesRf05IntegrationTest {
 
         listarCandidaturas(vaga, dono.getUsuario(), null, null)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].candidaturaId").value(cRecente.getId()))
-                .andExpect(jsonPath("$.content[1].candidaturaId").value(cEmpate1.getId()))
-                .andExpect(jsonPath("$.content[2].candidaturaId").value(cEmpate2.getId()))
-                .andExpect(jsonPath("$.content[3].candidaturaId").value(cUma.getId()))
-                .andExpect(jsonPath("$.content[4].candidaturaId").value(cZero.getId()))
-                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").value(2))
-                .andExpect(jsonPath("$.content[0].funcoesCoincidentes.length()").value(2))
-                .andExpect(jsonPath("$.content[3].quantidadeFuncoesCoincidentes").value(1))
-                .andExpect(jsonPath("$.content[4].quantidadeFuncoesCoincidentes").value(0));
+                .andExpect(jsonPath("$.content[0].candidaturaId").value(cZero.getId()))
+                .andExpect(jsonPath("$.content[1].candidaturaId").value(cEmpate2.getId()))
+                .andExpect(jsonPath("$.content[2].candidaturaId").value(cEmpate1.getId()))
+                .andExpect(jsonPath("$.content[3].candidaturaId").value(cRecente.getId()))
+                .andExpect(jsonPath("$.content[4].candidaturaId").value(cUma.getId()))
+                .andExpect(jsonPath("$.content[1].quantidadeFuncoesCoincidentes").value(2))
+                .andExpect(jsonPath("$.content[1].funcoesCoincidentes.length()").value(2))
+                .andExpect(jsonPath("$.content[4].quantidadeFuncoesCoincidentes").value(1))
+                .andExpect(jsonPath("$.content[0].quantidadeFuncoesCoincidentes").value(0));
     }
 
     @Test
@@ -407,6 +409,9 @@ class VagaDetalhesRf05IntegrationTest {
         }
         SessionFactory sessionFactory = entityManagerFactory.unwrap(SessionFactory.class);
         sessionFactory.getStatistics().clear();
+        listarCandidaturas(vaga, dono.getUsuario(), 0, 1).andExpect(status().isOk());
+        long umaCandidatura = sessionFactory.getStatistics().getPrepareStatementCount();
+        sessionFactory.getStatistics().clear();
 
         listarCandidaturas(vaga, dono.getUsuario(), 0, 20)
                 .andExpect(status().isOk())
@@ -414,7 +419,7 @@ class VagaDetalhesRf05IntegrationTest {
 
         assertThat(sessionFactory.getStatistics().getPrepareStatementCount())
                 .as("consultas devem permanecer constantes, não crescer por candidato")
-                .isLessThanOrEqualTo(8);
+                .isLessThanOrEqualTo(umaCandidatura + 1).isLessThanOrEqualTo(10);
     }
 
     private org.springframework.test.web.servlet.ResultActions detalhar(

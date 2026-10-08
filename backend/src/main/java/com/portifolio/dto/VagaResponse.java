@@ -50,7 +50,9 @@ public class VagaResponse {
     private List<String> fotos;
     private ContratantePublicoResponse contratantePublico;
     private Long minhaCandidaturaId;
-    private StatusCandidatura statusMinhaCandidatura;
+    private String statusMinhaCandidatura;
+    private StatusCandidatura statusLegadoMinhaCandidatura;
+    private boolean registroLegadoMinhaCandidatura;
 
     // Calculado exclusivamente pela identidade autenticada e pelo vínculo
     // persistido; nunca por contratanteId fornecido pelo cliente.

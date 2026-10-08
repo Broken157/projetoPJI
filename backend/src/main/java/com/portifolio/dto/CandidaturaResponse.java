@@ -13,6 +13,9 @@ public class CandidaturaResponse {
     private Long artistaId;
     private String mensagemApresentacao;
     private String linkPortfolioCandidatura;
-    private StatusCandidatura status;
+    private String status;
+    private StatusCandidatura statusLegado;
+    private boolean registroLegado;
+    private com.portifolio.model.enums.StatusVaga statusVaga;
     private LocalDateTime dataCandidatura;
 }

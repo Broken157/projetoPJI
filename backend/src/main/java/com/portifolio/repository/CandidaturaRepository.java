@@ -87,7 +87,7 @@ public interface CandidaturaRepository extends JpaRepository<Candidatura, Long> 
             Pageable pageable);
 
     @EntityGraph(attributePaths = {
-            "artista", "artista.usuario", "artista.areas", "artista.areas.funcoes"
+            "vaga", "artista", "artista.usuario", "artista.areas", "artista.areas.area", "artista.areas.funcoes"
     })
     @Query("select distinct c from Candidatura c where c.id in :ids")
     List<Candidatura> findDetalhadasByIdIn(@Param("ids") List<Long> ids);

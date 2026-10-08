@@ -234,7 +234,7 @@ class NotificacaoWebSocketRf23IntegrationTest {
         } else {
             jdbcTemplate.update("insert into perfis_artistas(usuario_id,tipo_perfil_artistico,disponivel_oportunidades) values (?,'ARTISTA_SOLO',true)", ator.getId());
             com.portifolio.support.OfficialSchemaFixtures.completarArtista(jdbcTemplate, ator.getId());
-            caminho = "/api/candidaturas"; corpo = "{\"vagaId\":"+vaga+",\"mensagemApresentacao\":\"Corpo privado\",\"linkPortfolioCandidatura\":\"https://portfolio.test\"}";
+            caminho = "/api/candidaturas"; corpo = "{\"confirmacao\":true,\"vagaId\":"+vaga+",\"mensagemApresentacao\":\"Corpo privado\",\"linkPortfolioCandidatura\":\"https://portfolio.test\"}";
         }
         var resposta = HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:"+port+caminho))
                 .header("Authorization", "Bearer "+jwtService.gerarToken(ator)).header("Content-Type","application/json")

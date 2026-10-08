@@ -240,7 +240,7 @@ class NotificacaoRf23IntegrationTest {
     }
 
     @Test
-    void rf25NotificaCandidatosEPreservaCanceladaPorVaga() throws Exception {
+    void rf28NotificaCandidatosEPreservaEstadoOriginalDaCandidatura() throws Exception {
         PerfilContratante dono = novoContratante("dono-cancelamento@rf23.test");
         PerfilArtista artista = novoArtista("artista-cancelamento@rf23.test");
         Vaga vaga = novaVaga(dono, StatusVaga.ABERTA);
@@ -254,7 +254,7 @@ class NotificacaoRf23IntegrationTest {
                 .andExpect(status().isNoContent());
 
         assertThat(candidaturaRepository.findById(candidatura.getId()).orElseThrow().getStatus())
-                .isEqualTo(StatusCandidatura.CANCELADA_POR_VAGA);
+                .isEqualTo(StatusCandidatura.PENDENTE);
         assertThat(notificacaoRepository.findAll()).singleElement()
                 .satisfies(n -> assertThat(n.getMensagem()).contains("cancelada"));
     }
@@ -371,7 +371,7 @@ class NotificacaoRf23IntegrationTest {
 
     private String corpoCandidatura(Vaga vaga, PerfilArtista artista) {
         return """
-                {"vagaId":%d,"artistaId":%d,"mensagemApresentacao":"Tenho interesse.",
+                {"confirmacao":true,"vagaId":%d,"artistaId":%d,"mensagemApresentacao":"Tenho interesse.",
                 "linkPortfolioCandidatura":"https://example.test/portfolio"}
                 """.formatted(vaga.getId(), artista.getUsuarioId());
     }

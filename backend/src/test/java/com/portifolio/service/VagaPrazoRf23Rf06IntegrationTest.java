@@ -92,7 +92,7 @@ class VagaPrazoRf23Rf06IntegrationTest {
 
         candidatar(vaga, artista)
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("PENDENTE"));
+                .andExpect(jsonPath("$.status").value("ATIVA"));
 
         assertThat(candidaturaRepository.count()).isOne();
         assertThat(notificacaoRepository.count()).isOne();
@@ -255,7 +255,7 @@ class VagaPrazoRf23Rf06IntegrationTest {
                 .header("Authorization", "Bearer " + jwtService.gerarToken(artista.getUsuario()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"vagaId":%d,"mensagemApresentacao":"Tenho interesse.",
+                        {"confirmacao":true,"vagaId":%d,"mensagemApresentacao":"Tenho interesse.",
                         "linkPortfolioCandidatura":"https://portfolio.example/prazo"}
                         """.formatted(vaga.getId())));
     }

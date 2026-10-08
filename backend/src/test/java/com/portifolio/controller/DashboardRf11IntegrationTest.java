@@ -538,7 +538,7 @@ class DashboardRf11IntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.perfilIncompleto").value(true));
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/candidaturas")
                 .header("Authorization", bearer(a.getUsuario())).contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .content("{\"vagaId\":"+v.getId()+",\"mensagemApresentacao\":\"Interesse profissional\",\"linkPortfolioCandidatura\":\"https://example.org/p\"}"))
+                .content("{\"confirmacao\":true,\"vagaId\":"+v.getId()+",\"mensagemApresentacao\":\"Interesse profissional\",\"linkPortfolioCandidatura\":\"https://example.org/p\"}"))
                 .andExpect(status().isUnprocessableEntity());
         assertThat(candidaturaRepository.count()).isZero();
     }

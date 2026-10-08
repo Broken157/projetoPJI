@@ -5,6 +5,17 @@ import com.portifolio.dto.CandidaturaRequest;
 import com.portifolio.dto.CandidaturaResponse;
 import com.portifolio.dto.CandidaturaVagaPaginaResponse;
 import com.portifolio.dto.CandidaturaVagaResponse;
+import com.portifolio.dto.CandidatosVagaFiltro;
+import com.portifolio.dto.ChatSalaResponse;
+import com.portifolio.repository.CandidatosConsultaRepository;
+import com.portifolio.repository.ItemSalvoRepository;
+import com.portifolio.repository.AreaArtisticaRepository;
+import com.portifolio.repository.FuncaoRepository;
+import com.portifolio.repository.EspecializacaoRepository;
+import com.portifolio.model.enums.TipoAlvoSalvo;
+import com.portifolio.validation.EstadoCandidaturaFuncional;
+import com.portifolio.validation.TaxonomiaProfissional;
+import java.util.Locale;
 import com.portifolio.event.NotificacaoEvento;
 import com.portifolio.event.AvisoResponsavelCandidaturaEvento;
 import com.portifolio.exception.ConflictException;
@@ -63,6 +74,12 @@ public class CandidaturaService {
     private final NotificacaoPersistenceService notificacaoPersistenceService;
     private final VagaPrazoPolicy vagaPrazoPolicy;
     private final EntityManager entityManager;
+    private final CandidatosConsultaRepository candidatosConsultaRepository;
+    private final ItemSalvoRepository itemSalvoRepository;
+    private final AreaArtisticaRepository areaArtisticaRepository;
+    private final FuncaoRepository funcaoRepository;
+    private final EspecializacaoRepository especializacaoRepository;
+    private final ChatService chatService;
 
     @Transactional(readOnly = true)
     public List<CandidaturaResponse> listarDasMinhasVagas() {
@@ -104,52 +121,78 @@ public class CandidaturaService {
     }
 
     @Transactional(readOnly = true)
-    public CandidaturaVagaPaginaResponse listarPorVaga(
-            Long vagaId, Integer page, Integer size) {
+    public CandidaturaVagaPaginaResponse listarPorVaga(Long vagaId, Integer page, Integer size) {
+        CandidatosVagaFiltro filtro = new CandidatosVagaFiltro();
+        filtro.setPage(page);
+        filtro.setSize(size);
+        return listarPorVaga(vagaId, filtro);
+    }
+
+    @Transactional(readOnly = true)
+    public CandidaturaVagaPaginaResponse listarPorVaga(Long vagaId, CandidatosVagaFiltro filtro) {
         Usuario usuario = exigirUsuarioAtual();
-        exigirTipo(usuario, TipoUsuario.CONTRATANTE,
-                "Somente contratantes podem consultar candidatos da vaga.");
-        Vaga vaga = vagaRepository.findDetalhesById(vagaId)
-                .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
-        if (!vaga.getContratante().getUsuarioId().equals(usuario.getId())) {
-            throw new ForbiddenException(
-                    "Somente o proprietário da vaga pode consultar seus candidatos.");
-        }
-
-        Pageable pageable = paginaSemOrdenacao(page, size);
-        Set<Long> tagsDaVaga = vaga.getFuncoes().stream()
-                .map(Funcao::getId)
-                .collect(Collectors.toSet());
-        Set<Long> tagsParaConsulta = tagsDaVaga.isEmpty() ? Set.of(-1L) : tagsDaVaga;
-        Page<Long> paginaIds = legacySchema ? candidaturaRepository.findIdsPorVagaSemTaxonomia(vagaId, STATUS_ATIVOS, pageable) : candidaturaRepository
-                .findIdsPorVagaOrdenadosPorCompatibilidade(
-                        vagaId, tagsParaConsulta, pageable);
-
+        Vaga vaga = exigirVagaDoContratante(vagaId, usuario);
+        validarFiltrosCandidatos(filtro);
+        Pageable pageable = paginaSemOrdenacao(filtro.getPage(), filtro.getSize());
+        if (pageable.getOffset() > Integer.MAX_VALUE) throw new IllegalArgumentException("Página fora do intervalo permitido.");
+        Set<Long> tagsDaVaga = vaga.getFuncoes().stream().map(Funcao::getId).collect(Collectors.toSet());
+        Page<Long> paginaIds = candidatosConsultaRepository.buscar(vagaId, usuario.getId(), filtro, pageable);
         List<Long> ids = paginaIds.getContent();
-        Map<Long, Candidatura> porId = ids.isEmpty()
-                ? Map.of()
+        Map<Long, Candidatura> porId = ids.isEmpty() ? Map.of()
                 : candidaturaRepository.findDetalhadasByIdIn(ids).stream()
-                        .collect(Collectors.toMap(
-                                Candidatura::getId,
-                                candidatura -> candidatura,
-                                (primeira, segunda) -> primeira,
-                                LinkedHashMap::new));
-        List<CandidaturaVagaResponse> content = ids.stream()
-                .map(porId::get)
-                .map(candidatura -> toCandidaturaVagaResponse(candidatura, tagsDaVaga))
+                        .collect(Collectors.toMap(Candidatura::getId, c -> c));
+        Set<Long> artistaIds = porId.values().stream().map(c -> c.getArtista().getUsuarioId()).collect(Collectors.toSet());
+        Set<Long> favoritos = artistaIds.isEmpty() ? Set.of()
+                : itemSalvoRepository.buscarAlvosSalvos(usuario.getId(), TipoAlvoSalvo.PERFIL_ARTISTA, artistaIds);
+        List<CandidaturaVagaResponse> content = ids.stream().map(porId::get)
+                .map(c -> toCandidaturaVagaResponse(c, tagsDaVaga, favoritos.contains(c.getArtista().getUsuarioId())))
                 .toList();
+        return CandidaturaVagaPaginaResponse.builder().content(content).page(paginaIds.getNumber())
+                .size(paginaIds.getSize()).totalElements(paginaIds.getTotalElements()).totalPages(paginaIds.getTotalPages())
+                .first(paginaIds.isFirst()).last(paginaIds.isLast()).hasNext(paginaIds.hasNext())
+                .hasPrevious(paginaIds.hasPrevious()).build();
+    }
 
-        return CandidaturaVagaPaginaResponse.builder()
-                .content(content)
-                .page(paginaIds.getNumber())
-                .size(paginaIds.getSize())
-                .totalElements(paginaIds.getTotalElements())
-                .totalPages(paginaIds.getTotalPages())
-                .first(paginaIds.isFirst())
-                .last(paginaIds.isLast())
-                .hasNext(paginaIds.hasNext())
-                .hasPrevious(paginaIds.hasPrevious())
-                .build();
+    @Transactional
+    public ChatSalaResponse conversarComCandidato(Long vagaId, Long candidaturaId) {
+        Usuario usuario = exigirUsuarioAtual();
+        exigirVagaDoContratante(vagaId, usuario);
+        Candidatura candidatura = buscarCandidatura(candidaturaId);
+        if (!vagaId.equals(candidatura.getVaga().getId())) throw new ResourceNotFoundException("Candidato não encontrado nesta vaga.");
+        return chatService.criarOuReutilizarSala(usuario.getEmail(), candidatura.getArtista().getUsuarioId());
+    }
+
+    private Vaga exigirVagaDoContratante(Long vagaId, Usuario usuario) {
+        exigirTipo(usuario, TipoUsuario.CONTRATANTE, "Somente contratantes podem consultar candidatos da vaga.");
+        Vaga vaga = vagaRepository.findDetalhesById(vagaId).orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada."));
+        if (!vaga.getContratante().getUsuarioId().equals(usuario.getId()))
+            throw new ForbiddenException("Somente o proprietário da vaga pode consultar seus candidatos.");
+        return vaga;
+    }
+
+    private void validarFiltrosCandidatos(CandidatosVagaFiltro filtro) {
+        String estado = filtro.getStatus() == null ? "TODAS" : filtro.getStatus().trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("TODAS", "ATIVAS", "RETIRADAS").contains(estado))
+            throw new IllegalArgumentException("Status aceitos: TODAS, ATIVAS e RETIRADAS.");
+        if (filtro.getDataInicio() != null && filtro.getDataFim() != null && filtro.getDataInicio().isAfter(filtro.getDataFim()))
+            throw new IllegalArgumentException("Período da candidatura inválido.");
+        if (java.time.LocalDate.MAX.equals(filtro.getDataFim()))
+            throw new IllegalArgumentException("Data final fora do intervalo permitido.");
+        Short area = filtro.getAreaId();
+        Long funcao = filtro.getFuncaoId();
+        Long especializacao = filtro.getEspecializacaoId();
+        if (area != null && !areaArtisticaRepository.existsById(area)) throw new ResourceNotFoundException("Área não encontrada.");
+        List<Funcao> funcoes = funcao == null ? List.of() : funcaoRepository.buscarTaxonomia(Set.of(funcao));
+        if (funcao != null && funcoes.isEmpty()) throw new ResourceNotFoundException("Função não encontrada.");
+        if (funcao != null && area != null && !area.equals(funcoes.getFirst().getArea().getId()))
+            throw new UnprocessableEntityException("Função incompatível com a Área.");
+        if (especializacao != null) {
+            if (!especializacaoRepository.existsById(especializacao)) throw new ResourceNotFoundException("Especialização não encontrada.");
+            if (funcao != null && !TaxonomiaProfissional.especializacoesCompativeis(funcoes).contains(especializacao))
+                throw new UnprocessableEntityException("Especialização incompatível com a Função.");
+            if (area != null && especializacaoRepository.contarDaArea(area, Set.of(especializacao)) != 1)
+                throw new UnprocessableEntityException("Especialização incompatível com a Área.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -167,6 +210,9 @@ public class CandidaturaService {
     public CandidaturaResponse criar(CandidaturaCriacaoRequest request) {
         Usuario usuario = exigirUsuarioAtual();
         exigirTipo(usuario, TipoUsuario.ARTISTA, "Somente artistas podem se candidatar.");
+        if (!Boolean.TRUE.equals(request.getConfirmacao())) {
+            throw new IllegalArgumentException("Confirmação deve ser verdadeira.");
+        }
         if (menorAutorizadoPolicy.exigeProtecao(usuario) && !menorAutorizadoPolicy.autorizado(usuario)) {
             throw new ForbiddenException("Autorização do responsável é necessária para se candidatar.");
         }
@@ -304,6 +350,9 @@ public class CandidaturaService {
             throw new UnprocessableEntityException(
                     "A vaga no estado " + estadoVaga + " não permite retirada ativa.");
         }
+        if (vagaPrazoPolicy.estaVencida(candidatura.getVaga())) {
+            throw new UnprocessableEntityException("O prazo da vaga venceu; retirada operacional indisponível.");
+        }
         if (!STATUS_ATIVOS.contains(candidatura.getStatus())) {
             throw transicaoInvalida(candidatura.getStatus(), StatusCandidatura.RETIRADA);
         }
@@ -370,7 +419,7 @@ public class CandidaturaService {
     }
 
     private CandidaturaVagaResponse toCandidaturaVagaResponse(
-            Candidatura candidatura, Set<Long> tagsDaVaga) {
+            Candidatura candidatura, Set<Long> tagsDaVaga, boolean favorito) {
         PerfilArtista artista = candidatura.getArtista();
         Set<Long> funcaoIds = artista.getFuncoes().stream()
                 .map(Funcao::getId)
@@ -383,6 +432,14 @@ public class CandidaturaService {
                 .candidaturaId(candidatura.getId())
                 .artistaId(artista.getUsuarioId())
                 .username(artista.getUsuario().getUsername())
+                .favorito(favorito)
+                .cidade(artista.getCidade())
+                .estado(artista.getEstado())
+                .areaIds(artista.getAreas().stream().map(a -> a.getArea().getId()).collect(Collectors.toSet()))
+                .especializacaoIds(artista.getAreas().stream().flatMap(a -> a.getEspecializacoes().stream())
+                        .map(e -> e.getId()).collect(Collectors.toSet()))
+                .perfilUrl("/api/perfis/publicos/ARTISTA/" + artista.getUsuarioId())
+                .conversaUrl("/api/vagas/" + candidatura.getVaga().getId() + "/candidaturas/" + candidatura.getId() + "/conversa")
                 .nomeArtista(artista.getUsuario().getNome())
                 .biografia(artista.getBiografia())
                 .localizacao(artista.getLocalizacao())
@@ -396,7 +453,9 @@ public class CandidaturaService {
                 .quantidadeFuncoesCoincidentes(funcoesCoincidentes.size())
                 .mensagemApresentacao(candidatura.getMensagemApresentacao())
                 .linkPortfolioCandidatura(candidatura.getLinkPortfolioCandidatura())
-                .status(candidatura.getStatus())
+                .status(EstadoCandidaturaFuncional.de(candidatura.getStatus()))
+                .registroLegado(EstadoCandidaturaFuncional.legado(candidatura.getStatus()))
+                .statusVaga(candidatura.getVaga().getStatus())
                 .dataCandidatura(candidatura.getDataCandidatura())
                 .build();
     }
@@ -437,7 +496,11 @@ public class CandidaturaService {
                 .artistaId(candidatura.getArtista().getUsuarioId())
                 .mensagemApresentacao(candidatura.getMensagemApresentacao())
                 .linkPortfolioCandidatura(candidatura.getLinkPortfolioCandidatura())
-                .status(candidatura.getStatus())
+                .status(EstadoCandidaturaFuncional.de(candidatura.getStatus()))
+                .statusLegado(candidatura.getStatus() != null && EstadoCandidaturaFuncional.legado(candidatura.getStatus())
+                        ? candidatura.getStatus() : null)
+                .registroLegado(EstadoCandidaturaFuncional.legado(candidatura.getStatus()))
+                .statusVaga(candidatura.getVaga().getStatus())
                 .dataCandidatura(candidatura.getDataCandidatura())
                 .build();
     }

@@ -24,6 +24,7 @@ public class PerfilArtistaResponse {
     private String bannerUrl;
     private LocalDateTime ultimaAtualizacao;
     private Set<Long> funcaoIds;
+    private java.util.List<PerfilArtistaAreaResponse> areas;
 
     // RF34: URL do avatar resolvida (foto propria > foto Google > DiceBear)
     private String avatarUrl;

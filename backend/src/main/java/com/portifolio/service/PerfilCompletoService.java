@@ -31,7 +31,7 @@ public class PerfilCompletoService {
         PerfilArtista perfilArtista = null;
 
         if (usuario.getTipoUsuario() == TipoUsuario.ARTISTA) {
-            Optional<PerfilArtista> perfil = perfilArtistaRepository.findById(usuario.getId());
+            Optional<PerfilArtista> perfil = perfilArtistaRepository.buscarProfissional(usuario.getId());
             perfilArtista = perfil.orElse(null);
             completo = perfil.map(valor -> calcularArtista(usuario, valor)).orElse(false);
         } else if (usuario.getTipoUsuario() == TipoUsuario.CONTRATANTE) {
@@ -59,9 +59,7 @@ public class PerfilCompletoService {
                 && preenchido(perfil.getBiografia())
                 && preenchido(perfil.getCidade()) && perfil.getCidade().trim().length() <= 100
                 && preenchido(perfil.getEstado()) && perfil.getEstado().matches("[A-Za-z]{2}")
-                && preenchido(perfil.getUrlPortfolio())
                 && perfil.getTipoPerfilArtistico() != null
-                && perfil.getRaioAtuacao() != null
                 && (!(perfil.getTipoPerfilArtistico() == com.portifolio.model.enums.TipoPerfilArtistico.ESTUDIO
                     || perfil.getTipoPerfilArtistico() == com.portifolio.model.enums.TipoPerfilArtistico.PRODUTORA_EMPRESA)
                     || preenchido(usuario.getCnpj()))
@@ -69,6 +67,8 @@ public class PerfilCompletoService {
     }
 
     private boolean taxonomiaPrincipalCompleta(PerfilArtista perfil) {
+        if (perfil.getAreas().stream().anyMatch(a -> !com.portifolio.validation.TaxonomiaProfissional.coerente(a))) return false;
+        if (perfil.getAreas().stream().map(a -> a.getArea().getId()).distinct().count() != perfil.getAreas().size()) return false;
         var principais = perfil.getAreas().stream()
                 .filter(com.portifolio.model.PerfilArtistaArea::isPrincipal).toList();
         if (principais.size() != 1) return false;
@@ -76,11 +76,7 @@ public class PerfilCompletoService {
         if (area.getArea() == null || area.getArea().getId() == null || area.getNivelExperiencia() == null
                 || area.getFuncoes() == null || area.getFuncoes().isEmpty()
                 || area.getEspecializacoes() == null || area.getEspecializacoes().isEmpty()) return false;
-        if (area.getFuncoes().stream().anyMatch(f -> f.getArea() == null
-                || !area.getArea().getId().equals(f.getArea().getId()))) return false;
-        return area.getEspecializacoes().stream().anyMatch(e -> e.getId() != null
-                && area.getFuncoes().stream().anyMatch(f -> f.getEspecializacoes().stream()
-                    .anyMatch(compativel -> e.getId().equals(compativel.getId()))));
+        return true;
     }
 
     public boolean calcularContratante(Usuario usuario, PerfilContratante perfil) {

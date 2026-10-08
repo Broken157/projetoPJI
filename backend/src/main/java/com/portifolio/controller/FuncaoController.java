@@ -17,9 +17,17 @@ public class FuncaoController {
 
     private final FuncaoService funcaoService;
 
-    @GetMapping
+    @GetMapping(params = "!areaId")
     public ResponseEntity<List<FuncaoResponse>> listarTodos() {
         return ResponseEntity.ok(funcaoService.listarTodos());
+    }
+
+    @GetMapping(params = "areaId")
+    public com.portifolio.dto.TalentoResponse.Pagina<FuncaoResponse> porArea(
+            @org.springframework.web.bind.annotation.RequestParam Short areaId,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "20") int size) {
+        return funcaoService.listarPorArea(areaId, page, size);
     }
 
     @GetMapping("/{id}")

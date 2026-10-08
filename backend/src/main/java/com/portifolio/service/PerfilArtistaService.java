@@ -9,10 +9,8 @@ import com.portifolio.model.PerfilArtista;
 import com.portifolio.model.Funcao;
 import com.portifolio.model.Usuario;
 import com.portifolio.repository.PerfilArtistaRepository;
-import com.portifolio.repository.FuncaoRepository;
 import com.portifolio.security.AuthenticatedUserResolver;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,8 +25,9 @@ public class PerfilArtistaService {
     private boolean legacySchema;
 
     private final PerfilArtistaRepository perfilArtistaRepository;
-    private final FuncaoRepository funcaoRepository;
-    private final com.portifolio.repository.AreaArtisticaRepository areaArtisticaRepository;
+    private final com.portifolio.repository.UsuarioRepository usuarioRepository;
+    private final jakarta.persistence.EntityManager entityManager;
+    private final PerfilProfissionalService profissional;
     private final AvatarService avatarService; // RF34
     private final AuthenticatedUserResolver authenticatedUserResolver;
     private final PerfilCompletoService perfilCompletoService;
@@ -44,7 +43,7 @@ public class PerfilArtistaService {
     @Transactional(readOnly = true)
     public PerfilArtistaResponse buscarPorId(Long id) {
         exigirArtistaAtual(id);
-        PerfilArtista perfil = perfilArtistaRepository.findById(id)
+        PerfilArtista perfil = perfilArtistaRepository.buscarProfissional(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Perfil de artista nao encontrado."));
         return toResponse(perfil);
     }
@@ -52,14 +51,15 @@ public class PerfilArtistaService {
     @Transactional
     public PerfilArtistaResponse criar(PerfilArtistaRequest request) {
         Usuario usuarioAtual = exigirArtistaAtual(request.getUsuarioId());
-        if (perfilArtistaRepository.existsById(request.getUsuarioId())) {
+        usuarioAtual = bloquear(usuarioAtual);
+        if (perfilArtistaRepository.existsById(usuarioAtual.getId())) {
             throw new ConflictException("Perfil de artista ja cadastrado para este usuario.");
         }
         PerfilArtista perfil = new PerfilArtista();
         perfil.setUsuario(usuarioAtual);
         preencherPerfil(perfil, request);
         perfil.setUltimaAtualizacao(LocalDateTime.now());
-        PerfilArtista salvo = perfilArtistaRepository.save(perfil);
+        PerfilArtista salvo = perfilArtistaRepository.saveAndFlush(perfil);
         perfilCompletoService.recalcular(usuarioAtual);
         return toResponse(salvo);
     }
@@ -68,11 +68,12 @@ public class PerfilArtistaService {
     public PerfilArtistaResponse atualizar(Long id, PerfilArtistaRequest request) {
         Usuario usuarioAtual = exigirArtistaAtual(id);
         validarIdDoPayload(id, request.getUsuarioId());
-        PerfilArtista perfil = perfilArtistaRepository.findById(id)
+        usuarioAtual = bloquear(usuarioAtual);
+        PerfilArtista perfil = perfilArtistaRepository.buscarProfissional(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Perfil de artista nao encontrado."));
         preencherPerfil(perfil, request);
         perfil.setUltimaAtualizacao(LocalDateTime.now());
-        PerfilArtista salvo = perfilArtistaRepository.save(perfil);
+        PerfilArtista salvo = perfilArtistaRepository.saveAndFlush(perfil);
         perfilCompletoService.recalcular(usuarioAtual);
         return toResponse(salvo);
     }
@@ -90,7 +91,7 @@ public class PerfilArtistaService {
     private Usuario exigirArtistaAtual(Long usuarioId) {
         Usuario atual = authenticatedUserResolver.usuarioAtual()
                 .orElseThrow(() -> new ForbiddenException("Autenticação obrigatória."));
-        if (!atual.getId().equals(usuarioId)) {
+        if (usuarioId != null && !atual.getId().equals(usuarioId)) {
             throw new ForbiddenException("Você só pode alterar o próprio perfil.");
         }
         if (atual.getTipoUsuario() != com.portifolio.model.enums.TipoUsuario.ARTISTA) {
@@ -100,7 +101,7 @@ public class PerfilArtistaService {
     }
 
     private void validarIdDoPayload(Long id, Long usuarioId) {
-        if (!id.equals(usuarioId)) {
+        if (usuarioId != null && !id.equals(usuarioId)) {
             throw new ForbiddenException("O usuário do payload deve corresponder ao perfil autenticado.");
         }
     }
@@ -111,64 +112,34 @@ public class PerfilArtistaService {
         conteudoPublico.texto(request.getLocalizacao(), "Localização", 150, false);
         conteudoPublico.url(request.getUrlPortfolio(), "Portfólio", 255, false);
         conteudoPublico.url(request.getBannerUrl(), "Banner", 255, true);
-        perfil.setBiografia(request.getBiografia());
         var local = com.portifolio.validation.LocalizacaoArtista.deRequest(
                 request.getCidade(), request.getEstado(), request.getLocalizacao());
+        if (!legacySchema && perfil.getTipoPerfilArtistico() == null && request.getTipoPerfilArtistico() == null)
+            throw new com.portifolio.exception.UnprocessableEntityException("Informe tipoPerfilArtistico.");
+        var selecoes = legacySchema ? null : profissional.validar(perfil, request);
+        perfil.setBiografia(request.getBiografia());
         perfil.setCidade(local.cidade());
         perfil.setEstado(local.estado());
         perfil.setUrlPortfolio(request.getUrlPortfolio());
         if (legacySchema) {
-            if (request.getAreaPrincipalId()!=null || (request.getFuncaoIds()!=null && !request.getFuncaoIds().isEmpty()) || request.getTipoPerfilArtistico()!=null || request.getRaioAtuacao()!=null)
+            if (request.getAreas()!=null || request.getAreaPrincipalId()!=null || (request.getFuncaoIds()!=null && !request.getFuncaoIds().isEmpty()) || request.getTipoPerfilArtistico()!=null || request.getRaioAtuacao()!=null)
                 throw new com.portifolio.exception.UnprocessableEntityException("BLOQUEADA POR SCHEMA DO BANCO: campos profissionais avançados indisponíveis.");
             perfil.setBannerUrl(request.getBannerUrl()); return;
         }
         if (request.getTipoPerfilArtistico() != null) perfil.setTipoPerfilArtistico(request.getTipoPerfilArtistico());
         if (request.getRaioAtuacao() != null) perfil.setRaioAtuacao(request.getRaioAtuacao());
-        if (perfil.getTipoPerfilArtistico() == null) {
-            throw new IllegalArgumentException("Informe tipoPerfilArtistico.");
-        }
-        if (perfil.getRaioAtuacao() == null)
-            throw new com.portifolio.exception.UnprocessableEntityException("Informe raioAtuacao do catálogo oficial.");
         perfil.setBannerUrl(request.getBannerUrl());
         if (request.getDisponivelOportunidades()!=null) perfil.setDisponivelOportunidades(request.getDisponivelOportunidades());
-        if (request.getFuncaoIds() != null) {
-            if (request.getAreaPrincipalId() == null) {
-                throw new IllegalArgumentException("Informe areaPrincipalId para editar funções.");
-            }
-            if (perfil.getAreas().size() > 1) {
-                throw new com.portifolio.exception.UnprocessableEntityException("Edição de múltiplas áreas depende do RF08 completo.");
-            }
-            var area = areaArtisticaRepository.findById(request.getAreaPrincipalId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Área artística não encontrada."));
-            Set<Funcao> funcoes = resolverFuncoes(request.getFuncaoIds());
-            if (funcoes.size() > 5 || funcoes.stream().anyMatch(f -> !f.getArea().getId().equals(area.getId()))) {
-                throw new IllegalArgumentException("Informe até cinco funções pertencentes à área.");
-            }
-            var vinculo = perfil.getAreas().stream().findFirst().orElse(null);
-            if (vinculo != null && !vinculo.getArea().getId().equals(area.getId())) {
-                throw new com.portifolio.exception.UnprocessableEntityException("Troca de área depende do RF08 completo.");
-            }
-            if (vinculo == null) {
-                vinculo = new com.portifolio.model.PerfilArtistaArea();
-                vinculo.setPerfil(perfil);
-                vinculo.setArea(area);
-                vinculo.setPrincipal(true);
-                perfil.getAreas().add(vinculo);
-            }
-            // Preserva a coleção gerenciada: reinserir vínculos inalterados aciona a limpeza
-            // oficial de especializações órfãs e pode rebaixar um perfil ainda completo.
-            vinculo.getFuncoes().retainAll(funcoes);
-            vinculo.getFuncoes().addAll(funcoes);
-            vinculo.setUltimaAtualizacao(LocalDateTime.now());
-        }
+        profissional.reconciliar(perfil, selecoes);
     }
 
-    private Set<Funcao> resolverFuncoes(Set<Long> funcaoIds) {
-        List<Funcao> funcoes = funcaoRepository.findAllById(funcaoIds);
-        if (funcoes.size() != funcaoIds.size()) {
-            throw new ResourceNotFoundException("Uma ou mais funcoes nao foram encontradas.");
-        }
-        return new HashSet<>(funcoes);
+    private Usuario bloquear(Usuario usuario) {
+        Usuario bloqueado = usuarioRepository.findByIdForUpdate(usuario.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
+        // O resolver pode tê-lo carregado antes de aguardar o lock. Releitura evita
+        // sobrescrever campos da conta alterados durante essa espera.
+        entityManager.refresh(bloqueado);
+        return bloqueado;
     }
 
     private PerfilArtistaResponse toResponse(PerfilArtista perfil) {
@@ -199,6 +170,11 @@ public class PerfilArtistaService {
                 .bannerUrl(perfil.getBannerUrl())
                 .ultimaAtualizacao(perfil.getUltimaAtualizacao())
                 .funcaoIds(funcaoIds)
+                .areas(perfil.getAreas().stream().sorted(java.util.Comparator.comparing(a -> a.getArea().getId()))
+                        .map(a -> new com.portifolio.dto.PerfilArtistaAreaResponse(a.getArea().getId(), a.isPrincipal(),
+                                a.getNivelExperiencia(), a.getFuncoes().stream().map(Funcao::getId).collect(Collectors.toSet()),
+                                a.getEspecializacoes().stream().map(e -> e.getId()).collect(Collectors.toSet()),
+                                a.getUltimaAtualizacao())).toList())
                 .avatarUrl(avatarUrl)
                 .build();
     }

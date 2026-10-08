@@ -25,12 +25,16 @@ class PerfilCompletoServiceTest {
         Usuario usuario = usuarioCompleto(TipoUsuario.ARTISTA);
         PerfilArtista perfil = perfilArtistaCompleto();
         perfil.setBannerUrl(null);
+        perfil.setRaioAtuacao(null);
+        perfil.setUrlPortfolio(null);
+        perfil.setDisponivelOportunidades(false);
+        usuario.setFotoPerfil(null);
 
         assertThat(service.calcularArtista(usuario, perfil)).isTrue();
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"nome", "telefone", "email", "cpf", "biografia", "cidade", "estado", "localizacao", "portfolio"})
+    @ValueSource(strings = {"nome", "telefone", "email", "cpf", "biografia", "cidade", "estado", "localizacao"})
     void artistaComTextoObrigatorioAusenteOuBlankFicaIncompleto(String campo) {
         Usuario usuario = usuarioCompleto(TipoUsuario.ARTISTA);
         PerfilArtista perfil = perfilArtistaCompleto();
@@ -80,6 +84,7 @@ class PerfilCompletoServiceTest {
         PerfilContratante perfil = perfilContratanteCompleto();
         perfil.setNomeEmpresa(null);
         perfil.setBannerUrl(null);
+        usuario.setFotoPerfil(null);
         assertThat(service.calcularContratante(usuario, perfil)).isTrue();
 
         perfil.setNomeEmpresa("");
@@ -200,6 +205,21 @@ class PerfilCompletoServiceTest {
         principal.setEspecializacoes(Set.of(incompativel));
         assertThat(service.calcularArtista(u, p)).isFalse();
         principal.setPrincipal(false);
+        assertThat(service.calcularArtista(u, p)).isFalse();
+    }
+
+    @Test void umaEspecializacaoValidaNaoEncobreOutraIncompativel() {
+        var u = usuarioCompleto(TipoUsuario.ARTISTA); var p = perfilArtistaCompleto();
+        var area = p.getAreas().iterator().next();
+        var invalida = new Especializacao(); invalida.setId(999L);
+        var todas = new HashSet<>(area.getEspecializacoes()); todas.add(invalida); area.setEspecializacoes(todas);
+        assertThat(service.calcularArtista(u, p)).isFalse();
+    }
+
+    @Test void secundariaComFuncaoDeOutraAreaInvalidaCompletude() {
+        var u = usuarioCompleto(TipoUsuario.ARTISTA); var p = perfilArtistaCompleto();
+        var secundaria = new PerfilArtistaArea(); secundaria.setArea(com.portifolio.support.OfficialSchemaFixtures.area((short)2));
+        secundaria.setFuncoes(p.getFuncoes()); p.getAreas().add(secundaria);
         assertThat(service.calcularArtista(u, p)).isFalse();
     }
 

@@ -12,6 +12,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface PerfilArtistaRepository extends JpaRepository<PerfilArtista, Long>, JpaSpecificationExecutor<PerfilArtista> {
 
+    @EntityGraph(attributePaths = {"usuario", "areas", "areas.area", "areas.funcoes",
+            "areas.funcoes.area", "areas.funcoes.especializacoes", "areas.especializacoes"})
+    @Query("select distinct p from PerfilArtista p where p.usuarioId = :id")
+    Optional<PerfilArtista> buscarProfissional(@Param("id") Long id);
+
     @Override
     @EntityGraph(attributePaths = {"usuario", "areas", "areas.funcoes", "areas.funcoes.area"})
     Optional<PerfilArtista> findOne(Specification<PerfilArtista> specification);

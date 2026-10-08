@@ -19,6 +19,10 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     @EntityGraph(attributePaths = "responsaveisLegais")
     Optional<Usuario> findById(Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from Usuario u where u.id = :id")
+    Optional<Usuario> findByIdForUpdate(@Param("id") Long id);
+
     @EntityGraph(attributePaths = "responsaveisLegais")
     Optional<Usuario> findByEmail(String email);
 

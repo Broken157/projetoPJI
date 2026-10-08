@@ -15,7 +15,7 @@ import lombok.Setter;
 @Setter
 public class PerfilArtistaRequest {
 
-    @NotNull(message = "Usuário é obrigatório")
+    // Compatibilidade: se informado, deve corresponder ao titular autenticado.
     private Long usuarioId;
 
     private String biografia;
@@ -48,6 +48,7 @@ public class PerfilArtistaRequest {
     private Set<@NotNull(message = "ID da funcao não pode ser nulo") Long> funcaoIds;
     private com.portifolio.model.enums.TipoPerfilArtistico tipoPerfilArtistico;
     private com.portifolio.model.enums.Abrangencia raioAtuacao;
+    private java.util.List<@NotNull @jakarta.validation.Valid PerfilArtistaAreaRequest> areas;
 
     @com.fasterxml.jackson.annotation.JsonSetter("tagIds")
     public void rejeitarTagsLegadas(Object ignored) {

@@ -335,6 +335,19 @@ class AvisoResponsavelRf44IntegrationTest {
         assertThat(envios).singleElement().extracting(Envio::email).isEqualTo("atualizado@rf44.test");
     }
 
+    @Test void pendenciaOficialNaoEnviaAvisoAoContatoNovoComoAutorizado() {
+        var artista = artista(16, true);
+        new TransactionTemplate(manager).executeWithoutResult(tx -> {
+            assertThat(criar(artista, vaga.getId())).isEqualTo(201);
+            // Estado físico modelado com DML: não declara entregue a troca/revalidação C07/D05.
+            jdbc.update("update usuarios set status_conta='PENDENTE_CONSENTIMENTO' where id=?", artista.getUsuarioId());
+            jdbc.update("update responsaveis_legais set email_responsavel='pendente@rf44.test' where usuario_id=?", artista.getUsuarioId());
+        });
+        aguardar();
+        verifyNoInteractions(sender);
+        assertThat(envios).isEmpty();
+    }
+
     @ParameterizedTest @ValueSource(strings = {"candidatura", "artista", "vaga", "adulto", "recusado", "responsavel", "abaixo14", "bloqueado", "nulo", "negativo"})
     void eventoInconsistenteNaoEnviaCegamente(String caso) {
         var artista = artista(16, true);

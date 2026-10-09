@@ -41,6 +41,7 @@ class GuardianConsentServiceTest {
     @Mock PerfilArtistaRepository perfis;
     @Mock ObjectProvider<GuardianConsentEmailSender> senderProvider;
     @Mock ResendConfirmationRateLimiter rateLimiter;
+    @Mock com.portifolio.security.AuthenticatedUserResolver authenticatedUserResolver;
 
     private GuardianConsentService consentimento;
     private Usuario usuario;
@@ -49,7 +50,8 @@ class GuardianConsentServiceTest {
 
     @BeforeEach
     void preparar() throws Exception {
-        consentimento = new GuardianConsentService(responsaveis, perfis, senderProvider, rateLimiter, CLOCK);
+        consentimento = new GuardianConsentService(responsaveis, perfis, senderProvider, rateLimiter, CLOCK,
+                authenticatedUserResolver);
 
         usuario = new Usuario();
         usuario.setId(41L);

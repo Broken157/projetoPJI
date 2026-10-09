@@ -283,7 +283,7 @@ class PerfilEdicaoRf08IntegrationTest {
     }
 
     @Test
-    void edicaoDeUsuarioAtualizaSomenteNomeTelefoneEmailERecalcula() throws Exception {
+    void edicaoDeUsuarioAtualizaNomeTelefonePreservaEmailConfiavelERecalcula() throws Exception {
         PerfilContratante contratante = novoContratante("usuario-edicao-rf08@teste.com");
         completarContratante(contratante, null);
         LocalDate nascimentoOriginal = contratante.getUsuario().getDataNascimento();
@@ -295,11 +295,11 @@ class PerfilEdicaoRf08IntegrationTest {
                                 "nome", "Nome Atualizado",
                                 "dataNascimento", "2000-12-31",
                                 "telefone", "11888888888",
-                                "email", "usuario-editado-rf08@teste.com"))))
+                                "email", contratante.getUsuario().getEmail()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nome").value("Nome Atualizado"))
                 .andExpect(jsonPath("$.telefone").value("11888888888"))
-                .andExpect(jsonPath("$.email").value("usuario-editado-rf08@teste.com"))
+                .andExpect(jsonPath("$.email").value(contratante.getUsuario().getEmail()))
                 .andExpect(jsonPath("$.perfilCompleto").value(true));
 
         Usuario persistido = usuarioRepository.findById(contratante.getUsuarioId()).orElseThrow();
@@ -307,7 +307,7 @@ class PerfilEdicaoRf08IntegrationTest {
     }
 
     @Test
-    void menorAtualizaDadosDoProprioResponsavelSemAlterarPerfilCompleto() throws Exception {
+    void menorNaoSobrescreveResponsavelSemRevalidacaoDuravel() throws Exception {
         PerfilContratante menor = novoContratanteMenor("menor-responsavel-rf08@teste.com");
         completarContratante(menor, null);
         assertThat(usuarioRepository.findById(menor.getUsuarioId()).orElseThrow().getPerfilCompleto()).isTrue();
@@ -320,16 +320,12 @@ class PerfilEdicaoRf08IntegrationTest {
         mockMvc.perform(put("/api/usuarios/me")
                         .header("Authorization", bearer(menor.getUsuario()))
                         .contentType(MediaType.APPLICATION_JSON).content(json(payload)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nomeResponsavel").doesNotExist())
-                .andExpect(jsonPath("$.telefoneResponsavel").doesNotExist())
-                .andExpect(jsonPath("$.emailResponsavel").doesNotExist())
-                .andExpect(jsonPath("$.perfilCompleto").value(true));
+                .andExpect(status().isUnprocessableEntity());
 
         Usuario persistido = usuarioRepository.findById(menor.getUsuarioId()).orElseThrow();
-        assertThat(persistido.getNomeResponsavel()).isEqualTo("Responsável Atualizado");
-        assertThat(persistido.getTelefoneResponsavel()).isEqualTo("11888887777");
-        assertThat(persistido.getEmailResponsavel()).isEqualTo("responsavel-atualizado@teste.com");
+        assertThat(persistido.getNomeResponsavel()).isEqualTo("Responsável Original");
+        assertThat(persistido.getTelefoneResponsavel()).isEqualTo("11911112222");
+        assertThat(persistido.getEmailResponsavel()).isEqualTo("responsavel-original@teste.com");
         assertThat(persistido.getPerfilCompleto()).isTrue();
     }
 

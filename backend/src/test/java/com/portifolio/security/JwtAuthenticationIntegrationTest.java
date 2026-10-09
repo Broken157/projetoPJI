@@ -55,7 +55,7 @@ class JwtAuthenticationIntegrationTest {
     }
 
     @Test
-    void tokenAntigoAposAlteracaoDeEmailRetorna401SemExporDetalhesInternos() throws Exception {
+    void trocaDiretaContidaEJwtAntigoNaoApontaParaOutraContaAposMudancaPersistida() throws Exception {
         Usuario usuario = criarUsuario("email-antigo@fix-auth.test", TipoUsuario.CONTRATANTE);
         String tokenAntigo = login(usuario.getEmail());
 
@@ -66,8 +66,15 @@ class JwtAuthenticationIntegrationTest {
                                 "nome", usuario.getNome(),
                                 "telefone", usuario.getTelefone(),
                                 "email", "email-novo@fix-auth.test"))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("email-novo@fix-auth.test"));
+                .andExpect(status().isUnprocessableEntity());
+
+        assertThat(usuarioRepository.findById(usuario.getId()).orElseThrow().getEmail()).isEqualTo(usuario.getEmail());
+        mockMvc.perform(get("/api/usuarios/me").header("Authorization", bearer(tokenAntigo)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.email").value(usuario.getEmail()));
+
+        // DML preserva a regressão de ID+subject/reuso após alteração persistida;
+        // não simula entrega de troca protegida bloqueada por falta de email pendente.
+        jdbcTemplate.update("update usuarios set email=? where id=?", "email-novo@fix-auth.test", usuario.getId());
 
         MvcResult resultado = mockMvc.perform(get("/api/usuarios/me")
                         .header("Authorization", bearer(tokenAntigo)))

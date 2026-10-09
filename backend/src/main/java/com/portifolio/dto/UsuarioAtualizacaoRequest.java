@@ -42,4 +42,7 @@ public class UsuarioAtualizacaoRequest {
     @Email(message = "E-mail do responsável inválido")
     @Size(max = 150, message = "E-mail do responsável deve ter no máximo 150 caracteres")
     private String emailResponsavel;
+
+    // Reconhecido para rejeitar alteração não representável; nunca persistido em campo improvisado.
+    private String vinculoResponsavel;
 }

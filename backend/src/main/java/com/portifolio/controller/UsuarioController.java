@@ -38,6 +38,19 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioService.buscarAtual());
     }
 
+    @PutMapping("/me/telefone")
+    public ResponseEntity<Void> alterarTelefoneAtual(
+            @Valid @RequestBody com.portifolio.dto.TelefoneAtualizacaoRequest request) {
+        usuarioService.alterarTelefoneAtual(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/me/responsavel")
+    public ResponseEntity<com.portifolio.dto.ResponsavelAtualResponse> buscarResponsavelAtual() {
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(usuarioService.buscarResponsavelAtual());
+    }
+
     @PutMapping("/me")
     public ResponseEntity<UsuarioResponse> atualizarAtual(
             @Valid @RequestBody UsuarioAtualizacaoRequest request) {

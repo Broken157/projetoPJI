@@ -33,6 +33,8 @@ public class UsuarioService {
     private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
     private final jakarta.persistence.EntityManager entityManager;
     private final com.portifolio.security.JwtService jwtService;
+    private final jakarta.validation.Validator validator;
+    private final java.time.Clock clock;
 
     @Transactional(readOnly = true)
     public UsuarioResponse buscarAtual() {
@@ -42,18 +44,15 @@ public class UsuarioService {
     @Transactional
     public UsuarioResponse atualizarAtual(UsuarioAtualizacaoRequest request) {
         Usuario usuario = usuarioAtualBloqueado();
-        validarEmailDisponivel(request.getEmail(), usuario.getId());
+        validarEmailSemAlteracao(request.getEmail(), usuario);
+        validarTelefone(request.getTelefone());
+        bloquearAlteracaoResponsavel(usuario, request.getNomeResponsavel(),
+                request.getTelefoneResponsavel(), request.getEmailResponsavel(), request.getVinculoResponsavel());
 
         conteudoPublico.texto(request.getNome(), "Nome público", 150, true);
         usuario.setNome(request.getNome());
         usuario.setTelefone(request.getTelefone());
-        usuario.setEmail(request.getEmail());
         // dataNascimento permanece imutável mesmo que o cliente legado a envie.
-        atualizarResponsavelSeMenor(
-                usuario,
-                request.getNomeResponsavel(),
-                request.getTelefoneResponsavel(),
-                request.getEmailResponsavel());
 
         boolean senhaAlterada = atualizarSenhaSeSolicitada(usuario, request);
         Usuario salvo = usuarioRepository.save(usuario);
@@ -101,8 +100,12 @@ public class UsuarioService {
     /** Rota legada por ID, limitada aos mesmos campos seguros de /me. */
     @Transactional
     public UsuarioResponse atualizar(Long id, UsuarioRequest request) {
-        Usuario usuario = exigirProprioUsuario(id);
-        validarEmailDisponivel(request.getEmail(), id);
+        exigirProprioUsuario(id);
+        Usuario usuario = usuarioAtualBloqueado();
+        validarEmailSemAlteracao(request.getEmail(), usuario);
+        validarTelefone(request.getTelefone());
+        bloquearAlteracaoResponsavel(usuario, request.getNomeResponsavel(),
+                request.getTelefoneResponsavel(), request.getEmailResponsavel(), request.getVinculoResponsavel());
         if (request.getSenha() != null && !request.getSenha().isBlank()) {
             throw new UnprocessableEntityException(
                     "Troque a senha por /api/usuarios/me informando a senha atual.");
@@ -110,12 +113,6 @@ public class UsuarioService {
         conteudoPublico.texto(request.getNome(), "Nome público", 150, true);
         usuario.setNome(request.getNome());
         usuario.setTelefone(request.getTelefone());
-        usuario.setEmail(request.getEmail());
-        atualizarResponsavelSeMenor(
-                usuario,
-                request.getNomeResponsavel(),
-                request.getTelefoneResponsavel(),
-                request.getEmailResponsavel());
         Usuario salvo = usuarioRepository.save(usuario);
         perfilCompletoService.recalcular(salvo);
         return toResponseCompleto(salvo);
@@ -163,48 +160,63 @@ public class UsuarioService {
         usuario.setSenha(passwordPolicy.encode(novaSenha));
     }
 
-    private void validarEmailDisponivel(String email, Long usuarioId) {
-        usuarioRepository.findByEmail(email)
-                .filter(existente -> !existente.getId().equals(usuarioId))
+    private void validarEmailSemAlteracao(String email, Usuario usuario) {
+        if (email != null && email.trim().equalsIgnoreCase(usuario.getEmail().trim())) return;
+        usuarioRepository.findByEmailIgnoreCase(email)
+                .filter(existente -> !existente.getId().equals(usuario.getId()))
                 .ifPresent(existente -> {
                     throw new ConflictException("E-mail já cadastrado.");
                 });
+        throw new UnprocessableEntityException(
+                "Troca de e-mail indisponível até existir suporte durável à verificação do novo endereço.");
     }
 
-    private void atualizarResponsavelSeMenor(
-            Usuario usuario,
-            String nomeResponsavel,
-            String telefoneResponsavel,
-            String emailResponsavel) {
-        if (!menorDeIdade(usuario.getDataNascimento())) {
-            return;
-        }
-
-        String nomeFinal = valorInformadoOuAtual(nomeResponsavel, usuario.getNomeResponsavel());
-        String telefoneFinal = valorInformadoOuAtual(telefoneResponsavel, usuario.getTelefoneResponsavel());
-        String emailFinal = valorInformadoOuAtual(emailResponsavel, usuario.getEmailResponsavel());
-
-        if (!preenchido(nomeFinal) || !preenchido(telefoneFinal) || !preenchido(emailFinal)) {
+    private void bloquearAlteracaoResponsavel(Usuario usuario, String nome, String telefone,
+            String email, String vinculo) {
+        // C07/D05: um único registro não preserva responsável validado + alteração pendente/trilha.
+        // Campos iguais vindos do cliente legado são aceitos, mas nunca reescritos.
+        if (vinculo != null || alterado(nome, usuario.getNomeResponsavel(), false)
+                || alterado(telefone, usuario.getTelefoneResponsavel(), false)
+                || alterado(email, usuario.getEmailResponsavel(), true)) {
             throw new UnprocessableEntityException(
-                    "Nome, telefone e e-mail do responsável são obrigatórios para menores de 18 anos.");
+                    "Alteração do responsável indisponível até existir suporte durável à revalidação e trilha.");
         }
-
-        usuario.setNomeResponsavel(nomeFinal);
-        usuario.setTelefoneResponsavel(telefoneFinal);
-        usuario.setEmailResponsavel(emailFinal);
     }
 
-    private boolean menorDeIdade(LocalDate dataNascimento) {
-        return dataNascimento != null
-                && Period.between(dataNascimento, LocalDate.now()).getYears() < 18;
+    private boolean alterado(String enviado, String atual, boolean ignorarCaixa) {
+        return enviado != null && (atual == null || (ignorarCaixa
+                ? !enviado.equalsIgnoreCase(atual) : !enviado.equals(atual)));
     }
 
-    private String valorInformadoOuAtual(String novoValor, String valorAtual) {
-        return novoValor != null ? novoValor : valorAtual;
+    private void validarTelefone(String telefone) {
+        if (!validator.validateValue(com.portifolio.dto.CadastroDadosRequest.class, "telefone", telefone).isEmpty()) {
+            throw new IllegalArgumentException("Telefone inválido; informe DDD e número.");
+        }
     }
 
-    private boolean preenchido(String valor) {
-        return valor != null && !valor.isBlank();
+    @Transactional
+    public void alterarTelefoneAtual(com.portifolio.dto.TelefoneAtualizacaoRequest request) {
+        Usuario usuario = usuarioAtualBloqueado();
+        validarTelefone(request.telefone());
+        usuario.setTelefone(request.telefone());
+        usuarioRepository.save(usuario);
+        perfilCompletoService.recalcular(usuario);
+    }
+
+    @Transactional(readOnly = true)
+    public com.portifolio.dto.ResponsavelAtualResponse buscarResponsavelAtual() {
+        Usuario usuario = usuarioAtual();
+        if (usuario.getTipoUsuario() != com.portifolio.model.enums.TipoUsuario.ARTISTA
+                || usuario.getDataNascimento() == null
+                || Period.between(usuario.getDataNascimento(), LocalDate.now(clock)).getYears() < 14
+                || Period.between(usuario.getDataNascimento(), LocalDate.now(clock)).getYears() >= 18) {
+            throw new UnprocessableEntityException("Responsável legal aplicável somente a artista de 14 a 17 anos.");
+        }
+        var responsavel = usuario.getResponsavelLegal();
+        if (responsavel == null) throw new ResourceNotFoundException("Responsável legal não encontrado.");
+        return new com.portifolio.dto.ResponsavelAtualResponse(responsavel.getNomeResponsavel(),
+                responsavel.getEmailResponsavel(), responsavel.getTelefoneResponsavel(),
+                responsavel.getDataConsentimento(), Boolean.TRUE.equals(responsavel.getConsentimentoRevogado()));
     }
 
     private Usuario exigirProprioUsuario(Long id) {

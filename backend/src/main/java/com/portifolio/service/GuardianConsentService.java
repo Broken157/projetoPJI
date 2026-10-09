@@ -48,6 +48,7 @@ public class GuardianConsentService {
     private final ObjectProvider<GuardianConsentEmailSender> senderProvider;
     private final ResendConfirmationRateLimiter rateLimiter;
     private final Clock clock;
+    private final com.portifolio.security.AuthenticatedUserResolver authenticatedUserResolver;
 
     // Participa da transação RF26/Google, mas falha de SMTP não desfaz o e-mail já confirmado.
     public boolean iniciarConvite(Usuario usuario) {
@@ -93,6 +94,13 @@ public class GuardianConsentService {
     @Transactional
     public PasswordRecoveryResponse reenviar(ResendConfirmationRequest request) {
         String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        // Pendentes não têm sessão normal: mantém o reenvio público/genérico já existente.
+        // Se há titular autenticado, ele não pode usar a sessão para reenviar convite alheio.
+        authenticatedUserResolver.usuarioAtual().ifPresent(atual -> {
+            if (!email.equalsIgnoreCase(atual.getEmail().trim())) {
+                throw new com.portifolio.exception.ForbiddenException("Solicitação não pertence à conta autenticada.");
+            }
+        });
         rateLimiter.exigirDisponibilidade("rf27:" + hash(email),
                 "Aguarde antes de solicitar outro convite.");
         PasswordRecoveryResponse resposta = new PasswordRecoveryResponse(MENSAGEM_REENVIO);

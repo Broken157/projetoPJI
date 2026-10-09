@@ -49,6 +49,8 @@ import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -167,6 +169,38 @@ class ChatRf24IntegrationTest {
 
         criarSalaViaApi(contratante.getUsuario(), menor.getUsuarioId(), status().isCreated());
         assertThat(salaChatRepository.count()).isOne();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"BANCO", "FAVORITO", "BUSCA", "CONVITE_NOTIFICACAO"})
+    void relacionamentosIsoladosNaoAutorizamContatoComMenor(String contexto) throws Exception {
+        PerfilArtista menor = artista("menor-contexto@rf35.test", LocalDate.now().minusYears(16));
+        var responsavel = new com.portifolio.model.ResponsavelLegal();
+        responsavel.setNomeResponsavel("Responsavel fixture");
+        responsavel.setEmailResponsavel("responsavel-contexto@rf35.test");
+        responsavel.setTelefoneResponsavel("11988887777");
+        responsavel.setDataConsentimento(LocalDateTime.now());
+        responsavel.setConsentimentoRevogado(false);
+        menor.getUsuario().setResponsavelLegal(responsavel);
+        usuarioRepository.saveAndFlush(menor.getUsuario());
+        PerfilContratante dono = contratante("dono-contexto@rf35.test", LocalDate.of(1980,1,1));
+        if (contexto.equals("BANCO")) jdbcTemplate.update(
+                "insert into banco_talentos(artista_id,contratante_id) values (?,?)", menor.getUsuarioId(), dono.getUsuarioId());
+        if (contexto.equals("FAVORITO")) jdbcTemplate.update(
+                "insert into itens_salvos(usuario_id,tipo_alvo,alvo_id) values (?,'PERFIL_ARTISTA',?)", dono.getUsuarioId(), menor.getUsuarioId());
+        if (contexto.equals("CONVITE_NOTIFICACAO")) {
+            Vaga vaga = vaga(dono);
+            jdbcTemplate.update("insert into notificacoes(usuario_destino_id,tipo_notificacao,mensagem_alerta,link_contexto) values (?,'CONVITE','Convite fixture',?)",
+                    menor.getUsuarioId(), "/vagas/"+vaga.getId());
+        }
+        criarSalaViaApi(dono.getUsuario(),menor.getUsuarioId(),status().isUnprocessableEntity());
+        criarSalaViaApi(menor.getUsuario(),dono.getUsuarioId(),status().isUnprocessableEntity());
+        assertThat(salaChatRepository.count()).isZero();
+        assertThat(candidaturaRepository.count()).isZero();
+        // A origem relacional segura continua funcional, inclusive no sentido de resposta do menor.
+        candidatura(vaga(dono),menor);
+        long sala=criarSalaViaApi(dono.getUsuario(),menor.getUsuarioId(),status().isCreated());
+        assertThat(criarSalaViaApi(menor.getUsuario(),dono.getUsuarioId(),status().isCreated())).isEqualTo(sala);
     }
 
     @Test

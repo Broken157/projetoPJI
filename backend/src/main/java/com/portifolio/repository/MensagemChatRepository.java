@@ -46,16 +46,22 @@ public interface MensagemChatRepository extends JpaRepository<MensagemChat, Long
     @Query("select m from MensagemChat m where m.id = :id")
     Optional<MensagemChat> findByIdForUpdate(@Param("id") Long id);
 
+    @Query("select max(m.id) from MensagemChat m where m.sala.id = :salaId")
+    Long findUltimoIdDaSala(@Param("salaId") Long salaId);
+
     @Query("""
             select m.id from MensagemChat m
             where m.sala.id = :salaId
               and (m.remetente is null or m.remetente.id <> :usuarioId)
               and coalesce(m.lida, false) = false
+              and coalesce(m.excluida, false) = false
+              and m.id <= :limite
             order by m.dataEnvio desc, m.id desc
             """)
     List<Long> findIdsNaoLidasRecebidas(
             @Param("salaId") Long salaId,
             @Param("usuarioId") Long usuarioId,
+            @Param("limite") Long limite,
             Pageable pageable);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -65,6 +71,7 @@ public interface MensagemChatRepository extends JpaRepository<MensagemChat, Long
               and (m.remetente is null or m.remetente.id <> :usuarioId)
               and m.id in :ids
               and coalesce(m.lida, false) = false
+              and coalesce(m.excluida, false) = false
             """)
     int marcarRecebidasComoLidas(
             @Param("salaId") Long salaId,
@@ -75,10 +82,12 @@ public interface MensagemChatRepository extends JpaRepository<MensagemChat, Long
             select count(m) from MensagemChat m
             where (m.remetente is null or m.remetente.id <> :usuarioId)
               and coalesce(m.lida, false) = false
+              and coalesce(m.excluida, false) = false
               and exists (
                   select p.id from ParticipanteChat p
                   where p.sala.id = m.sala.id and p.usuario.id = :usuarioId
               )
+              and (select count(p) from ParticipanteChat p where p.sala.id = m.sala.id) in (1, 2)
             """)
     long countNaoLidasRecebidas(@Param("usuarioId") Long usuarioId);
 }

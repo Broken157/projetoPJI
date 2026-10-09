@@ -58,16 +58,33 @@ public interface ParticipanteChatRepository
               on nao_lida.sala_id = s.id
              and (nao_lida.remetente_id is null or nao_lida.remetente_id <> :usuarioId)
              and coalesce(nao_lida.lida, false) = false
+             and coalesce(nao_lida.excluida, false) = false
             where eu.usuario_id = :usuarioId
+              and (select count(*) from participantes_chat pc where pc.sala_id = s.id) in (1, 2)
+              and coalesce(u.nome, 'Usuário Removido') ilike :nome escape '!'
             group by s.id, s.data_criacao, outro.usuario_id, u.nome, coalesce(to_jsonb(u)->>'foto_perfil_url',to_jsonb(u)->>'foto_perfil'),
                      ultima.texto_mensagem, ultima.data_envio, ultima.excluida
+            having :leitura = 'TODAS'
+                or (:leitura = 'LIDAS' and count(nao_lida.id) = 0)
+                or (:leitura = 'NAO_LIDAS' and count(nao_lida.id) > 0)
             order by coalesce(ultima.data_envio, s.data_criacao) desc nulls last, s.id desc
             """, countQuery = """
             select count(*)
             from participantes_chat eu
+            left join participantes_chat outro on outro.sala_id = eu.sala_id and outro.usuario_id <> :usuarioId
+            left join usuarios u on u.id = outro.usuario_id
             where eu.usuario_id = :usuarioId
+              and (select count(*) from participantes_chat pc where pc.sala_id = eu.sala_id) in (1, 2)
+              and coalesce(u.nome, 'Usuário Removido') ilike :nome escape '!'
+              and (:leitura = 'TODAS' or
+                  (:leitura = 'NAO_LIDAS') = exists (
+                      select 1 from mensagens_chat m where m.sala_id = eu.sala_id
+                        and (m.remetente_id is null or m.remetente_id <> :usuarioId)
+                        and coalesce(m.lida, false) = false and coalesce(m.excluida, false) = false))
             """, nativeQuery = true)
     Page<ChatSalaResumoProjection> findSalasDoUsuario(
             @Param("usuarioId") Long usuarioId,
+            @Param("nome") String nome,
+            @Param("leitura") String leitura,
             Pageable pageable);
 }

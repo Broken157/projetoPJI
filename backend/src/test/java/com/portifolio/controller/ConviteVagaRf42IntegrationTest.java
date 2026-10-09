@@ -359,12 +359,12 @@ class ConviteVagaRf42IntegrationTest {
     }
 
     @ParameterizedTest @ValueSource(ints = {14, 17})
-    void menorAutorizadoRecebeComPrivacidadeEChatSomenteAposConvite(int idade) throws Exception {
+    void menorAutorizadoRecebeConviteMasNotificacaoNaoProvaContextoDeChat(int idade) throws Exception {
         tornarMenor(artista, idade, true, false);
         var responsavel = db.queryForList("select * from responsaveis_legais");
         chat(dono, artista, 422); assertThat(quantidade("salas_chat")).isZero();
         emitir(artista, vaga, 201); privacidade(central(artista).path("content").get(0));
-        chat(dono, artista, 201); assertThat(quantidade("salas_chat")).isEqualTo(1);
+        chat(dono, artista, 422); assertThat(quantidade("salas_chat")).isZero();
         assertThat(db.queryForList("select * from responsaveis_legais")).isEqualTo(responsavel);
         assertThat(quantidade("candidaturas")).isZero();
     }
@@ -382,12 +382,12 @@ class ConviteVagaRf42IntegrationTest {
         mvc.perform(enviar(artista, vaga)).andExpect(status().isNotFound()); chat(dono, artista, 422); semConvite();
     }
 
-    @Test void conviteLidoHistoricoPermaneceInteracaoSomenteDoDonoCorreto() throws Exception {
+    @Test void conviteLidoPermaneceNotificacaoSemAutorizarChatDeMenor() throws Exception {
         tornarMenor(artista, 16, true, false); tornarMenor(colega, 16, true, false);
         var criada = emitir(artista, vaga, 201);
         mvc.perform(patch("/api/notificacoes/lidas").header("Authorization", bearer(artista))).andExpect(status().isNoContent());
         db.update("update vagas set status='ENCERRADA' where id=?", vaga);
-        chat(outroDono, artista, 422); chat(dono, colega, 422); chat(dono, artista, 201);
+        chat(outroDono, artista, 422); chat(dono, colega, 422); chat(dono, artista, 422);
         assertThat(convites()).hasSize(1); assertThat(registro()).containsEntry("id", criada.path("notificacaoId").asLong()).containsEntry("lida", true);
     }
 

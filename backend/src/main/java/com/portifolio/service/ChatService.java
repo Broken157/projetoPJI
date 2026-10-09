@@ -33,6 +33,7 @@ import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.time.Clock;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,7 +64,6 @@ public class ChatService {
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
     private final MenorAutorizadoPolicy menorAutorizadoPolicy;
-    private final ConviteVagaService conviteVagaService;
     private final GoogleAccountAccessPolicy accountAccessPolicy;
     private final NotificacaoPersistenceService notificacaoPersistenceService;
     private final DenunciaRepository denuncias;
@@ -86,9 +86,21 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public ChatSalaPaginaResponse listarSalas(String emailAutenticado, Integer page, Integer size) {
+        return listarSalas(emailAutenticado, page, size, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public ChatSalaPaginaResponse listarSalas(
+            String emailAutenticado, Integer page, Integer size, String nome, String leitura) {
         Usuario atual = usuarioPorEmail(emailAutenticado);
+        String filtro = leitura == null || leitura.isBlank() ? "TODAS" : leitura.strip().toUpperCase(Locale.ROOT);
+        if (!Set.of("TODAS", "LIDAS", "NAO_LIDAS").contains(filtro)) {
+            throw new IllegalArgumentException("leitura deve ser TODAS, LIDAS ou NAO_LIDAS.");
+        }
+        String busca = nome == null ? "" : nome.strip();
+        String padrao = "%" + busca.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
         Page<ChatSalaResumoProjection> pagina = participanteChatRepository.findSalasDoUsuario(
-                atual.getId(), PageRequest.of(validarPagina(page), validarTamanho(size)));
+                atual.getId(), padrao, filtro, PageRequest.of(validarPagina(page), validarTamanho(size)));
         return ChatSalaPaginaResponse.builder()
                 .content(pagina.getContent().stream().map(this::toSalaResponse).toList())
                 .page(pagina.getNumber())
@@ -241,19 +253,25 @@ public class ChatService {
     public int marcarRecebidasComoLidas(String emailAutenticado, Long salaId) {
         Usuario atual = usuarioPorEmail(emailAutenticado);
         List<Long> participantes = exigirParticipante(salaId, atual.getId());
-        List<Long> mensagemIds = mensagemChatRepository.findIdsNaoLidasRecebidas(
-                salaId, atual.getId(), PageRequest.of(0, TAMANHO_MAXIMO));
-        if (mensagemIds.isEmpty()) {
-            return 0;
+        Long limite = mensagemChatRepository.findUltimoIdDaSala(salaId);
+        if (limite == null) return 0;
+        int total = 0;
+        // Bounded receipts cover the room's current snapshot without chasing concurrent sends.
+        while (true) {
+            List<Long> mensagemIds = mensagemChatRepository.findIdsNaoLidasRecebidas(
+                    salaId, atual.getId(), limite, PageRequest.of(0, TAMANHO_MAXIMO));
+            if (mensagemIds.isEmpty()) {
+                return total;
+            }
+            int atualizadas = mensagemChatRepository.marcarRecebidasComoLidas(salaId, atual.getId(), mensagemIds);
+            total += atualizadas;
+            if (atualizadas > 0 && participantes.size() == 2) publicarChat(
+                    List.of(outroParticipante(participantes, atual.getId())),
+                    ChatEventoTipo.LEITURA,
+                    salaId,
+                    null,
+                    mensagemIds);
         }
-        int atualizadas = mensagemChatRepository.marcarRecebidasComoLidas(salaId, atual.getId(), mensagemIds);
-        if (participantes.size() == 2) publicarChat(
-                List.of(outroParticipante(participantes, atual.getId())),
-                ChatEventoTipo.LEITURA,
-                salaId,
-                null,
-                mensagemIds);
-        return atualizadas;
     }
 
     @Transactional(readOnly = true)
@@ -293,11 +311,9 @@ public class ChatService {
                     ? atual.getId() : destino.getId();
             Long contratanteId = atual.getTipoUsuario() == TipoUsuario.CONTRATANTE
                     ? atual.getId() : destino.getId();
-            Usuario artista = atual.getId().equals(artistaId) ? atual : destino;
-            Usuario contratante = atual.getId().equals(contratanteId) ? atual : destino;
+            // C03: notification link_contexto is not a relational proof of an invitation.
             if (!candidaturaRepository.existsByArtistaUsuarioIdAndVagaContratanteUsuarioId(
-                    artistaId, contratanteId)
-                    && !conviteVagaService.interacaoProfissionalValida(contratante, artista)) {
+                    artistaId, contratanteId)) {
                 throw new UnprocessableEntityException(
                         "Chat com menor exige interacao profissional valida entre os participantes.");
             }

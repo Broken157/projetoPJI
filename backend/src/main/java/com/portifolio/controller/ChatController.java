@@ -50,8 +50,10 @@ public class ChatController {
     public ChatSalaPaginaResponse listarSalas(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String nome,
+            @RequestParam(required = false) String leitura,
             Principal principal) {
-        return chatService.listarSalas(principal.getName(), page, size);
+        return chatService.listarSalas(principal.getName(), page, size, nome, leitura);
     }
 
     @GetMapping("/salas/{salaId}/mensagens")

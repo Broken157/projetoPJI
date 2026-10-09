@@ -21,7 +21,9 @@ public class DenunciaRepository {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
                 select exists (select 1 from reportes_usuario
                     where tipo_conteudo = 'MENSAGEM' and conteudo_id = ?)
-                """, Boolean.class, mensagemId));
+                    or exists (select 1 from moderacao_conteudo
+                    where tipo_conteudo = 'MENSAGEM' and conteudo_id = ?)
+                """, Boolean.class, mensagemId, mensagemId));
     }
 
     // O filtro de denunciante está nas duas partes da consulta, inclusive no detalhe.

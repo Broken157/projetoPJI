@@ -227,9 +227,9 @@ class ChatRf35IntegrationTest {
         mvc.perform(auth(patch(lidas()), a)).andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("select count(*) from mensagens_chat where remetente_id=? and lida=true", Long.class, a.getId())).isZero();
         mvc.perform(auth(patch(lidas()), b)).andExpect(status().isNoContent());
-        assertThat(jdbc.queryForObject("select count(*) from mensagens_chat where remetente_id=? and lida=true", Long.class, a.getId())).isEqualTo(50L);
+        assertThat(jdbc.queryForObject("select count(*) from mensagens_chat where remetente_id=? and lida=true", Long.class, a.getId())).isEqualTo(53L);
         assertThat(jdbc.queryForObject("select lida from mensagens_chat where id=?", Boolean.class, propria)).isTrue();
-        assertThat(jdbc.queryForObject("select lida from mensagens_chat where id=2", Boolean.class)).isFalse();
+        assertThat(jdbc.queryForObject("select lida from mensagens_chat where id=2", Boolean.class)).isTrue();
         mvc.perform(auth(patch(lidas()), b)).andExpect(status().isNoContent());
         mvc.perform(auth(get("/api/chat/nao-lidas/count"), b)).andExpect(jsonPath("$.count").value(0));
         mvc.perform(auth(get(mensagens()), a)).andExpect(jsonPath("$.content[0].lida").value(true));
@@ -382,6 +382,180 @@ class ChatRf35IntegrationTest {
         mvc.perform(auth(get(mensagens()),b)).andExpect(status().isUnprocessableEntity());
         mvc.perform(auth(post(mensagens()),a).contentType(MediaType.APPLICATION_JSON).content("{\"texto\":\"Contato\"}"))
                 .andExpect(status().isUnprocessableEntity());
+    }
+
+    @ParameterizedTest @CsvSource({"TODAS,1", "LIDAS,0", "NAO_LIDAS,1"})
+    void filtroRecebidasNaoDependeDaUltimaMensagemPropria(String filtro, int quantidade) throws Exception {
+        enviar(b, "Recebida pendente");
+        enviar(a, "Resposta ainda sem ler");
+        mvc.perform(auth(get("/api/chat/salas").param("leitura", filtro), a))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(quantidade))
+                .andExpect(jsonPath("$.content.length()").value(quantidade));
+        mvc.perform(auth(patch(lidas()), a)).andExpect(status().isNoContent());
+        mvc.perform(auth(get("/api/chat/salas").param("leitura", "LIDAS"), a))
+                .andExpect(jsonPath("$.totalElements").value(1)).andExpect(jsonPath("$.content[0].naoLidas").value(0));
+        mvc.perform(auth(get("/api/chat/salas").param("leitura", "NAO_LIDAS"), a))
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @ParameterizedTest @ValueSource(strings={"TODAS", "LIDAS"})
+    void salaVaziaOuSomenteMensagemPropriaEhLida(String filtro) throws Exception {
+        mvc.perform(auth(get("/api/chat/salas").param("leitura", filtro), a))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        enviar(a, "Enviada");
+        mvc.perform(auth(get("/api/chat/salas").param("leitura", filtro), a))
+                .andExpect(jsonPath("$.content[0].naoLidas").value(0));
+        mvc.perform(auth(get("/api/chat/nao-lidas/count"), a)).andExpect(jsonPath("$.count").value(0));
+    }
+
+    @ParameterizedTest @ValueSource(strings={"destino", "DESTINO", "  DeStInO  "})
+    void buscaNomeCaseInsensitiveMantemEscopoDoJwt(String nome) throws Exception {
+        mvc.perform(auth(get("/api/chat/salas").param("nome", nome), a))
+                .andExpect(jsonPath("$.totalElements").value(1)).andExpect(jsonPath("$.content[0].salaId").value(sala));
+        mvc.perform(auth(get("/api/chat/salas").param("nome", nome), terceiro))
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @ParameterizedTest @ValueSource(strings={"%", "_", "!", "\\"})
+    void buscaTrataWildcardsComoTextoLiteral(String simbolo) throws Exception {
+        jdbc.update("update usuarios set nome=? where id=?", "Nome " + simbolo + " literal", b.getId());
+        Usuario normal = usuario("normal", TipoUsuario.CONTRATANTE);
+        chat.criarOuReutilizarSala(a.getEmail(), normal.getId());
+        mvc.perform(auth(get("/api/chat/salas").param("nome", simbolo), a))
+                .andExpect(jsonPath("$.totalElements").value(1)).andExpect(jsonPath("$.content[0].salaId").value(sala));
+    }
+
+    @ParameterizedTest @ValueSource(strings={"destino@rf35.test", "rf35_destino", "11999999999"})
+    void buscaNaoIncluiEmailUsernameOuTelefone(String privado) throws Exception {
+        mvc.perform(auth(get("/api/chat/salas").param("nome", privado), a))
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @ParameterizedTest @CsvSource({"size,51", "size,0", "page,-1", "leitura,OUTRA"})
+    void listaRejeitaLimiteOuFiltroInvalido(String parametro, String valor) throws Exception {
+        mvc.perform(auth(get("/api/chat/salas").param(parametro, valor), a)).andExpect(status().isBadRequest());
+    }
+
+    @Test void filtrosCombinadosPaginamComContagemEOrdemEstavelSemNMaisUm() throws Exception {
+        List<Long> ids = new ArrayList<>();
+        for (int i=0; i<22; i++) {
+            Usuario alvo = usuario("empresa"+i, TipoUsuario.CONTRATANTE);
+            long id = chat.criarOuReutilizarSala(a.getEmail(), alvo.getId()).getSalaId();
+            jdbc.update("insert into mensagens_chat(sala_id,remetente_id,texto_mensagem,lida,data_envio) values (?,?,?,false,?)",
+                    id, alvo.getId(), "Pendente", LocalDateTime.now(clock));
+            ids.add(id);
+        }
+        var stats = emf.unwrap(SessionFactory.class).getStatistics();
+        stats.setStatisticsEnabled(true); stats.clear();
+        JsonNode primeira;
+        try {
+            primeira = json(mvc.perform(auth(get("/api/chat/salas").param("nome","EMPRESA").param("leitura","NAO_LIDAS"), a))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.size").value(20))
+                    .andExpect(jsonPath("$.totalElements").value(22)).andReturn().getResponse().getContentAsString());
+            assertThat(stats.getPrepareStatementCount()).isLessThanOrEqualTo(4);
+        } finally { stats.setStatisticsEnabled(false); }
+        List<Long> obtidos = new ArrayList<>();
+        primeira.path("content").forEach(item -> obtidos.add(item.path("salaId").asLong()));
+        var segunda = json(mvc.perform(auth(get("/api/chat/salas").param("nome","empresa").param("leitura","NAO_LIDAS").param("page","1"), a))
+                .andExpect(jsonPath("$.content.length()").value(2)).andReturn().getResponse().getContentAsString());
+        segunda.path("content").forEach(item -> obtidos.add(item.path("salaId").asLong()));
+        assertThat(obtidos).containsExactlyElementsOf(ids.reversed()).doesNotHaveDuplicates();
+        mvc.perform(auth(get("/api/chat/salas").param("size","50"), a)).andExpect(jsonPath("$.size").value(50));
+    }
+
+    @Test void excluidaNaoContaComoRecebidaPendenteNemAlteraLeituraGlobal() throws Exception {
+        long id=enviar(b,"Excluir");
+        mvc.perform(auth(delete(msg(id)), b)).andExpect(status().isNoContent());
+        mvc.perform(auth(get("/api/chat/nao-lidas/count"), a)).andExpect(jsonPath("$.count").value(0));
+        mvc.perform(auth(get("/api/chat/salas").param("leitura","NAO_LIDAS"), a))
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(auth(get("/api/chat/salas").param("leitura","LIDAS"), a))
+                .andExpect(jsonPath("$.content[0].naoLidas").value(0));
+        mvc.perform(auth(patch(lidas()), a)).andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("select lida from mensagens_chat where id=?",Boolean.class,id)).isFalse();
+    }
+
+    @Test void salaComMaisDeDoisNaoEntraEmListaContadorOuAutorizacaoDireta() throws Exception {
+        inserir(b.getId(),"Coletiva invalida",LocalDateTime.now(clock));
+        jdbc.update("insert into participantes_chat(sala_id,usuario_id) values (?,?)",sala,terceiro.getId());
+        mvc.perform(auth(get("/api/chat/salas"), a)).andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(auth(get("/api/chat/nao-lidas/count"), a)).andExpect(jsonPath("$.count").value(0));
+        mvc.perform(auth(get(mensagens()), a)).andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test void moderacaoExistenteTambemPreservaOriginalEAnexo() throws Exception {
+        long id=upload(a,"pdf");
+        jdbc.update("update mensagens_chat set texto_mensagem='Conteudo sob analise' where id=?",id);
+        jdbc.update("insert into moderacao_conteudo(tipo_conteudo,conteudo_id,autor_id) values ('MENSAGEM',?,?)",id,a.getId());
+        mvc.perform(auth(patch(msg(id)),a).contentType(MediaType.APPLICATION_JSON).content("{\"texto\":\"Editada\"}"))
+                .andExpect(status().isOk());
+        String ref=referencia(id);
+        mvc.perform(auth(delete(msg(id)),a)).andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("select texto_original from mensagens_chat where id=?",String.class,id))
+                .isEqualTo("Conteudo sob analise");
+        assertThat(referencia(id)).isEqualTo(ref);
+        assertThat(Files.exists(STORAGE.resolve(ref))).isTrue();
+        mvc.perform(auth(get(download(id)),b)).andExpect(status().isNotFound());
+        mvc.perform(auth(get(mensagens()),b)).andExpect(jsonPath("$.content[0].texto").value(ChatService.MENSAGEM_EXCLUIDA));
+    }
+
+    @Test void videoNaoEhAnexoAceito() throws Exception {
+        mvc.perform(auth(multipart(anexos()).file(new MockMultipartFile("arquivo","video.mp4","video/mp4",new byte[]{0,0,0,1})),a))
+                .andExpect(status().isUnprocessableEntity());
+        assertThat(arquivos()).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from mensagens_chat",Long.class)).isZero();
+    }
+
+    @Test void chamadasDistintasComMesmoTextoSaoMensagensENotificacoesDistintas() throws Exception {
+        long primeira=enviar(a,"Texto igual"); long segunda=enviar(a,"Texto igual");
+        assertThat(segunda).isNotEqualTo(primeira);
+        assertThat(jdbc.queryForObject("select count(*) from mensagens_chat",Long.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select count(*) from notificacoes where usuario_destino_id=? and tipo_notificacao='MENSAGEM'",Long.class,b.getId())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select count(*) from notificacoes where usuario_destino_id=?",Long.class,a.getId())).isZero();
+    }
+
+    @Test void jwtAntigoNaoEnviaNemAbreConversaAposPendenciaDeConsentimento() throws Exception {
+        String antigo=bearer(a);
+        tornarMenor(a,false);
+        jdbc.update("update usuarios set status_conta='PENDENTE_CONSENTIMENTO' where id=?",a.getId());
+        mvc.perform(post(mensagens()).header("Authorization",antigo).contentType(MediaType.APPLICATION_JSON).content("{\"texto\":\"Nao permitida\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/chat/salas").header("Authorization",antigo).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"usuarioDestinoId\":"+b.getId()+"}")).andExpect(status().isUnauthorized());
+        assertThat(jdbc.queryForObject("select count(*) from mensagens_chat",Long.class)).isZero();
+    }
+
+    @Test void leituraConcorrenteEhIdempotenteComRecibosLimitados() throws Exception {
+        for(int i=0;i<73;i++) inserir(a.getId(),"Pendente "+i,LocalDateTime.now(clock));
+        var barreira = new java.util.concurrent.CyclicBarrier(2);
+        try(var executores = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var chamadas = java.util.stream.IntStream.range(0,2).mapToObj(i -> executores.submit(() -> {
+                barreira.await(10,java.util.concurrent.TimeUnit.SECONDS);
+                return chat.marcarRecebidasComoLidas(b.getEmail(),sala);
+            })).toList();
+            int total=0;
+            for(var chamada:chamadas) total+=chamada.get(30,java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(total).isEqualTo(73);
+        }
+        assertThat(chat.contarNaoLidas(b.getEmail()).count()).isZero();
+        var eventos=org.mockito.ArgumentCaptor.forClass(ChatEventoResponse.class);
+        verify(chatGateway,atLeastOnce()).entregar(eq(a.getId()),eq(a.getEmail()),eventos.capture());
+        assertThat(eventos.getAllValues()).allSatisfy(e -> assertThat(e.getMensagemIds()).hasSizeLessThanOrEqualTo(50));
+    }
+
+    @Test void edicoesConcorrentesPreservamAutoriaEEstadoFinalConsistente() throws Exception {
+        long id=enviar(a,"Inicial");
+        var barreira=new java.util.concurrent.CyclicBarrier(2);
+        try(var executores=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var chamadas=List.of("Primeira","Segunda").stream().map(texto -> executores.submit(() -> {
+                barreira.await(10,java.util.concurrent.TimeUnit.SECONDS);
+                return chat.editarMensagem(a.getEmail(),id,texto).getTexto();
+            })).toList();
+            for(var chamada:chamadas) assertThat(chamada.get(30,java.util.concurrent.TimeUnit.SECONDS)).isIn("Primeira","Segunda");
+        }
+        assertThat(jdbc.queryForObject("select texto_mensagem from mensagens_chat where id=?",String.class,id)).isIn("Primeira","Segunda");
+        assertThat(jdbc.queryForObject("select remetente_id from mensagens_chat where id=?",Long.class,id)).isEqualTo(a.getId());
+        assertThat(jdbc.queryForObject("select editada from mensagens_chat where id=?",Boolean.class,id)).isTrue();
     }
 
     private void tornarMenor(Usuario usuario, boolean revogado) {

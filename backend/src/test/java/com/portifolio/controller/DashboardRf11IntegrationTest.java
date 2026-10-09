@@ -595,7 +595,8 @@ class DashboardRf11IntegrationTest {
         jdbcTemplate.update("insert into notificacoes(usuario_destino_id,tipo_notificacao,mensagem_alerta,link_contexto,lida) values(?,'MENSAGEM','Recebida','/mensagens',false),(?,'MENSAGEM','Já lida','/mensagens',true),(?,'MENSAGEM','Alheia','/mensagens',false)",u.getId(),u.getId(),outro.getId());
         var antes = snapshot();
         var result = mockMvc.perform(get("/api/dashboard").header("Authorization", bearer(u)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.mensagens.quantidadeNaoLidas").value(2))
+                // Excluída e própria não são recebidas pendentes no contrato RF35.
+                .andExpect(status().isOk()).andExpect(jsonPath("$.mensagens.quantidadeNaoLidas").value(1))
                 .andExpect(jsonPath("$.notificacoes.quantidadeNaoLidas").value(1)).andReturn();
         assertThat(snapshot()).isEqualTo(antes);
         verificarPrivacidade(result.getResponse().getContentAsString());

@@ -318,6 +318,39 @@ class RecuperacaoSenhaRf09IntegrationTest {
         assertThat(output.getAll()).doesNotContain(emailSender.ultimoToken);
     }
 
+    @Test
+    void resetRevogaTambemJWTAccessOnlyEmitidoNestaInstanciaESomenteDoTitular() throws Exception {
+        Usuario usuario = novoUsuarioLocal("reset-access@rf09.test");
+        Usuario outro = novoUsuarioLocal("outro-reset-access@rf09.test");
+        String access = corpo(login(usuario.getEmail(), SENHA_ANTIGA, false)
+                .andExpect(status().isOk()).andReturn()).get("token").textValue();
+        String accessOutro = corpo(login(outro.getEmail(), SENHA_ANTIGA, false)
+                .andExpect(status().isOk()).andReturn()).get("token").textValue();
+        solicitar(usuario.getEmail());
+        redefinir(emailSender.ultimoToken, SENHA_NOVA).andExpect(status().isOk());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/usuarios/me")
+                .header("Authorization", "Bearer " + access)).andExpect(status().isUnauthorized());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/usuarios/me")
+                .header("Authorization", "Bearer " + accessOutro)).andExpect(status().isOk());
+    }
+
+    @Test
+    void resetComSenhaInvalidaPreservaTodosOsSegredosESessoesSemVazarLogs(CapturedOutput output) throws Exception {
+        Usuario usuario = novoUsuarioLocal("reset-log-completo@rf09.test");
+        MvcResult login = login(usuario.getEmail(), SENHA_ANTIGA, true).andExpect(status().isOk()).andReturn();
+        String access = corpo(login).get("token").textValue();
+        String rawRefresh = login.getResponse().getHeader("Set-Cookie").split(";", 2)[0].substring("palco_refresh=".length());
+        solicitar(usuario.getEmail());
+        String rawReset = emailSender.ultimoToken;
+        String invalida = "sem-complexidade-fixture";
+        String resposta = redefinir(rawReset, invalida).andExpect(status().isBadRequest()).andReturn().getResponse().getContentAsString();
+        assertThat(resposta + output.getAll()).doesNotContain(rawReset, hash(rawReset), rawRefresh, hash(rawRefresh),
+                access, usuario.getSenha(), invalida);
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/usuarios/me")
+                .header("Authorization", "Bearer " + access)).andExpect(status().isOk());
+        redefinir(rawReset, SENHA_NOVA).andExpect(status().isOk());
+    }
+
     private MvcResult solicitar(String email) throws Exception {
         return mockMvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)

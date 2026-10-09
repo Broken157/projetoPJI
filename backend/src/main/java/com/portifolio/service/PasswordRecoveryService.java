@@ -36,14 +36,17 @@ public class PasswordRecoveryService {
     private final RefreshTokenService refreshTokenService;
     private final ObjectProvider<PasswordRecoveryEmailSender> emailSenderProvider;
     private final PasswordPolicy passwordPolicy;
+    private final jakarta.persistence.EntityManager entityManager;
+    private final com.portifolio.security.JwtService jwtService;
 
     @Transactional
     public PasswordRecoveryResponse solicitar(ForgotPasswordRequest request) {
         PasswordRecoveryResponse resposta = respostaGenerica();
-        Usuario usuario = usuarioRepository.findByEmail(request.getEmail().trim()).orElse(null);
+        Usuario usuario = usuarioRepository.findByEmailForUpdate(request.getEmail().trim()).orElse(null);
         if (usuario == null) {
             return resposta;
         }
+        entityManager.refresh(usuario);
 
         PasswordRecoveryEmailSender emailSender = emailSenderProvider.getIfAvailable();
         if (emailSender == null) {
@@ -77,15 +80,23 @@ public class PasswordRecoveryService {
     @Transactional
     public PasswordRecoveryResponse redefinir(ResetPasswordRequest request) {
         String hash = hashToken(request.getToken().trim());
-        Usuario usuario = usuarioRepository.findByTokenRecuperacao(hash)
-                .filter(this::tokenEstaValido)
+        Long usuarioId = usuarioRepository.findByTokenRecuperacao(hash)
+                .map(Usuario::getId)
                 .orElseThrow(() -> new ResourceNotFoundException(MENSAGEM_TOKEN_INVALIDO));
+        Usuario usuario = usuarioRepository.findByIdForUpdate(usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException(MENSAGEM_TOKEN_INVALIDO));
+        // O usuário pode ter sido carregado antes da espera; validar o estado efetivamente bloqueado.
+        entityManager.refresh(usuario);
+        if (!hash.equals(usuario.getTokenRecuperacao()) || !tokenEstaValido(usuario)) {
+            throw new ResourceNotFoundException(MENSAGEM_TOKEN_INVALIDO);
+        }
 
         usuario.setSenha(passwordPolicy.encode(request.getNovaSenha()));
         usuario.setTokenRecuperacao(null);
         usuario.setTokenExpiracao(null);
         usuarioRepository.save(usuario);
         refreshTokenService.invalidarTodosDoUsuario(usuario.getId());
+        jwtService.revogarTodosDoUsuario(usuario.getId());
 
         return new PasswordRecoveryResponse("Senha redefinida com sucesso.");
     }

@@ -24,6 +24,8 @@ public class AuthController {
     private final GuardianConsentService guardianConsentService;
     private final SessionCookiePolicy cookies;
     private final JwtService jwtService;
+    private final com.portifolio.service.RefreshTokenService refreshTokenService;
+    private final com.portifolio.service.UsuarioService usuarioService;
 
     @PostMapping("/cadastro")
     public ResponseEntity<CadastroResponse> cadastrar(@Valid @RequestBody CadastroRequest request) {
@@ -61,12 +63,17 @@ public class AuthController {
     public ResponseEntity<RefreshResponse> refresh(HttpServletRequest http, HttpServletResponse response) {
         cookies.validarOrigem(http);
         String token = cookies.ler(http);
-        if (token == null) throw new com.portifolio.exception.UnauthorizedException("Sessão expirada. Entre novamente.");
-        RefreshRequest request = new RefreshRequest();
-        request.setRefreshToken(token);
-        RefreshResponse result = authService.refreshToken(request);
-        cookies.gravar(response, result.getRefreshToken());
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+        try {
+            if (token == null) throw new com.portifolio.exception.UnauthorizedException("Sessão expirada. Entre novamente.");
+            RefreshRequest request = new RefreshRequest();
+            request.setRefreshToken(token);
+            RefreshResponse result = authService.refreshToken(request);
+            cookies.gravar(response, result.getRefreshToken());
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+        } catch (com.portifolio.exception.UnauthorizedException ex) {
+            cookies.gravar(response, null);
+            throw ex;
+        }
     }
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest http, HttpServletResponse response) {
@@ -85,6 +92,37 @@ public class AuthController {
             authService.logout(request);
         }
     }
+    @GetMapping("/sessoes")
+    public ResponseEntity<java.util.List<SessaoResponse>> sessoes(HttpServletRequest http) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(refreshTokenService.listarProprias(cookies.ler(http)));
+    }
+
+    @DeleteMapping("/sessoes/{sessionId}")
+    public ResponseEntity<Void> encerrarSessao(@PathVariable Long sessionId,
+            HttpServletRequest http, HttpServletResponse response) {
+        cookies.validarOrigem(http);
+        if (refreshTokenService.encerrarPropria(sessionId, cookies.ler(http))) cookies.gravar(response, null);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/sessoes")
+    public ResponseEntity<Void> encerrarTodasSessoes(HttpServletRequest http, HttpServletResponse response) {
+        cookies.validarOrigem(http);
+        refreshTokenService.encerrarTodasProprias();
+        cookies.gravar(response, null);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/senha")
+    public ResponseEntity<Void> alterarSenha(@RequestBody AlteracaoSenhaRequest request,
+            HttpServletRequest http, HttpServletResponse response) {
+        cookies.validarOrigem(http);
+        usuarioService.alterarSenhaAtual(request);
+        cookies.gravar(response, null);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/forgot-password")
     public ResponseEntity<PasswordRecoveryResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         return ResponseEntity.ok(passwordRecoveryService.solicitar(request));

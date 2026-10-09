@@ -2,6 +2,8 @@ package com.portifolio.repository;
 
 import com.portifolio.model.RefreshToken;
 import java.util.Optional;
+import java.util.List;
+import java.time.LocalDateTime;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +15,10 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<RefreshToken> findByTokenHashAndAtivoTrue(String tokenHash);
     Optional<RefreshToken> findByTokenHash(String tokenHash);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    Optional<RefreshToken> findByIdAndUsuarioId(Long id, Long usuarioId);
+    List<RefreshToken> findByUsuarioIdAndAtivoTrueAndExpiracaoAfterOrderByDataCriacaoDescIdDesc(
+            Long usuarioId, LocalDateTime instante);
     boolean existsByIdAndAtivoTrueAndExpiracaoAfter(Long id, java.time.LocalDateTime instante);
 
     // Invalida todos os tokens ativos de um usuario (usado no logout total / exclusao de conta)

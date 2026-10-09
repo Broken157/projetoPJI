@@ -1,20 +1,26 @@
 package com.portifolio.service;
 
 import com.portifolio.exception.ResourceNotFoundException;
+import com.portifolio.exception.UnauthorizedException;
+import com.portifolio.dto.SessaoResponse;
 import com.portifolio.model.RefreshToken;
 import com.portifolio.model.Usuario;
 import com.portifolio.repository.RefreshTokenRepository;
+import com.portifolio.repository.UsuarioRepository;
+import com.portifolio.security.AuthenticatedUserResolver;
+import com.portifolio.security.JwtService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// RF33 — Sessao persistente ("Lembrar de mim")
+// RF25 — sessão persistente; RF53 — gestão das próprias sessões.
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenService {
@@ -23,6 +29,11 @@ public class RefreshTokenService {
     private long expiracaoDias;
 
     private final RefreshTokenRepository refreshTokenRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
+    private final jakarta.persistence.EntityManager entityManager;
+    private final JwtService jwtService;
+    private static final String SESSAO_INVALIDA = "Sessão expirada. Entre novamente.";
 
     /**
      * Gera um refresh token para o usuario.
@@ -31,6 +42,9 @@ public class RefreshTokenService {
      */
     @Transactional
     public String gerarRefreshToken(Usuario usuario) {
+        // Mesma ordem de refresh/reset/senha: usuário antes da sessão.
+        usuarioRepository.findByIdForUpdate(usuario.getId())
+                .orElseThrow(() -> new UnauthorizedException(SESSAO_INVALIDA));
         String rawToken = UUID.randomUUID().toString();
 
         RefreshToken refreshToken = new RefreshToken();
@@ -50,31 +64,17 @@ public class RefreshTokenService {
      */
     @Transactional
     public Usuario validarRefreshToken(String rawToken) {
-        String hash = hashToken(rawToken);
-
-        RefreshToken rt = refreshTokenRepository
-                .findByTokenHashAndAtivoTrue(hash)
-                .orElseThrow(() -> new com.portifolio.exception.UnauthorizedException("Refresh token invalido ou ja utilizado."));
-
-        if (rt.getExpiracao().isBefore(LocalDateTime.now())) {
-            rt.setAtivo(false);
-            refreshTokenRepository.save(rt);
-            throw new com.portifolio.exception.UnauthorizedException("Refresh token expirado. Faca login novamente.");
-        }
-
-        return rt.getUsuario();
+        return sessaoValidaBloqueada(rawToken).getUsuario();
     }
 
     /** Mantém a identidade da sessão e troca atomicamente o segredo sob bloqueio da linha. */
     @Transactional
     public String rotacionar(String rawToken) {
-        RefreshToken rt = refreshTokenRepository.findByTokenHashAndAtivoTrue(hashToken(rawToken))
-                .orElseThrow(() -> new com.portifolio.exception.UnauthorizedException("Refresh token já utilizado."));
-        if (!rt.getExpiracao().isAfter(LocalDateTime.now()))
-            throw new com.portifolio.exception.UnauthorizedException("Refresh token expirado.");
+        RefreshToken rt = sessaoValidaBloqueada(rawToken);
         String next = UUID.randomUUID().toString();
         rt.setTokenHash(hashToken(next));
         rt.setExpiracao(LocalDateTime.now().plusDays(expiracaoDias));
+        rt.setUltimoUso(LocalDateTime.now());
         refreshTokenRepository.saveAndFlush(rt);
         return next;
     }
@@ -82,12 +82,16 @@ public class RefreshTokenService {
     /** Invalida um token especifico (logout de um dispositivo). */
     @Transactional
     public void invalidarRefreshToken(String rawToken) {
-        String hash = hashToken(rawToken);
-        refreshTokenRepository.findByTokenHashAndAtivoTrue(hash)
-                .ifPresent(rt -> {
-                    rt.setAtivo(false);
-                    refreshTokenRepository.save(rt);
-                });
+        RefreshToken anterior = refreshTokenRepository.findByTokenHash(hashToken(rawToken)).orElse(null);
+        if (anterior == null || anterior.getUsuario() == null) return;
+        Long usuarioId = anterior.getUsuario().getId();
+        if (usuarioRepository.findByIdForUpdate(usuarioId).isEmpty()) return;
+        // O ID estável preserva a sessão mesmo se a rotação terminou durante a espera.
+        refreshTokenRepository.findByIdAndUsuarioId(anterior.getId(), usuarioId).ifPresent(rt -> {
+            entityManager.refresh(rt);
+            rt.setAtivo(false);
+            refreshTokenRepository.save(rt);
+        });
     }
 
     /**
@@ -95,7 +99,63 @@ public class RefreshTokenService {
      */
     @Transactional
     public void invalidarTodosDoUsuario(Long usuarioId) {
+        usuarioRepository.findByIdForUpdate(usuarioId);
         refreshTokenRepository.invalidarTodosPorUsuario(usuarioId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SessaoResponse> listarProprias(String cookieAtual) {
+        Long usuarioId = usuarioAtualId();
+        String hashAtual = cookieAtual == null ? null : hashToken(cookieAtual);
+        return refreshTokenRepository
+                .findByUsuarioIdAndAtivoTrueAndExpiracaoAfterOrderByDataCriacaoDescIdDesc(
+                        usuarioId, LocalDateTime.now())
+                .stream().map(rt -> new SessaoResponse(rt.getId(), rt.getDataCriacao(),
+                        rt.getExpiracao(), true, rt.getTokenHash().equals(hashAtual))).toList();
+    }
+
+    @Transactional
+    public boolean encerrarPropria(Long sessionId, String cookieAtual) {
+        Long usuarioId = usuarioAtualId();
+        usuarioRepository.findByIdForUpdate(usuarioId)
+                .orElseThrow(() -> new UnauthorizedException(SESSAO_INVALIDA));
+        RefreshToken rt = refreshTokenRepository.findByIdAndUsuarioId(sessionId, usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sessão não encontrada."));
+        entityManager.refresh(rt);
+        boolean atual = cookieAtual != null && rt.getTokenHash().equals(hashToken(cookieAtual));
+        rt.setAtivo(false);
+        refreshTokenRepository.save(rt);
+        return atual;
+    }
+
+    @Transactional
+    public void encerrarTodasProprias() {
+        Long usuarioId = usuarioAtualId();
+        invalidarTodosDoUsuario(usuarioId);
+        jwtService.revogarTodosDoUsuario(usuarioId);
+    }
+
+    private Long usuarioAtualId() {
+        return authenticatedUserResolver.usuarioAtual().map(Usuario::getId)
+                .orElseThrow(() -> new UnauthorizedException(SESSAO_INVALIDA));
+    }
+
+    private RefreshToken sessaoValidaBloqueada(String rawToken) {
+        String hash = hashToken(rawToken);
+        RefreshToken anterior = refreshTokenRepository.findByTokenHash(hash)
+                .orElseThrow(() -> new UnauthorizedException(SESSAO_INVALIDA));
+        if (anterior.getUsuario() == null) throw new UnauthorizedException(SESSAO_INVALIDA);
+        Usuario usuario = usuarioRepository.findByIdForUpdate(anterior.getUsuario().getId())
+                .orElseThrow(() -> new UnauthorizedException(SESSAO_INVALIDA));
+        entityManager.refresh(usuario);
+        RefreshToken rt = refreshTokenRepository.findByTokenHashAndAtivoTrue(hash)
+                .orElseThrow(() -> new UnauthorizedException(SESSAO_INVALIDA));
+        entityManager.refresh(rt);
+        if (!hash.equals(rt.getTokenHash()) || !Boolean.TRUE.equals(rt.getAtivo())
+                || !rt.getExpiracao().isAfter(LocalDateTime.now())) {
+            throw new UnauthorizedException(SESSAO_INVALIDA);
+        }
+        return rt;
     }
 
     // Hash SHA-256 do token raw — RNF01: nada sensivel gravado em texto puro

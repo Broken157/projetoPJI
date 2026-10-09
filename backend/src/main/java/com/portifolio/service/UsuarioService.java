@@ -31,6 +31,8 @@ public class UsuarioService {
     private final RefreshTokenService refreshTokenService;
     private final PasswordPolicy passwordPolicy;
     private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
+    private final jakarta.persistence.EntityManager entityManager;
+    private final com.portifolio.security.JwtService jwtService;
 
     @Transactional(readOnly = true)
     public UsuarioResponse buscarAtual() {
@@ -39,7 +41,7 @@ public class UsuarioService {
 
     @Transactional
     public UsuarioResponse atualizarAtual(UsuarioAtualizacaoRequest request) {
-        Usuario usuario = usuarioAtual();
+        Usuario usuario = usuarioAtualBloqueado();
         validarEmailDisponivel(request.getEmail(), usuario.getId());
 
         conteudoPublico.texto(request.getNome(), "Nome público", 150, true);
@@ -58,6 +60,7 @@ public class UsuarioService {
         perfilCompletoService.recalcular(salvo);
         if (senhaAlterada) {
             refreshTokenService.invalidarTodosDoUsuario(salvo.getId());
+            jwtService.revogarTodosDoUsuario(salvo.getId());
         }
         return toResponseCompleto(salvo);
     }
@@ -133,18 +136,31 @@ public class UsuarioService {
         if (request.getNovaSenha() == null || request.getNovaSenha().isEmpty()) {
             return false;
         }
+        alterarSenha(usuario, request.getSenhaAtual(), request.getNovaSenha());
+        return true;
+    }
+
+    @Transactional
+    public void alterarSenhaAtual(com.portifolio.dto.AlteracaoSenhaRequest request) {
+        Usuario usuario = usuarioAtualBloqueado();
+        alterarSenha(usuario, request.getSenhaAtual(), request.getNovaSenha());
+        usuarioRepository.save(usuario);
+        refreshTokenService.invalidarTodosDoUsuario(usuario.getId());
+        jwtService.revogarTodosDoUsuario(usuario.getId());
+    }
+
+    private void alterarSenha(Usuario usuario, String senhaAtual, String novaSenha) {
         if (usuario.getSenha() == null || usuario.getSenha().isBlank()) {
             throw new UnprocessableEntityException(
                     "Contas exclusivamente Google não podem criar senha por este fluxo.");
         }
-        if (request.getSenhaAtual() == null || request.getSenhaAtual().isBlank()) {
+        if (senhaAtual == null || senhaAtual.isBlank()) {
             throw new UnprocessableEntityException("Informe a senha atual para definir uma nova senha.");
         }
-        if (!passwordEncoder.matches(request.getSenhaAtual(), usuario.getSenha())) {
+        if (!passwordEncoder.matches(senhaAtual, usuario.getSenha())) {
             throw new ForbiddenException("Senha atual incorreta.");
         }
-        usuario.setSenha(passwordPolicy.encode(request.getNovaSenha()));
-        return true;
+        usuario.setSenha(passwordPolicy.encode(novaSenha));
     }
 
     private void validarEmailDisponivel(String email, Long usuarioId) {
@@ -240,5 +256,13 @@ public class UsuarioService {
     private Usuario usuarioAtual() {
         return authenticatedUserResolver.usuarioAtual()
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado."));
+    }
+
+    private Usuario usuarioAtualBloqueado() {
+        Long id = usuarioAtual().getId();
+        Usuario usuario = usuarioRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado."));
+        entityManager.refresh(usuario);
+        return usuario;
     }
 }

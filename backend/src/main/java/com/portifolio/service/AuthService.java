@@ -58,6 +58,7 @@ public class AuthService {
     private final GoogleRegistrationContextService googleRegistrationContext;
     private final GoogleAccountAccessPolicy accountAccessPolicy;
     private final com.portifolio.validation.ConteudoPublicoValidator conteudoPublico;
+    private final jakarta.persistence.EntityManager entityManager;
 
     // ──────────────────────────────────────────────────────────
     // RF01 — Cadastro convencional e vínculo com uma área principal
@@ -136,8 +137,9 @@ public class AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
 
-        Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
+        Usuario usuario = usuarioRepository.findByEmailForUpdate(request.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Email ou senha incorretos."));
+        entityManager.refresh(usuario);
 
         // Conta Google sem senha local nao revela a existencia do e-mail.
         if (usuario.getSenha() == null) {
